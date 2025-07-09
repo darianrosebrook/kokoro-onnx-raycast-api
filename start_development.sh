@@ -21,6 +21,12 @@ fi
 echo "🔄 Activating virtual environment..."
 source .venv/bin/activate
 
+# Load environment variables from .env file if it exists
+if [ -f ".env" ]; then
+    echo "🔧 Loading environment variables from .env file..."
+    export $(grep -v '^#' .env | xargs)
+fi
+
 # Python application will handle all validation (dependencies, models, etc.)
 echo "🐍 Handing off to Python for validation and startup..."
 

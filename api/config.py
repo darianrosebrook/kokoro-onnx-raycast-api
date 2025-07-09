@@ -308,6 +308,21 @@ class TTSConfig:
     BENCHMARK_CACHE_DURATION = 86400  # Cache duration in seconds (24 hours)
     BENCHMARK_WARMUP_TEXT = "Hello, this is a warmup inference to optimize model performance."
     
+    # Configurable benchmark frequency settings
+    BENCHMARK_FREQUENCY_OPTIONS = {
+        "daily": 86400,        # 24 hours
+        "weekly": 604800,      # 7 days
+        "monthly": 2592000,    # 30 days
+        "manually": 31536000   # 1 year (effectively manual)
+    }
+    
+    # Get benchmark frequency from environment or default to daily
+    BENCHMARK_FREQUENCY = os.environ.get("KOKORO_BENCHMARK_FREQUENCY", "daily").lower()
+    
+    # Validate benchmark frequency and fall back to daily if invalid
+    if BENCHMARK_FREQUENCY not in BENCHMARK_FREQUENCY_OPTIONS:
+        BENCHMARK_FREQUENCY = "daily"
+    
     # Development mode settings for faster startup
     DEVELOPMENT_MODE = os.environ.get("KOKORO_DEVELOPMENT_MODE", "false").lower() == "true"
     SKIP_BENCHMARKING = os.environ.get("KOKORO_SKIP_BENCHMARKING", "false").lower() == "true"
@@ -450,3 +465,70 @@ class TTSConfig:
         logger.info(f"   - Max segment length: {cls.MAX_SEGMENT_LENGTH} characters")
         
         return True
+
+    @classmethod
+    def get_benchmark_cache_duration(cls) -> int:
+        """
+        Get the benchmark cache duration in seconds based on configured frequency.
+        
+        This method provides intelligent cache duration calculation based on the
+        user's benchmark frequency preference, with special handling for development
+        mode and fast startup scenarios.
+        
+        ## Cache Duration Logic
+        
+        ### Standard Durations
+        - **daily**: 24 hours (86,400 seconds)
+        - **weekly**: 7 days (604,800 seconds)
+        - **monthly**: 30 days (2,592,000 seconds)
+        - **manually**: 1 year (effectively manual - user must clear cache)
+        
+        ### Development Mode Overrides
+        - **Development Mode**: Extends cache duration to avoid frequent benchmarking
+        - **Fast Startup**: Uses extended duration for development convenience
+        - **Minimum Duration**: Always at least 1 hour to prevent excessive benchmarking
+        
+        ## Benefits of Configurable Frequency
+        
+        ### Performance Optimization
+        - **Reduced Startup Time**: Longer cache durations mean faster startup
+        - **Hardware Stability**: Hardware doesn't change frequently, so longer caching is safe
+        - **Battery Life**: Less frequent benchmarking reduces power consumption
+        
+        ### User Control
+        - **Manual Mode**: Users can control exactly when benchmarking occurs
+        - **Adaptive Frequency**: Different frequencies for different use cases
+        - **Development-Friendly**: Extended caching for development workflows
+        
+        @returns int: Cache duration in seconds
+        
+        @example
+        ```python
+        # Get current cache duration
+        duration = TTSConfig.get_benchmark_cache_duration()
+        print(f"Cache duration: {duration/3600:.1f} hours")
+        
+        # Check if cache is still valid
+        cache_age = time.time() - cache_timestamp
+        if cache_age < TTSConfig.get_benchmark_cache_duration():
+            # Use cached results
+            pass
+        ```
+        """
+        # Get base duration from frequency setting
+        base_duration = cls.BENCHMARK_FREQUENCY_OPTIONS.get(cls.BENCHMARK_FREQUENCY, 86400)
+        
+        # Apply development mode extensions
+        if cls.DEVELOPMENT_MODE or cls.FAST_STARTUP:
+            # In development mode, extend cache duration significantly
+            # This prevents frequent benchmarking during development cycles
+            if cls.BENCHMARK_FREQUENCY == "daily":
+                return 7 * 86400  # 7 days
+            elif cls.BENCHMARK_FREQUENCY == "weekly":
+                return 14 * 86400  # 2 weeks
+            elif cls.BENCHMARK_FREQUENCY == "monthly":
+                return 60 * 86400  # 2 months
+            else:  # manually
+                return base_duration
+        
+        return base_duration

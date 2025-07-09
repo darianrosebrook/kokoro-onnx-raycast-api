@@ -344,6 +344,7 @@ export SAMPLE_RATE="24000"
 # Performance Optimization
 export ONNX_PROVIDER="CoreMLExecutionProvider"  # or "CPUExecutionProvider"
 export KOKORO_BENCHMARK_PROVIDERS="true"        # Enable provider benchmarking
+export KOKORO_BENCHMARK_FREQUENCY="weekly"      # Benchmark frequency: daily/weekly/monthly/manually
 
 # Development
 export DEVELOPMENT_MODE="true"
@@ -432,6 +433,7 @@ export KOKORO_SKIP_BENCHMARKING=false
 - `KOKORO_SKIP_BENCHMARKING`: Disable provider benchmarking entirely (default: false)
 - `KOKORO_FAST_STARTUP`: Use extended cache duration (7 days vs 24 hours) (default: false)
 - `KOKORO_BENCHMARK_PROVIDERS`: Control benchmark execution (default: true)
+- `KOKORO_BENCHMARK_FREQUENCY`: Set benchmark cache duration - daily/weekly/monthly/manually (default: daily)
 
 **Startup Progress Monitoring**
 ```bash
@@ -444,14 +446,73 @@ curl http://localhost:8000/health
 
 **Cache Management**
 The system uses intelligent caching to avoid re-running expensive operations:
-- Provider recommendations are cached for 24 hours (7 days in development mode)
+- Provider recommendations are cached based on configured frequency (daily/weekly/monthly/manually)
 - Hardware capabilities are cached during runtime
+- Cache duration extends automatically in development mode for faster iteration
 - Cache is automatically refreshed when used successfully
 
 **Typical Startup Times**
 - **Development Mode**: ~5-10 seconds (benchmarking disabled)
 - **Production Mode (cached)**: ~15-20 seconds (using cached provider recommendations)
 - **Production Mode (fresh)**: ~30-45 seconds (full benchmarking and optimization)
+
+#### Benchmark Frequency Configuration
+
+The system includes configurable benchmark frequency to balance performance optimization with startup speed. Since hardware capabilities don't change frequently, longer cache periods are safe and provide faster startup times.
+
+**Interactive Configuration**
+```bash
+# Interactive setup with explanations and recommendations
+python scripts/configure_benchmark_frequency.py
+
+# Show current configuration
+python scripts/configure_benchmark_frequency.py --show-current
+
+# Set frequency non-interactively
+python scripts/configure_benchmark_frequency.py --frequency weekly
+```
+
+**Frequency Options**
+- **Daily** (24 hours): For development or frequently changing systems
+- **Weekly** (7 days): ⭐ **Recommended** for most users - balances optimization and convenience
+- **Monthly** (30 days): For stable production systems and battery-conscious users  
+- **Manual**: Expert mode - only benchmark when explicitly requested
+
+**Environment Variable**
+```bash
+# Set benchmark frequency (persisted in .env file)
+export KOKORO_BENCHMARK_FREQUENCY=weekly
+
+# Add to .env file for persistence
+echo "KOKORO_BENCHMARK_FREQUENCY=weekly" >> .env
+```
+
+**Cache Management Tools**
+```bash
+# Show detailed cache status and expiration
+python scripts/manage_benchmark_cache.py --status
+
+# Clear cache to force re-benchmark (e.g., after OS updates)
+python scripts/manage_benchmark_cache.py --clear
+
+# Force benchmark regardless of cache status
+python scripts/manage_benchmark_cache.py --force-benchmark
+
+# Inspect detailed cache contents
+python scripts/manage_benchmark_cache.py --inspect
+```
+
+**Benefits of Configurable Frequency**
+- **Faster Startup**: Longer cache periods mean less frequent 20-30s benchmark delays
+- **Battery Friendly**: Reduced power consumption from less frequent benchmarking
+- **Hardware Stable**: Since hardware doesn't change often, longer caching is safe
+- **User Control**: Choose the right balance for your use case
+
+**Recommendations by Use Case**
+- **Developers**: Daily or Weekly (quick iteration, occasional optimization)
+- **Most Users**: Weekly (recommended - good balance of speed and optimization)
+- **Production**: Monthly (stable systems, minimal startup delays)
+- **Experts**: Manual (complete control over when benchmarking occurs)
 
 ## 📊 Performance Monitoring
 
@@ -627,6 +688,49 @@ python scripts/quick_benchmark.py
 - ⚡ Basic inference validation
 - ⚡ Provider status checking
 - ⚡ Quick health assessment
+
+### Benchmark Frequency Configuration
+Configure how often the system benchmarks hardware for optimal provider selection:
+
+```bash
+# Interactive configuration with explanations
+python scripts/configure_benchmark_frequency.py
+
+# Show current configuration
+python scripts/configure_benchmark_frequency.py --show-current
+
+# Set frequency non-interactively
+python scripts/configure_benchmark_frequency.py --frequency weekly
+```
+
+**Features:**
+- ⚙️ Interactive setup with detailed explanations
+- ⚙️ Frequency options: daily/weekly/monthly/manual
+- ⚙️ Automatic .env file management
+- ⚙️ Hardware context and recommendations
+
+### Benchmark Cache Management
+Manage benchmark cache for performance optimization:
+
+```bash
+# Show detailed cache status and expiration
+python scripts/manage_benchmark_cache.py --status
+
+# Clear cache to force re-benchmark
+python scripts/manage_benchmark_cache.py --clear
+
+# Force benchmark regardless of cache status
+python scripts/manage_benchmark_cache.py --force-benchmark
+
+# Inspect detailed cache contents
+python scripts/manage_benchmark_cache.py --inspect
+```
+
+**Features:**
+- 📊 Cache status monitoring with expiration times
+- 🧹 Manual cache clearing and forced benchmarking
+- 🔍 Detailed cache inspection and analysis
+- ⚡ Expert control over benchmark timing
 
 ### Cache Cleanup Utility
 Manage cache files and prevent storage bloat:

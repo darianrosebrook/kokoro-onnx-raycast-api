@@ -1233,16 +1233,14 @@ def initialize_model():
                 cached_provider = cache_data.get("recommended_provider")
                 cache_age = time.time() - cache_data.get("benchmark_date", 0)
                 
-                # Extended cache duration for development mode
-                cache_duration = TTSConfig.BENCHMARK_CACHE_DURATION
-                if TTSConfig.DEVELOPMENT_MODE or TTSConfig.FAST_STARTUP:
-                    cache_duration = 7 * 86400  # 7 days for development mode
+                # Use configurable cache duration based on user preference
+                cache_duration = TTSConfig.get_benchmark_cache_duration()
                 
                 # Use cached recommendation if within cache duration
                 if cached_provider and cache_age < cache_duration:
                     recommended_provider = cached_provider
                     cache_hit = True
-                    logger.info(f"📋 Using cached provider recommendation: {cached_provider} (cache age: {cache_age/3600:.1f}h)")
+                    logger.info(f"📋 Using cached provider recommendation: {cached_provider} (cache age: {cache_age/3600:.1f}h, expires in: {(cache_duration - cache_age)/3600:.1f}h)")
     except Exception as e:
         logger.warning(f"⚠️ Could not read provider cache: {e}")
     

@@ -21,6 +21,12 @@ fi
 echo "🔄 Activating virtual environment..."
 source .venv/bin/activate
 
+# Load environment variables from .env file if it exists
+if [ -f ".env" ]; then
+    echo "🔧 Loading environment variables from .env file..."
+    export $(grep -v '^#' .env | xargs)
+fi
+
 # Check if Python is available
 if ! command -v python &> /dev/null; then
     echo "❌ Error: Python is not available in the virtual environment."

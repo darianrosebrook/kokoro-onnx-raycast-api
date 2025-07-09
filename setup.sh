@@ -71,6 +71,19 @@ echo "Installing Python dependencies from requirements.txt..."
 pip3 install -r requirements.txt
 print_success "Python dependencies installed."
 
+# Run environment diagnostics
+echo "Running environment diagnostics..."
+if [ -f "scripts/check_environment.py" ]; then
+  python scripts/check_environment.py
+  if [ $? -eq 0 ]; then
+    print_success "Environment diagnostics passed."
+  else
+    print_warning "Environment diagnostics found some issues - check the output above."
+  fi
+else
+  print_warning "Environment diagnostic script not found - skipping diagnostics."
+fi
+
 # Install espeak-ng (platform-dependent)
 if [[ "$(uname -s)" == "Darwin" ]]; then
   if ! command -v espeak-ng &> /dev/null; then
@@ -112,6 +125,39 @@ else
   print_success "Voices file downloaded."
 fi
 
+# --- 3b. ORT Optimization Setup ---
+print_header "Step 3b: Setting up ORT Optimization for Apple Silicon"
+
+# Check if we're on Apple Silicon
+if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+  echo "🍎 Apple Silicon detected - setting up ORT optimization..."
+  
+  # Enable ORT optimization by default on Apple Silicon
+  export KOKORO_ORT_OPTIMIZATION=auto
+  echo "export KOKORO_ORT_OPTIMIZATION=auto" >> .env 2>/dev/null || echo "KOKORO_ORT_OPTIMIZATION=auto" > .env
+  
+  # Create cache directories
+  mkdir -p .cache/ort
+  
+  print_success "ORT optimization configured for Apple Silicon."
+  echo "   • ORT models will be automatically created and cached"
+  echo "   • This provides better performance and reduces temp file issues"
+  
+  # Optional: Pre-convert model for faster startup
+  if [ -f "scripts/convert_to_ort.py" ] && [ -f "$MODEL_FILE" ]; then
+    echo "🔧 Pre-converting model to ORT format for optimal performance..."
+    if python scripts/convert_to_ort.py "$MODEL_FILE" -o ".cache/ort/$(basename "$MODEL_FILE" .onnx).ort" 2>/dev/null; then
+      print_success "Model pre-converted to ORT format."
+    else
+      print_warning "ORT pre-conversion failed - will convert automatically on first run."
+    fi
+  fi
+else
+  echo "ℹ️  Non-Apple Silicon system detected - ORT optimization not required."
+  echo "   • Standard ONNX models will be used"
+  echo "   • CPU execution will be optimized automatically"
+fi
+
 # --- 4. Frontend Setup (Raycast Extension) ---
 print_header "Step 4: Setting up the Raycast Frontend"
 
@@ -125,20 +171,100 @@ else
   print_warning "Raycast directory not found. Skipping frontend setup."
 fi
 
-# --- 5. Final Instructions ---
+# --- 5. System Validation ---
+print_header "Step 5: Final System Validation"
+
+# Run comprehensive diagnostics
+if [ -f "scripts/troubleshoot_coreml.py" ]; then
+  echo "🔍 Running comprehensive system diagnostics..."
+  if python scripts/troubleshoot_coreml.py > /dev/null 2>&1; then
+    print_success "System diagnostics passed - CoreML ready."
+  else
+    print_warning "System diagnostics found potential issues - see ORT_OPTIMIZATION_GUIDE.md for troubleshooting."
+  fi
+else
+  print_warning "Diagnostic script not found - manual validation recommended."
+fi
+
+# --- 6. Benchmark Frequency Configuration ---
+print_header "Step 6: Benchmark Frequency Configuration"
+
+echo "🔧 Configuring how often the system should benchmark your hardware..."
+echo ""
+echo "The TTS system benchmarks your hardware to determine the optimal provider"
+echo "(CoreML vs CPU) for best performance. Since hardware doesn't change frequently,"
+echo "you can cache these results to speed up startup times."
+echo ""
+
+if [ -f "scripts/configure_benchmark_frequency.py" ]; then
+  # Check if frequency is already configured
+  if [ -f ".env" ] && grep -q "KOKORO_BENCHMARK_FREQUENCY" .env; then
+    echo "📋 Benchmark frequency already configured:"
+    python scripts/configure_benchmark_frequency.py --show-current
+    echo ""
+    
+    # Ask if user wants to reconfigure
+    read -p "Do you want to change the benchmark frequency? (y/n): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      echo "🔧 Launching interactive configuration..."
+      python scripts/configure_benchmark_frequency.py
+    else
+      print_success "Using existing benchmark frequency configuration."
+    fi
+  else
+    echo "🔧 Launching interactive benchmark frequency configuration..."
+    python scripts/configure_benchmark_frequency.py
+  fi
+  
+  # Verify configuration was saved
+  if [ -f ".env" ] && grep -q "KOKORO_BENCHMARK_FREQUENCY" .env; then
+    print_success "Benchmark frequency configured successfully."
+  else
+    print_warning "Benchmark frequency not configured - using default (daily)."
+  fi
+else
+  print_warning "Benchmark frequency configuration script not found."
+  echo "   • Default frequency (daily) will be used"
+  echo "   • You can manually set: export KOKORO_BENCHMARK_FREQUENCY=weekly"
+fi
+
+# --- 7. Final Instructions ---
 print_header "🎉 Setup Complete! 🎉"
 echo ""
-echo "You're all set! Here's how to run the project:"
+echo "✅ Your Kokoro TTS system is ready with the following features:"
+echo "   • 🧠 Apple Silicon optimization with CoreML and Neural Engine"
+echo "   • 🚀 ORT (ONNX Runtime) acceleration for better performance"
+echo "   • 🩺 Comprehensive diagnostic and troubleshooting tools"
+echo "   • 📊 Automatic performance monitoring and optimization"
+echo "   • ⚡ Configurable benchmark frequency for optimal startup times"
 echo ""
-echo "1. Start the Backend API Server:"
-echo "   In your terminal, run:"
-echo "   👉 ./start_development.sh"
+echo "🔧 Diagnostic Tools:"
+echo "   👉 python scripts/check_environment.py     # Check system setup"
+echo "   👉 python scripts/troubleshoot_coreml.py   # Diagnose CoreML issues"
+echo "   👉 python scripts/configure_benchmark_frequency.py  # Configure benchmark frequency"
 echo ""
-echo "2. Start the Raycast Extension:"
-echo "   In a separate terminal, navigate to the 'raycast' directory and run:"
-echo "   👉 cd raycast"
-echo "   👉 npm run dev"
+echo "📊 Benchmark Management:"
+echo "   👉 python scripts/configure_benchmark_frequency.py --show-current  # Show current settings"
+echo "   👉 python scripts/configure_benchmark_frequency.py --frequency weekly  # Set frequency"
+echo "   👉 rm .cache/coreml_config.json  # Clear cache to force re-benchmark"
 echo ""
-echo "Enjoy using Kokoro TTS!"
+echo "🚀 Quick Start:"
+echo "   👉 ./start_development.sh   # Development server with hot reload"
+echo "   👉 ./start_production.sh    # Production server with optimization"
+echo ""
+echo "🔧 Environment Variables:"
+echo "   • KOKORO_BENCHMARK_FREQUENCY: Controls benchmark frequency (daily/weekly/monthly/manually)"
+echo "   • KOKORO_DEVELOPMENT_MODE: Skip benchmarking for faster development startup"
+echo "   • KOKORO_SKIP_BENCHMARKING: Completely disable automatic benchmarking"
+echo "   • ONNX_PROVIDER: Override provider selection (CoreMLExecutionProvider/CPUExecutionProvider)"
+echo ""
+echo "💡 Pro Tips:"
+echo "   • Use 'weekly' benchmark frequency for most users (recommended)"
+echo "   • Use 'monthly' frequency for stable production systems"
+echo "   • Use 'manually' frequency for expert users who want complete control"
+echo "   • Clear the cache after major OS updates to re-benchmark"
+echo "   • Monitor startup times - longer cache periods = faster startup"
+echo ""
 echo "========================================================================"
 echo "" 
