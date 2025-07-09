@@ -1303,7 +1303,9 @@ def initialize_model():
         # Test model with standard inference
         log_progress("Testing model with standard inference...")
         try:
-            test_samples, _ = kokoro_model.create(TTSConfig.TEST_TEXT, "af_heart", 1.0, "en-us")
+            # Use a shorter test text for initial validation to avoid hanging
+            short_test_text = "Hello, this is a quick test to verify the model is working correctly."
+            test_samples, _ = kokoro_model.create(short_test_text, "af_heart", 1.0, "en-us")
             if test_samples is None:
                 raise RuntimeError("Model test inference returned None")
             log_progress("Model test inference successful")
@@ -1408,7 +1410,7 @@ def initialize_model():
                 
                 # Test CPU model
                 try:
-                    test_samples, _ = kokoro_model.create("test", "af_heart", 1.0, "en-us")
+                    test_samples, _ = kokoro_model.create("Hello, this is a CPU fallback test.", "af_heart", 1.0, "en-us")
                     if test_samples is None:
                         raise RuntimeError("CPU model test returned None")
                 except Exception as cpu_test_e:

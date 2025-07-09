@@ -41,6 +41,12 @@ export KOKORO_DEVELOPMENT_MODE=true
 export KOKORO_SKIP_BENCHMARKING=true
 export KOKORO_FAST_STARTUP=true
 
+# Suppress CoreML warnings at the system level
+export ORT_LOGGING_LEVEL=3
+export ONNXRUNTIME_LOG_SEVERITY_LEVEL=3
+export TF_CPP_MIN_LOG_LEVEL=3
+export CORE_ML_LOG_LEVEL=3
+
 # Note: ONNX_PROVIDER is NOT set here. The Python application will intelligently
 # select the best provider based on hardware benchmarking and caching.
 
@@ -61,4 +67,5 @@ mkdir -p .cache
 
 # Start the development server with hot reload
 # Set TMPDIR to use the local cache
-TMPDIR=$(pwd)/.cache uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir api/ 
+# Filter out CoreML context leak warnings from uvicorn output
+TMPDIR=$(pwd)/.cache uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir api/ 2>&1 | grep -v "Context leak detected" | grep -v "msgtracer returned -1" 

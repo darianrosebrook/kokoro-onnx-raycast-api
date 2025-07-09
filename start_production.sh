@@ -40,6 +40,12 @@ echo "🐍 Handing off to Python for validation and startup..."
 # Set environment variables for optimization
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
+# Suppress CoreML warnings at the system level
+export ORT_LOGGING_LEVEL=3
+export ONNXRUNTIME_LOG_SEVERITY_LEVEL=3
+export TF_CPP_MIN_LOG_LEVEL=3
+export CORE_ML_LOG_LEVEL=3
+
 # The Python application will intelligently select the best provider.
 # We do not set ONNX_PROVIDER here to allow the app to benchmark and choose.
 echo "⚡ ONNX provider will be auto-selected by the application for best performance."
@@ -93,6 +99,7 @@ mkdir -p .cache
 
 # Start the production server with gunicorn
 # Set TMPDIR to use the local cache
+# Filter out CoreML context leak warnings from gunicorn output
 TMPDIR=$(pwd)/.cache gunicorn api.main:app \
     --config gunicorn.conf.py \
     --workers $WORKER_COUNT \
@@ -106,4 +113,4 @@ TMPDIR=$(pwd)/.cache gunicorn api.main:app \
     --access-logfile - \
     --error-logfile - \
     --log-level info \
-    --worker-connections 1000 
+    --worker-connections 1000 2>&1 | grep -v "Context leak detected" | grep -v "msgtracer returned -1" 

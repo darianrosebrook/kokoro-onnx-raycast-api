@@ -26,13 +26,15 @@ These warnings, while generally harmless, can cause several issues:
 
 ## Solution Architecture
 
-### Intelligent Warning Filtering
-The system implements a multi-layered approach to warning management:
+### Multi-Layered Warning Suppression
+The system implements a comprehensive approach to warning management:
 
-1. **Pattern Recognition**: Identifies known CoreML warning patterns
-2. **Severity Assessment**: Categorizes warnings by actual impact
-3. **Suppression Logic**: Selectively suppresses noise while preserving signals
-4. **Performance Tracking**: Monitors warning frequency for trend analysis
+1. **Stderr Interception**: Captures C++ level warnings that bypass Python's warning system
+2. **Early Activation**: Stderr interceptor activates at module import time
+3. **Pattern Recognition**: Identifies known CoreML warning patterns
+4. **Severity Assessment**: Categorizes warnings by actual impact
+5. **Suppression Logic**: Selectively suppresses noise while preserving signals
+6. **Performance Tracking**: Monitors warning frequency for trend analysis
 
 ### Integration with Performance Monitoring
 - **Warning Metrics**: Tracks warning frequency and patterns
@@ -44,7 +46,7 @@ The system implements a multi-layered approach to warning management:
 
 ### Warning Handler Architecture
 ```
-Warning Event → Pattern Matching → Severity Assessment → 
+Warning Event → Stderr Interception → Pattern Matching → Severity Assessment → 
 Action Decision → Performance Tracking → Response
 ```
 
@@ -99,7 +101,7 @@ Performance Impact Assessment
 - **Performance Impact**: Measures warning handling overhead
 
 @author @darianrosebrook
-@version 2.0.0
+@version 2.1.0
 @since 2025-07-08   
 @license MIT
 
@@ -121,12 +123,182 @@ import logging
 import os
 import sys
 import contextlib
+import io
+from typing import Optional, TextIO
 from api.performance.stats import handle_coreml_context_warning
 
 logger = logging.getLogger(__name__)
 
 # Global flag to prevent duplicate handler registration
 _warning_handler_setup = False
+_stderr_interceptor_active = False
+
+class StderrInterceptor:
+    """
+    Intercepts stderr output to capture and suppress CoreML warnings.
+    
+    This class captures C++ level warnings that bypass Python's warning system
+    and applies pattern matching to suppress known harmless warnings while
+    preserving important error messages.
+    """
+    
+    def __init__(self, original_stderr: TextIO):
+        """
+        Initialize the stderr interceptor.
+        
+        @param original_stderr: The original stderr stream to restore on cleanup
+        """
+        self.original_stderr = original_stderr
+        self.suppressed_count = 0
+        self.total_count = 0
+        
+        # Patterns to suppress (known harmless CoreML warnings)
+        self.suppress_patterns = [
+            "Context leak detected",
+            "msgtracer returned -1",
+            "Some nodes were not assigned",
+            "Rerunning with verbose output",
+            "CoreMLExecutionProvider::GetCapability",
+            "number of partitions supported",
+            "words count mismatch"
+        ]
+        
+        # Patterns to always show (important errors)
+        self.show_patterns = [
+            "ERROR",
+            "CRITICAL",
+            "FATAL",
+            "Exception",
+            "Traceback"
+        ]
+    
+    def write(self, text: str):
+        """
+        Intercept stderr writes and apply pattern-based filtering.
+        
+        @param text: The text being written to stderr
+        """
+        self.total_count += 1
+        
+        # Check if this is a warning we should suppress
+        should_suppress = False
+        for pattern in self.suppress_patterns:
+            if pattern in text:
+                should_suppress = True
+                break
+        
+        # Check if this is an important message we should always show
+        should_show = False
+        for pattern in self.show_patterns:
+            if pattern in text:
+                should_show = True
+                break
+        
+        # Decision logic: suppress known warnings, show important errors, pass through others
+        if should_suppress and not should_show:
+            # Suppress this warning but track it
+            self.suppressed_count += 1
+            logger.debug(f"🔍 Suppressed stderr warning: {text.strip()}")
+            
+            # Track in performance monitoring
+            try:
+                handle_coreml_context_warning()
+            except Exception as e:
+                logger.debug(f"⚠️ Could not track warning in performance system: {e}")
+            
+            return  # Don't write to original stderr
+        
+        # Pass through to original stderr
+        try:
+            self.original_stderr.write(text)
+            self.original_stderr.flush()
+        except Exception as e:
+            # If original stderr fails, try to log the error
+            logger.debug(f"⚠️ Error writing to original stderr: {e}")
+    
+    def flush(self):
+        """Flush the original stderr stream."""
+        try:
+            self.original_stderr.flush()
+        except Exception:
+            pass
+    
+    def close(self):
+        """Close the original stderr stream."""
+        try:
+            self.original_stderr.close()
+        except Exception:
+            pass
+
+
+def activate_stderr_interceptor():
+    """
+    Activate stderr interception to capture CoreML warnings.
+    
+    This function must be called early in the application lifecycle,
+    before any ONNX Runtime operations, to ensure all warnings are captured.
+    
+    @returns None: Stderr interceptor is activated as a side effect
+    """
+    global _stderr_interceptor_active
+    
+    if _stderr_interceptor_active:
+        logger.debug("🔧 Stderr interceptor already active, skipping activation")
+        return
+    
+    try:
+        # Create and install the stderr interceptor
+        original_stderr = sys.stderr
+        interceptor = StderrInterceptor(original_stderr)
+        sys.stderr = interceptor
+        
+        _stderr_interceptor_active = True
+        logger.info("✅ Stderr interceptor activated for early warning suppression")
+        logger.debug("🔍 Will suppress CoreML context leaks and msgtracer warnings")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to activate stderr interceptor: {e}")
+
+
+def setup_comprehensive_logging_filter():
+    """
+    Setup comprehensive logging filters to catch warnings at the logging level.
+    
+    This function adds custom filters to the root logger and specific loggers
+    to catch warnings that might bypass other suppression mechanisms.
+    """
+    try:
+        # Add custom filter to root logger
+        root_logger = logging.getLogger()
+        
+        # Check if filter already exists
+        existing_filters = [f for f in root_logger.filters if isinstance(f, ONNXRuntimeWarningFilter)]
+        if not existing_filters:
+            warning_filter = ONNXRuntimeWarningFilter()
+            root_logger.addFilter(warning_filter)
+            logger.debug("🔧 Comprehensive logging filter added to root logger")
+        
+        # Configure specific loggers
+        loggers_to_configure = [
+            "onnxruntime",
+            "phonemizer", 
+            "espeak",
+            "kokoro_onnx"
+        ]
+        
+        for logger_name in loggers_to_configure:
+            try:
+                specific_logger = logging.getLogger(logger_name)
+                specific_logger.setLevel(logging.ERROR)
+                logger.debug(f"🔧 Logger '{logger_name}' set to ERROR level")
+            except Exception as e:
+                logger.debug(f"⚠️ Could not configure logger '{logger_name}': {e}")
+        
+        logger.debug("🔧 Comprehensive logging filter setup complete")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to setup comprehensive logging filter: {e}")
+
 
 class ONNXRuntimeWarningFilter(logging.Filter):
     """
@@ -195,7 +367,8 @@ def suppress_onnx_warnings():
     env_vars = {
         "ORT_LOGGING_LEVEL": "3",
         "ONNXRUNTIME_LOG_SEVERITY_LEVEL": "3",
-        "TF_CPP_MIN_LOG_LEVEL": "3"
+        "TF_CPP_MIN_LOG_LEVEL": "3",
+        "CORE_ML_LOG_LEVEL": "3"
     }
     
     try:
@@ -246,6 +419,8 @@ def configure_onnx_runtime_logging():
         warnings.filterwarnings("ignore", message=".*Rerunning with verbose output.*")
         warnings.filterwarnings("ignore", message=".*CoreMLExecutionProvider::GetCapability.*")
         warnings.filterwarnings("ignore", message=".*number of partitions supported.*")
+        warnings.filterwarnings("ignore", message=".*Context leak detected.*")
+        warnings.filterwarnings("ignore", message=".*msgtracer returned -1.*")
         
         logger.debug("🔧 ONNX Runtime logging configured for minimal noise")
         
@@ -490,6 +665,9 @@ def setup_coreml_warning_handler():
     # Register the custom warning handler
     warnings.showwarning = custom_warning_handler
     
+    # Setup comprehensive logging filters
+    setup_comprehensive_logging_filter()
+    
     # Mark handler as initialized
     _warning_handler_setup = True
     
@@ -512,6 +690,38 @@ def setup_coreml_warning_handler():
         # These are normal and expected with CoreML provider
         warnings.filterwarnings("ignore", message=".*Some nodes were not assigned.*")
         warnings.filterwarnings("ignore", message=".*Rerunning with verbose output.*")
+        warnings.filterwarnings("ignore", message=".*Context leak detected.*")
+        warnings.filterwarnings("ignore", message=".*msgtracer returned -1.*")
         logger.debug("🔧 ONNX Runtime node assignment warnings suppressed")
     except Exception as e:
-        logger.debug(f"⚠️ Could not configure ONNX Runtime logging: {e}") 
+        logger.debug(f"⚠️ Could not configure ONNX Runtime logging: {e}")
+
+
+def get_warning_suppression_stats():
+    """
+    Get statistics about warning suppression.
+    
+    @returns dict: Warning suppression statistics
+    """
+    try:
+        if hasattr(sys.stderr, 'suppressed_count') and hasattr(sys.stderr, 'total_count'):
+            return {
+                "stderr_interceptor_active": _stderr_interceptor_active,
+                "suppressed_warnings": getattr(sys.stderr, 'suppressed_count', 0),
+                "total_warnings": getattr(sys.stderr, 'total_count', 0),
+                "suppression_rate": getattr(sys.stderr, 'suppressed_count', 0) / max(getattr(sys.stderr, 'total_count', 1), 1) * 100
+            }
+        else:
+            return {
+                "stderr_interceptor_active": _stderr_interceptor_active,
+                "suppressed_warnings": 0,
+                "total_warnings": 0,
+                "suppression_rate": 0
+            }
+    except Exception as e:
+        logger.debug(f"⚠️ Could not get warning suppression stats: {e}")
+        return {"error": str(e)}
+
+
+# Activate stderr interceptor at module import time for early warning suppression
+activate_stderr_interceptor() 

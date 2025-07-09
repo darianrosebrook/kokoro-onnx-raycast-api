@@ -458,6 +458,9 @@ configure_onnx_runtime_logging()
 setup_coreml_warning_handler()
 suppress_phonemizer_warnings()
 
+# Note: Stderr interceptor is already activated at module import time in warnings.py
+# This ensures early warning suppression before any ONNX Runtime operations
+
 # Apply monkey patches for eSpeak integration and Kokoro model fixes
 # These patches fix known issues with the upstream kokoro-onnx library
 logger.info("🔧 Applying production patches to kokoro-onnx library...")
@@ -655,6 +658,71 @@ async def trigger_cache_cleanup(aggressive: bool = False):
         return {"success": False, "error": str(e)}
 
 
+@app.get("/warning-stats")
+async def get_warning_statistics():
+    """
+    Get detailed warning suppression statistics.
+    
+    This endpoint provides comprehensive information about warning suppression
+    performance, including stderr interception statistics and suppression rates.
+    
+    **Response Format**:
+    ```json
+    {
+        "stderr_interceptor_active": boolean,
+        "suppressed_warnings": number,
+        "total_warnings": number,
+        "suppression_rate": number,
+        "warning_patterns": {
+            "context_leaks": number,
+            "msgtracer_warnings": number,
+            "onnx_warnings": number
+        }
+    }
+    ```
+    
+    **Information Provided**:
+    - **Stderr Interceptor Status**: Whether the stderr interceptor is active
+    - **Suppression Statistics**: Total warnings processed and suppressed
+    - **Suppression Rate**: Percentage of warnings successfully suppressed
+    - **Pattern Analysis**: Breakdown of warning types by pattern
+    
+    **Use Cases**:
+    - Performance monitoring and optimization
+    - Debugging warning suppression effectiveness
+    - Production monitoring and alerting
+    - System health assessment
+    
+    @returns JSON object with warning suppression statistics
+    """
+    try:
+        from api.warnings import get_warning_suppression_stats
+        
+        stats = get_warning_suppression_stats()
+        
+        # Add additional context about warning patterns
+        stats["warning_patterns"] = {
+            "context_leaks": "tracked_via_performance_system",
+            "msgtracer_warnings": "suppressed_via_stderr_interceptor",
+            "onnx_warnings": "suppressed_via_logging_filters"
+        }
+        
+        stats["system_info"] = {
+            "warning_handler_active": True,
+            "stderr_interception_enabled": stats.get("stderr_interceptor_active", False),
+            "comprehensive_filtering": True
+        }
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"❌ Warning statistics endpoint error: {e}")
+        return {
+            "error": "Warning statistics endpoint failed",
+            "details": str(e)
+        }
+
+
 @app.get("/status")
 async def get_status():
     """
@@ -740,6 +808,20 @@ async def get_status():
         except Exception as e:
             logger.warning(f"⚠️ Could not get hardware info: {e}")
             status["hardware"] = {"error": str(e)}
+
+        # Add warning suppression information
+        try:
+            from api.warnings import get_warning_suppression_stats
+            warning_stats = get_warning_suppression_stats()
+            status["warning_suppression"] = {
+                "active": warning_stats.get("stderr_interceptor_active", False),
+                "suppressed_warnings": warning_stats.get("suppressed_warnings", 0),
+                "total_warnings": warning_stats.get("total_warnings", 0),
+                "suppression_rate": warning_stats.get("suppression_rate", 0)
+            }
+        except Exception as e:
+            logger.warning(f"⚠️ Could not get warning suppression info: {e}")
+            status["warning_suppression"] = {"error": str(e)}
 
         return status
 
