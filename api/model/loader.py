@@ -1379,6 +1379,7 @@ def initialize_model():
         # Log successful initialization
         init_time = time.time() - start_time
         logger.info(f"🎉 Model initialization completed successfully in {init_time:.2f}s")
+        logger.info("👍🏼 Application startup complete, server is ready to accept requests")
             
     except Exception as e:
         # If the primary provider fails (especially CoreML), log it as a warning
@@ -1416,6 +1417,7 @@ def initialize_model():
                 
                 model_loaded = True
                 logger.info("✅ CPU fallback initialization successful")
+                logger.info("👍🏼 Application startup complete, server is ready to accept requests")
                 
                 # Benchmark CPU fallback if enabled
                 enable_benchmarking = os.environ.get("KOKORO_BENCHMARK_PROVIDERS", "true").lower() == "true"

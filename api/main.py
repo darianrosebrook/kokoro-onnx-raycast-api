@@ -216,7 +216,7 @@ from api.warnings import setup_coreml_warning_handler, suppress_phonemizer_warni
 def setup_application_logging():
     """
     Setup comprehensive logging configuration for the application.
-    
+
     This function configures logging with multiple handlers for different output
     destinations and provides detailed logging for debugging and monitoring.
     """
@@ -227,31 +227,31 @@ def setup_application_logging():
     simple_formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s'
     )
-    
+
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
-    
+
     # Clear existing handlers to prevent duplicates
     root_logger.handlers.clear()
-    
+
     # Console handler with color support
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(simple_formatter)
     root_logger.addHandler(console_handler)
-    
+
     # Create logs directory
     logs_dir = "logs"
     os.makedirs(logs_dir, exist_ok=True)
-    
+
     # File handler for detailed logging
     log_file = os.path.join(logs_dir, "api_server.log")
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.DEBUG)  # Always log everything to file
     file_handler.setFormatter(detailed_formatter)
     root_logger.addHandler(file_handler)
-    
+
     logger = logging.getLogger(__name__)
     logger.info(f"🔧 Application logging configured")
     logger.info(f"📄 Detailed logs will be written to: {log_file}")
@@ -260,18 +260,18 @@ def setup_application_logging():
 def validate_dependencies():
     """
     Validate that all required dependencies are available.
-    
+
     This function checks for the presence and compatibility of all required
     dependencies before starting the application to prevent runtime failures.
-    
+
     @raises RuntimeError: If critical dependencies are missing
     """
     logger = logging.getLogger(__name__)
     logger.info("🔍 Validating application dependencies...")
-    
+
     missing_deps = []
     version_issues = []
-    
+
     # Check critical dependencies
     required_packages = [
         ('onnxruntime', 'onnxruntime'),
@@ -281,7 +281,7 @@ def validate_dependencies():
         ('fastapi', 'fastapi'),
         ('uvicorn', 'uvicorn'),
     ]
-    
+
     for import_name, package_name in required_packages:
         try:
             __import__(import_name)
@@ -289,63 +289,66 @@ def validate_dependencies():
         except ImportError:
             missing_deps.append(package_name)
             logger.error(f"❌ {package_name} not found")
-    
+
     # Check optional dependencies
     optional_packages = [
         ('psutil', 'psutil'),
         ('phonemizer_fork', 'phonemizer-fork'),
     ]
-    
+
     for import_name, package_name in optional_packages:
         try:
             __import__(import_name)
             logger.debug(f"✅ {package_name} available (optional)")
         except ImportError:
             logger.warning(f"⚠️ {package_name} not found (optional)")
-    
+
     # Check eSpeak installation
     try:
         import subprocess
-        result = subprocess.run(['which', 'espeak-ng'], capture_output=True, text=True)
+        result = subprocess.run(['which', 'espeak-ng'],
+                                capture_output=True, text=True)
         if result.returncode == 0:
             logger.debug("✅ eSpeak-ng found in system PATH")
         else:
             logger.warning("⚠️ eSpeak-ng not found in system PATH")
     except Exception as e:
         logger.warning(f"⚠️ Could not check eSpeak-ng installation: {e}")
-    
+
     # Report results
     if missing_deps:
         error_msg = f"Missing required dependencies: {', '.join(missing_deps)}"
         logger.error(f"❌ {error_msg}")
-        logger.error("💡 Install missing packages with: pip install " + " ".join(missing_deps))
+        logger.error(
+            "💡 Install missing packages with: pip install " + " ".join(missing_deps))
         raise RuntimeError(error_msg)
-    
+
     if version_issues:
-        logger.warning(f"⚠️ Version compatibility issues: {', '.join(version_issues)}")
-    
+        logger.warning(
+            f"⚠️ Version compatibility issues: {', '.join(version_issues)}")
+
     logger.info("✅ All application dependencies validated successfully")
 
 
 def validate_model_files():
     """
     Validate that required model files are present and accessible.
-    
+
     This function checks for the presence of model files before attempting
     to initialize the TTS model to prevent startup failures.
-    
+
     @raises RuntimeError: If model files are missing or inaccessible
     """
     logger = logging.getLogger(__name__)
     logger.info("🔍 Validating model files...")
-    
+
     model_files = {
         'model': TTSConfig.MODEL_PATH,
         'voices': TTSConfig.VOICES_PATH
     }
-    
+
     missing_files = []
-    
+
     for file_type, file_path in model_files.items():
         if not os.path.exists(file_path):
             missing_files.append(f"{file_type} ({file_path})")
@@ -357,83 +360,88 @@ def validate_model_files():
                     f.read(1024)  # Read first 1KB to test access
                 logger.debug(f"✅ {file_type} file accessible: {file_path}")
             except Exception as e:
-                missing_files.append(f"{file_type} ({file_path}) - access error: {e}")
-                logger.error(f"❌ {file_type} file not accessible: {file_path} - {e}")
-    
+                missing_files.append(
+                    f"{file_type} ({file_path}) - access error: {e}")
+                logger.error(
+                    f"❌ {file_type} file not accessible: {file_path} - {e}")
+
     if missing_files:
         error_msg = f"Missing or inaccessible model files: {', '.join(missing_files)}"
         logger.error(f"❌ {error_msg}")
         raise RuntimeError(error_msg)
-    
+
     logger.info("✅ All model files validated successfully")
 
 
 def validate_environment():
     """
     Validate environment configuration and system capabilities.
-    
+
     This function checks environment variables, system capabilities, and
     configuration settings to ensure the application can start properly.
-    
+
     @raises RuntimeError: If environment validation fails
     """
     logger = logging.getLogger(__name__)
     logger.info("🔍 Validating environment configuration...")
-    
+
     # The main hardware capability detection is now handled in the model loader.
     # This check is a lightweight validation to ensure ONNX Runtime is functional.
-    
+
     # Check ONNX Runtime providers
     try:
         available_providers = ort.get_available_providers()
         logger.info(f"📦 Available ONNX providers: {available_providers}")
-        
+
         if 'CPUExecutionProvider' not in available_providers:
             raise RuntimeError("CPU provider not available - critical error")
-        
+
     except Exception as e:
         logger.error(f"❌ ONNX Runtime provider validation failed: {e}")
         raise RuntimeError(f"ONNX Runtime validation failed: {e}")
-    
+
     # Check environment variables
     required_env_vars = ['PYTHONPATH']
     for env_var in required_env_vars:
         if not os.environ.get(env_var):
             logger.warning(f"⚠️ Environment variable {env_var} not set")
-    
+
     logger.info("✅ Environment configuration validated successfully")
 
 
 def validate_patch_status():
     """
     Validate that patches have been applied successfully.
-    
+
     This function checks the status of applied patches and reports any
     issues that might affect application functionality.
-    
+
     @raises RuntimeError: If critical patches failed to apply
     """
     logger = logging.getLogger(__name__)
     logger.info("🔍 Validating patch status...")
-    
+
     try:
         patch_status = get_patch_status()
-        
+
         if not patch_status['applied']:
             raise RuntimeError("Patches not applied - critical error")
-        
+
         if patch_status['patch_errors']:
-            logger.warning(f"⚠️ Patch errors detected: {patch_status['patch_errors']}")
-        
-        logger.info(f"✅ Patches applied successfully in {patch_status['application_time']:.3f}s")
-        logger.info(f"📊 Original functions stored: {patch_status['original_functions_stored']}")
-        
+            logger.warning(
+                f"⚠️ Patch errors detected: {patch_status['patch_errors']}")
+
+        logger.info(
+            f"✅ Patches applied successfully in {patch_status['application_time']:.3f}s")
+        logger.info(
+            f"📊 Original functions stored: {patch_status['original_functions_stored']}")
+
         # Log patch guard status
         guard_status = patch_status.get('patch_guard_status', {})
         for method, is_patched in guard_status.items():
             status = "✅ Patched" if is_patched else "❌ Not Patched"
             logger.debug(f"   • {method}: {status}")
-        
+
     except Exception as e:
         logger.error(f"❌ Patch status validation failed: {e}")
         raise RuntimeError(f"Patch validation failed: {e}")
@@ -467,80 +475,88 @@ startup_progress = {
     "completed_at": None
 }
 
+
 def update_startup_progress(progress: int, message: str, status: str = "initializing"):
     """Update startup progress for user feedback"""
     startup_progress.update({
         "status": status,
-        "progress": progress, 
+        "progress": progress,
         "message": message,
         "started_at": startup_progress.get("started_at") or time.time()
     })
     logger.info(f"🚀 Startup Progress ({progress}%): {message}")
 
+
 async def initialize_model():
     """Initialize the model with progress tracking"""
     global kokoro_model, model_initialization_complete, model_initialization_started
-    
+
     if model_initialization_started:
         return
-    
+
     model_initialization_started = True
     startup_progress["started_at"] = time.time()
-    
+
     try:
         update_startup_progress(5, "Setting up warning management...")
         setup_coreml_warning_handler()
-        
+
         update_startup_progress(8, "Cleaning up cache files...")
         try:
             cache_info = get_cache_info()
             if cache_info.get('needs_cleanup', False):
                 cleanup_result = cleanup_cache(aggressive=False)
-                logger.info(f"🧹 Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
+                logger.info(
+                    f"🧹 Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
             else:
-                logger.info(f"🧹 Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
+                logger.info(
+                    f"🧹 Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
         except Exception as e:
             logger.warning(f"⚠️ Cache cleanup failed: {e}")
-        
+
         update_startup_progress(10, "Applying production patches...")
         apply_all_patches()
-        
-        update_startup_progress(15, "Initializing model with hardware acceleration...")
-        
+
+        update_startup_progress(
+            15, "Initializing model with hardware acceleration...")
+
         # Create a wrapper function to track progress during model initialization
         def track_model_init():
             update_startup_progress(20, "Detecting hardware capabilities...")
             initialize_model_sync()  # This function doesn't return the model
             return True
-        
+
         await asyncio.get_event_loop().run_in_executor(
             None, track_model_init
         )
-        
+
         update_startup_progress(90, "Finalizing model setup...")
-        
+
         # Get the model from the global model loader
         from api.model.loader import get_model, get_model_status
-        
+
         # Quick validation
         if not get_model_status():
-            raise RuntimeError("Model initialization failed - model not loaded")
-            
+            raise RuntimeError(
+                "Model initialization failed - model not loaded")
+
         kokoro_model = get_model()
         if kokoro_model is None:
             raise RuntimeError("Model initialization failed - model is None")
-            
+
         update_startup_progress(100, "Model initialization complete!", "ready")
         startup_progress["completed_at"] = time.time()
         model_initialization_complete = True
-        
-        total_time = startup_progress["completed_at"] - startup_progress["started_at"]
+
+        total_time = startup_progress["completed_at"] - \
+            startup_progress["started_at"]
         logger.info(f"🎉 Model initialization completed in {total_time:.2f}s")
-        
+
     except Exception as e:
         update_startup_progress(0, f"Initialization failed: {str(e)}", "error")
         logger.error(f"❌ Model initialization failed: {e}")
         raise
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -548,12 +564,12 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🔧 Application logging configured")
     logger.info("📄 Detailed logs will be written to: logs/api_server.log")
-    
+
     # Start model initialization in background
     asyncio.create_task(initialize_model())
-    
+
     yield
-    
+
     # Shutdown
     logger.info("🔄 Application shutting down")
 
@@ -574,6 +590,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/health")
 async def health_check():
     """
@@ -591,12 +608,14 @@ async def health_check():
     else:
         return {"status": "starting", "model_ready": False}
 
+
 @app.get("/startup-progress")
 async def get_startup_progress():
     """
     Get detailed startup progress information
     """
     return startup_progress
+
 
 @app.get("/cache-status")
 async def get_cache_status():
@@ -617,11 +636,12 @@ async def get_cache_status():
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.post("/cache-cleanup")
 async def trigger_cache_cleanup(aggressive: bool = False):
     """
     Manually trigger cache cleanup
-    
+
     @param aggressive: Use aggressive cleanup policies
     """
     try:
@@ -634,11 +654,12 @@ async def trigger_cache_cleanup(aggressive: bool = False):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
 @app.get("/status")
 async def get_status():
     """
     Comprehensive server status endpoint for debugging and monitoring.
-    
+
     **Response Format**:
     ```json
     {
@@ -666,7 +687,7 @@ async def get_status():
         }
     }
     ```
-    
+
     **Information Provided**:
     - **Model Status**: Whether the TTS model is loaded and ready
     - **ONNX Providers**: Available execution providers on this system
@@ -675,14 +696,14 @@ async def get_status():
     - **Error Rates**: Fallback usage and error frequency
     - **Patch Status**: Status of applied patches and any errors
     - **Hardware Info**: System hardware capabilities and configuration
-    
+
     **Use Cases**:
     - Performance monitoring and optimization
     - Debugging hardware acceleration issues
     - Capacity planning and scaling decisions
     - Runtime performance analysis
     - Patch status monitoring
-    
+
     @returns JSON object with comprehensive server status
     """
     try:
@@ -692,7 +713,7 @@ async def get_status():
             "onnx_providers": ort.get_available_providers(),
             "performance": get_performance_stats(),
         }
-        
+
         # Add patch status
         try:
             patch_status = get_patch_status()
@@ -705,7 +726,7 @@ async def get_status():
         except Exception as e:
             logger.warning(f"⚠️ Could not get patch status: {e}")
             status["patch_status"] = {"error": str(e)}
-        
+
         # Add hardware information
         try:
             capabilities = detect_apple_silicon_capabilities()
@@ -719,9 +740,9 @@ async def get_status():
         except Exception as e:
             logger.warning(f"⚠️ Could not get hardware info: {e}")
             status["hardware"] = {"error": str(e)}
-        
+
         return status
-        
+
     except Exception as e:
         logger.error(f"❌ Status endpoint error: {e}")
         return {
@@ -729,14 +750,15 @@ async def get_status():
             "details": str(e)
         }
 
+
 @app.post("/v1/audio/speech")
 async def create_speech(request: Request, tts_request: TTSRequest):
     """
     OpenAI-compatible TTS endpoint with streaming and hardware acceleration.
-    
+
     This endpoint implements the OpenAI TTS API specification while providing
     advanced features like streaming audio delivery and hardware acceleration.
-    
+
     **Request Format**:
     ```json
     {
@@ -748,41 +770,41 @@ async def create_speech(request: Request, tts_request: TTSRequest):
         "format": "wav"  // "wav" or "pcm"
     }
     ```
-    
+
     **Processing Pipeline**:
     1. **Request Validation**: Validate all parameters and text length
     2. **Model Status Check**: Ensure model is loaded and ready
     3. **Text Processing**: Normalize and segment text for optimal synthesis
     4. **Audio Generation**: Parallel processing of text segments
     5. **Response Streaming**: Real-time audio delivery to client
-    
+
     **Streaming Mode** (`stream: true`):
     - **Latency**: 200-500ms to first audio chunk
     - **Format**: Chunked transfer encoding with proper MIME types
     - **Memory**: Constant memory usage regardless of text length
     - **Interruption**: Supports client disconnection detection
-    
+
     **Non-Streaming Mode** (`stream: false`):
     - **Latency**: Full synthesis before response (2-10 seconds)
     - **Format**: Complete audio file in single response
     - **Memory**: Higher memory usage for long texts
     - **Reliability**: More reliable for unstable connections
-    
+
     **Error Handling**:
     - **503 Service Unavailable**: Model not loaded
     - **400 Bad Request**: Invalid parameters or text processing failure
     - **500 Internal Server Error**: Unexpected processing errors
-    
+
     **Performance Optimizations**:
     - **Hardware Acceleration**: Automatic CoreML provider selection
     - **Parallel Processing**: Multiple segments processed simultaneously
     - **Intelligent Segmentation**: Natural boundary detection for better speech
     - **Memory Management**: Automatic cleanup and resource management
-    
+
     **Format Support**:
     - **WAV**: Complete WAV file with proper headers (recommended)
     - **PCM**: Raw 16-bit PCM audio data (for advanced use cases)
-    
+
     @param request: FastAPI Request object for client tracking
     @param tts_request: Validated TTS request parameters
     @returns StreamingResponse with audio data
@@ -791,7 +813,7 @@ async def create_speech(request: Request, tts_request: TTSRequest):
     # Ensure model is loaded before processing
     if not model_initialization_complete:
         raise HTTPException(
-            status_code=503, 
+            status_code=503,
             detail="TTS model not loaded. Please wait for initialization to complete."
         )
 
@@ -803,7 +825,7 @@ async def create_speech(request: Request, tts_request: TTSRequest):
             if tts_request.format == "wav"
             else "audio/L16;rate=24000;channels=1"
         )
-        
+
         # Create streaming generator for real-time audio delivery
         generator = stream_tts_audio(
             tts_request.text,
@@ -813,16 +835,16 @@ async def create_speech(request: Request, tts_request: TTSRequest):
             tts_request.format,
             request,
         )
-        
+
         return StreamingResponse(generator, media_type=media_type)
-    
+
     # Handle non-streaming requests with complete audio generation
     else:
         # Segment text for parallel processing
         segments = segment_text(tts_request.text, TTSConfig.MAX_SEGMENT_LENGTH)
         if not segments:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="No valid text segments to process. Please check your input text."
             )
 
@@ -838,7 +860,7 @@ async def create_speech(request: Request, tts_request: TTSRequest):
         # Ensure at least one segment was processed successfully
         if not all_audio_np:
             raise HTTPException(
-                status_code=500, 
+                status_code=500,
                 detail="Audio generation failed for all segments. Please try again or contact support."
             )
 
@@ -857,7 +879,8 @@ async def create_speech(request: Request, tts_request: TTSRequest):
         if tts_request.format == "wav":
             # Convert to 16-bit PCM and create WAV file
             scaled_audio = np.int16(final_audio * 32767)
-            sf.write(audio_io, scaled_audio, TTSConfig.SAMPLE_RATE, format="WAV")
+            sf.write(audio_io, scaled_audio,
+                     TTSConfig.SAMPLE_RATE, format="WAV")
             media_type = "audio/wav"
         else:  # PCM format
             # Convert to raw 16-bit PCM data
@@ -867,19 +890,19 @@ async def create_speech(request: Request, tts_request: TTSRequest):
 
         audio_io.seek(0)
         return StreamingResponse(
-            iter([audio_io.getvalue()]), 
+            iter([audio_io.getvalue()]),
             media_type=media_type
         )
 
 # Development server entry point
 if __name__ == "__main__":
     import uvicorn
-    
+
     logger.info("🚀 Starting development server...")
     uvicorn.run(
-        app, 
-        host="0.0.0.0", 
-        port=8000, 
+        app,
+        host="0.0.0.0",
+        port=8000,
         log_level="info",
         reload=True  # Enable auto-reload in development
-    ) 
+    )
