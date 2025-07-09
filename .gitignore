@@ -38,3 +38,6 @@ Thumbs.db
 # Model and voice files
 *.onnx
 *.bin
+
+# Local cache
+.cache/

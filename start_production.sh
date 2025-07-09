@@ -82,9 +82,12 @@ echo "📄 Application logs will be written to: api_server.log"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
+# Create a local cache directory for CoreML compiled models to avoid permissions issues in /var/folders
+mkdir -p .cache
+
 # Start the production server with gunicorn
-# Preload the app to initialize the model once for all workers.
-gunicorn api.main:app \
+# Set TMPDIR to use the local cache
+TMPDIR=$(pwd)/.cache gunicorn api.main:app \
     --config gunicorn.conf.py \
     --workers $WORKER_COUNT \
     --worker-class uvicorn.workers.UvicornWorker \

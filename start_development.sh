@@ -45,13 +45,9 @@ echo "📄 Application logs will be written to: api_server.log"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
+# Create a local cache directory for CoreML compiled models to avoid permissions issues in /var/folders
+mkdir -p .cache
+
 # Start the development server with hot reload
-# The Python app (api/main.py) is now the single source of truth for all validation.
-python -m uvicorn api.main:app \
-    --host 0.0.0.0 \
-    --port 8000 \
-    --reload \
-    --reload-dir . \
-    --log-level debug \
-    --access-log \
-    --loop asyncio 
+# Set TMPDIR to use the local cache
+TMPDIR=$(pwd)/.cache uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir api/ 
