@@ -628,6 +628,32 @@ python scripts/quick_benchmark.py
 - ⚡ Provider status checking
 - ⚡ Quick health assessment
 
+### Cache Cleanup Utility
+Manage cache files and prevent storage bloat:
+
+```bash
+# Check cache statistics
+python scripts/cleanup_cache.py --stats
+
+# Clean up cache files
+python scripts/cleanup_cache.py
+
+# Aggressive cleanup (smaller limits)
+python scripts/cleanup_cache.py --aggressive
+
+# API endpoints for cache management
+curl http://localhost:8000/cache-status
+curl -X POST http://localhost:8000/cache-cleanup
+```
+
+**Features:**
+- 🧹 Intelligent cleanup policies (age, size, pattern-based)
+- 📊 Real-time cache statistics and monitoring
+- 🗂️ Preserves important ORT optimized models
+- ⚡ Automatic cleanup during server startup
+- 🔧 Configurable cleanup thresholds (500MB max, 10 temp dirs)
+- 📈 Performance impact monitoring
+
 ### Full System Benchmark
 Comprehensive performance analysis:
 
