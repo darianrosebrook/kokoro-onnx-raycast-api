@@ -30,6 +30,11 @@ export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
 export UVICORN_RELOAD=1
 
+# Development mode optimizations for faster startup
+export KOKORO_DEVELOPMENT_MODE=true
+export KOKORO_SKIP_BENCHMARKING=true
+export KOKORO_FAST_STARTUP=true
+
 # Note: ONNX_PROVIDER is NOT set here. The Python application will intelligently
 # select the best provider based on hardware benchmarking and caching.
 

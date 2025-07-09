@@ -185,16 +185,25 @@ import os
 import struct
 import sys
 import traceback
+import asyncio
+import time
 from contextlib import asynccontextmanager
+from typing import Optional
 
 import numpy as np
 import onnxruntime as ort
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import soundfile as sf
 
 from api.config import TTSConfig, TTSRequest
+from api.warnings import setup_coreml_warning_handler
+from api.model.patch import apply_all_patches, get_patch_status
+from api.model.loader import initialize_model as initialize_model_sync, detect_apple_silicon_capabilities
+from api.performance.stats import get_performance_stats
+from api.tts.core import _generate_audio_segment, stream_tts_audio
+from api.tts.text_processing import segment_text
 from api.model.loader import get_model_status, initialize_model, detect_apple_silicon_capabilities
 from api.model.patch import apply_all_patches, get_patch_status
 from api.performance.stats import get_performance_stats
@@ -445,94 +454,109 @@ suppress_phonemizer_warnings()
 logger.info("🔧 Applying production patches to kokoro-onnx library...")
 apply_all_patches()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Application lifespan manager for proper resource initialization and cleanup.
+# Global variables for application state
+kokoro_model: Optional[object] = None
+model_initialization_complete = False
+model_initialization_started = False
+startup_progress = {
+    "status": "starting",
+    "progress": 0,
+    "message": "Initializing application...",
+    "started_at": None,
+    "completed_at": None
+}
+
+def update_startup_progress(progress: int, message: str, status: str = "initializing"):
+    """Update startup progress for user feedback"""
+    startup_progress.update({
+        "status": status,
+        "progress": progress, 
+        "message": message,
+        "started_at": startup_progress.get("started_at") or time.time()
+    })
+    logger.info(f"🚀 Startup Progress ({progress}%): {message}")
+
+async def initialize_model():
+    """Initialize the model with progress tracking"""
+    global kokoro_model, model_initialization_complete, model_initialization_started
     
-    This context manager ensures comprehensive validation and initialization:
-    1. Dependency validation before server starts
-    2. Environment and configuration validation
-    3. Model file validation
-    4. Patch status validation
-    5. Model initialization with hardware acceleration
-    6. Proper resource cleanup on shutdown
+    if model_initialization_started:
+        return
     
-    **Startup Sequence**:
-    1. Validate all dependencies and environment
-    2. Verify TTS configuration parameters
-    3. Validate model files are present and accessible
-    4. Check patch application status
-    5. Initialize Kokoro model with optimal provider selection
-    6. Log successful startup
-    
-    **Shutdown Sequence**:
-    1. Log shutdown initiation
-    2. Automatic resource cleanup via registered handlers
-    
-    @raises RuntimeError: If any critical validation fails
-    """
-    # Startup phase
-    logger.info("🚀 Starting Kokoro-ONNX TTS API server...")
+    model_initialization_started = True
+    startup_progress["started_at"] = time.time()
     
     try:
-        # Step 1: Validate dependencies
-        validate_dependencies()
-        logger.info("✅ Dependencies validated successfully")
+        update_startup_progress(5, "Setting up warning management...")
+        setup_coreml_warning_handler()
         
-        # Step 2: Validate environment
-        validate_environment()
-        logger.info("✅ Environment validated successfully")
+        update_startup_progress(10, "Applying production patches...")
+        apply_all_patches()
         
-        # Step 3: Verify configuration before model initialization
-        TTSConfig.verify_config()
-        logger.info("✅ Configuration verified successfully")
+        update_startup_progress(15, "Initializing model with hardware acceleration...")
         
-        # Step 4: Validate model files
-        validate_model_files()
-        logger.info("✅ Model files validated successfully")
+        # Create a wrapper function to track progress during model initialization
+        def track_model_init():
+            update_startup_progress(20, "Detecting hardware capabilities...")
+            initialize_model_sync()  # This function doesn't return the model
+            return True
         
-        # Step 5: Validate patch status
-        validate_patch_status()
-        logger.info("✅ Patch status validated successfully")
+        await asyncio.get_event_loop().run_in_executor(
+            None, track_model_init
+        )
         
-        # Step 6: Initialize model in development mode or if not using Gunicorn
-        # In production with Gunicorn, model is initialized in the post_fork hook
-        if os.environ.get("KOKORO_GUNICORN_WORKER") != "true":
-            logger.info("🚀 Initializing TTS model directly (development mode)...")
-            initialize_model()
-            logger.info("✅ Model initialization completed")
-
-        logger.info("🎉 Application startup complete - Server ready for requests")
+        update_startup_progress(90, "Finalizing model setup...")
+        
+        # Get the model from the global model loader
+        from api.model.loader import get_model, get_model_status
+        
+        # Quick validation
+        if not get_model_status():
+            raise RuntimeError("Model initialization failed - model not loaded")
+            
+        kokoro_model = get_model()
+        if kokoro_model is None:
+            raise RuntimeError("Model initialization failed - model is None")
+            
+        update_startup_progress(100, "Model initialization complete!", "ready")
+        startup_progress["completed_at"] = time.time()
+        model_initialization_complete = True
+        
+        total_time = startup_progress["completed_at"] - startup_progress["started_at"]
+        logger.info(f"🎉 Model initialization completed in {total_time:.2f}s")
         
     except Exception as e:
-        logger.error(f"❌ Application startup failed: {e}")
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"📋 Full traceback:\n{traceback.format_exc()}")
-        raise RuntimeError(f"Application startup failed: {e}")
-    
-    yield  # Application runs here
-    
-    # Shutdown phase
-    logger.info("🛑 Initiating application shutdown...")
-    logger.info("✅ Application shutdown complete")
+        update_startup_progress(0, f"Initialization failed: {str(e)}", "error")
+        logger.error(f"❌ Model initialization failed: {e}")
+        raise
 
-# Create FastAPI application with comprehensive configuration
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan management with progress tracking"""
+    # Startup
+    logger.info("🔧 Application logging configured")
+    logger.info("📄 Detailed logs will be written to: logs/api_server.log")
+    
+    # Start model initialization in background
+    asyncio.create_task(initialize_model())
+    
+    yield
+    
+    # Shutdown
+    logger.info("🔄 Application shutting down")
+
+# Create FastAPI app with lifespan management
 app = FastAPI(
-    title="Kokoro-ONNX TTS API",
-    description="Production-ready TTS API with hardware acceleration and streaming support",
+    title="Kokoro TTS API",
     version="2.1.0",
-    lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    description="High-performance Neural Text-to-Speech API with Apple Silicon optimization",
+    lifespan=lifespan
 )
 
-# Configure CORS for web application compatibility
-# In production, consider restricting origins to specific domains
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -541,28 +565,26 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """
-    Health check endpoint for load balancers and monitoring systems.
-    
-    **Response Format**:
-    ```json
-    {
-        "status": "online" | "initializing"
-    }
-    ```
-    
-    **Status Values**:
-    - `online`: Model is loaded and ready to process requests
-    - `initializing`: Model is still loading (temporary state)
-    
-    **Use Cases**:
-    - Load balancer health checks
-    - Kubernetes readiness probes
-    - Monitoring system integration
-    - Client-side server status verification
-    
-    @returns JSON object with current server status
+    Enhanced health check that provides status during initialization
     """
-    return {"status": "online" if get_model_status() else "initializing"}
+    if model_initialization_complete:
+        return {"status": "online", "model_ready": True}
+    elif model_initialization_started:
+        return {
+            "status": "initializing",
+            "model_ready": False,
+            "progress": startup_progress,
+            "message": "Model is initializing, please wait..."
+        }
+    else:
+        return {"status": "starting", "model_ready": False}
+
+@app.get("/startup-progress")
+async def get_startup_progress():
+    """
+    Get detailed startup progress information
+    """
+    return startup_progress
 
 @app.get("/status")
 async def get_status():
@@ -618,7 +640,7 @@ async def get_status():
     try:
         # Get basic status
         status = {
-            "model_loaded": get_model_status(),
+            "model_loaded": model_initialization_complete,
             "onnx_providers": ort.get_available_providers(),
             "performance": get_performance_stats(),
         }
@@ -719,7 +741,7 @@ async def create_speech(request: Request, tts_request: TTSRequest):
     @raises HTTPException: For various error conditions
     """
     # Ensure model is loaded before processing
-    if not get_model_status():
+    if not model_initialization_complete:
         raise HTTPException(
             status_code=503, 
             detail="TTS model not loaded. Please wait for initialization to complete."

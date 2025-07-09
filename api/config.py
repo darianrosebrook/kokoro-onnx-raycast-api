@@ -301,12 +301,17 @@ class TTSConfig:
     """.strip()
     
     # Benchmark configuration parameters
-    BENCHMARK_ENABLE_LONG_TEXT = True  # Enable long text benchmarking
-    BENCHMARK_WARMUP_RUNS = 3  # Number of warmup runs per provider
-    BENCHMARK_CONSISTENCY_RUNS = 3  # Number of consistency test runs
+    BENCHMARK_ENABLE_LONG_TEXT = False  # Disable long text benchmarking by default (too slow)
+    BENCHMARK_WARMUP_RUNS = 1  # Reduced from 3 to 1 for faster benchmarking
+    BENCHMARK_CONSISTENCY_RUNS = 1  # Reduced from 3 to 1 for faster benchmarking
     BENCHMARK_MIN_IMPROVEMENT_PERCENT = float(os.environ.get("KOKORO_MIN_IMPROVEMENT_PERCENT", "10.0"))  # Minimum improvement required to recommend provider change
     BENCHMARK_CACHE_DURATION = 86400  # Cache duration in seconds (24 hours)
     BENCHMARK_WARMUP_TEXT = "Hello, this is a warmup inference to optimize model performance."
+    
+    # Development mode settings for faster startup
+    DEVELOPMENT_MODE = os.environ.get("KOKORO_DEVELOPMENT_MODE", "false").lower() == "true"
+    SKIP_BENCHMARKING = os.environ.get("KOKORO_SKIP_BENCHMARKING", "false").lower() == "true"
+    FAST_STARTUP = os.environ.get("KOKORO_FAST_STARTUP", "false").lower() == "true"
     
     # Audio processing parameters optimized for Kokoro model
     SAMPLE_RATE = 24000  # Kokoro default sample rate for optimal quality
@@ -329,6 +334,16 @@ class TTSConfig:
     # Text processing limits for optimal performance
     MAX_TEXT_LENGTH = 2000  # OpenAI API compatibility limit
     MAX_SEGMENT_LENGTH = 200  # Optimal segment size for parallel processing
+    
+    # ORT (ONNX Runtime) optimization settings
+    ORT_OPTIMIZATION_ENABLED = os.environ.get("KOKORO_ORT_OPTIMIZATION", "auto").lower()
+    ORT_MODEL_PATH = os.environ.get("KOKORO_ORT_MODEL_PATH", "")
+    ORT_CACHE_DIR = os.path.join(os.getcwd(), ".cache", "ort")
+    ORT_COMPILE_ON_FIRST_RUN = os.environ.get("KOKORO_ORT_COMPILE_ON_FIRST_RUN", "true").lower() == "true"
+
+    # Apple Silicon specific ORT settings
+    APPLE_SILICON_ORT_PREFERRED = os.environ.get("KOKORO_APPLE_SILICON_ORT_PREFERRED", "true").lower() == "true"
+    ORT_DEVICE_TYPES = ["CPUAndNeuralEngine", "CPUAndGPU", "CPUOnly"]
     
     @classmethod
     def verify_config(cls):
