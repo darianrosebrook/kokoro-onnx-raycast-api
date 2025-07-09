@@ -3,6 +3,31 @@ logs/
 .cache/
 reports/
 
+# Temporary files and cache artifacts
+.cache/tmp*
+.cache/coreml_context_*
+benchmark_*.log
+*.tmp
+*.temp
+coreml_config.json
+benchmark_results.md
+
+# CoreML compilation artifacts
+*.mlmodelc/
+*.mlmodel
+
+# Temporary audio files
+*.wav
+*.mp3
+*.pcm
+test_audio.*
+final_test.*
+dev_test.*
+
+# Performance reports (auto-generated)
+performance_report_*.json
+benchmark_report_*.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -41,3 +66,10 @@ Thumbs.db
 
 # Local cache
 .cache/
+.DS_Store
+
+# Environment variables, leaving .env.example for reference
+.env
+.env.local
+.env.production
+.env.development 

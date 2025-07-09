@@ -203,6 +203,7 @@ from api.model.patch import apply_all_patches, get_patch_status
 from api.model.loader import initialize_model as initialize_model_sync, detect_apple_silicon_capabilities
 from api.performance.stats import get_performance_stats
 from api.tts.core import _generate_audio_segment, stream_tts_audio
+from api.utils.cache_cleanup import cleanup_cache, get_cache_info
 from api.tts.text_processing import segment_text
 from api.model.loader import get_model_status, initialize_model, detect_apple_silicon_capabilities
 from api.model.patch import apply_all_patches, get_patch_status
@@ -490,6 +491,17 @@ async def initialize_model():
         update_startup_progress(5, "Setting up warning management...")
         setup_coreml_warning_handler()
         
+        update_startup_progress(8, "Cleaning up cache files...")
+        try:
+            cache_info = get_cache_info()
+            if cache_info.get('needs_cleanup', False):
+                cleanup_result = cleanup_cache(aggressive=False)
+                logger.info(f"🧹 Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
+            else:
+                logger.info(f"🧹 Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
+        except Exception as e:
+            logger.warning(f"⚠️ Cache cleanup failed: {e}")
+        
         update_startup_progress(10, "Applying production patches...")
         apply_all_patches()
         
@@ -585,6 +597,42 @@ async def get_startup_progress():
     Get detailed startup progress information
     """
     return startup_progress
+
+@app.get("/cache-status")
+async def get_cache_status():
+    """
+    Get cache statistics and cleanup status
+    """
+    try:
+        cache_info = get_cache_info()
+        return {
+            "cache_statistics": cache_info,
+            "cleanup_recommendations": {
+                "needs_cleanup": cache_info.get('needs_cleanup', False),
+                "size_mb": cache_info.get('total_size_mb', 0),
+                "temp_dirs": cache_info.get('temp_dirs', 0),
+                "recommended_action": "cleanup" if cache_info.get('needs_cleanup', False) else "none"
+            }
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/cache-cleanup")
+async def trigger_cache_cleanup(aggressive: bool = False):
+    """
+    Manually trigger cache cleanup
+    
+    @param aggressive: Use aggressive cleanup policies
+    """
+    try:
+        cleanup_result = cleanup_cache(aggressive=aggressive)
+        return {
+            "success": True,
+            "cleanup_result": cleanup_result,
+            "message": f"Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 @app.get("/status")
 async def get_status():
