@@ -1,0 +1,40 @@
+# Cache and Logs
+logs/
+.cache/
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Node.js
+node_modules/
+dist/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Raycast
+.DS_Store
+.raycast-history.json
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Model and voice files
+*.onnx
+*.bin
