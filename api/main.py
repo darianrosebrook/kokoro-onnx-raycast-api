@@ -220,6 +220,10 @@ def setup_application_logging():
     This function configures logging with multiple handlers for different output
     destinations and provides detailed logging for debugging and monitoring.
     """
+    # Prevent duplicate setup
+    if hasattr(setup_application_logging, '_configured'):
+        return
+    setup_application_logging._configured = True
     # Create formatters
     detailed_formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
@@ -235,26 +239,49 @@ def setup_application_logging():
     # Clear existing handlers to prevent duplicates
     root_logger.handlers.clear()
 
-    # Console handler with color support
+    # Console handler with immediate flushing
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(simple_formatter)
+    # Ensure immediate flushing
+    console_handler.flush = lambda: console_handler.stream.flush()
+    # Set buffer size to 0 for immediate output
+    if hasattr(console_handler.stream, 'reconfigure'):
+        console_handler.stream.reconfigure(line_buffering=True)
     root_logger.addHandler(console_handler)
 
     # Create logs directory
     logs_dir = "logs"
     os.makedirs(logs_dir, exist_ok=True)
 
-    # File handler for detailed logging
-    log_file = os.path.join(logs_dir, "api_server.log")
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.DEBUG)  # Always log everything to file
-    file_handler.setFormatter(detailed_formatter)
-    root_logger.addHandler(file_handler)
-
     logger = logging.getLogger(__name__)
     logger.info(f"🔧 Application logging configured")
-    logger.info(f"📄 Detailed logs will be written to: {log_file}")
+    logger.info(f"📄 Detailed logs will be written to: logs/api_server.log")
+    
+    # Configure immediate flushing for console handler
+    for handler in root_logger.handlers:
+        if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
+            # Force immediate flushing for console output
+            handler.flush = lambda: handler.stream.flush()
+            # Override emit to ensure flushing
+            original_emit = handler.emit
+            def emit_with_flush(record):
+                original_emit(record)
+                handler.stream.flush()
+                # Also force stdout flush
+                sys.stdout.flush()
+            handler.emit = emit_with_flush
+    
+    # Ensure stdout is unbuffered
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(line_buffering=True)
+    
+    # Test logging to ensure it's working immediately
+    logger.info("🔧 Logging system initialized and ready")
+    sys.stdout.flush()  # Force immediate output
+    
+    # Also print directly to ensure immediate output
+    print("🔧 Direct output test - logging system ready", flush=True)
 
 
 def validate_dependencies():
@@ -487,7 +514,8 @@ def update_startup_progress(progress: int, message: str, status: str = "initiali
         "message": message,
         "started_at": startup_progress.get("started_at") or time.time()
     })
-    logger.info(f"🚀 Startup Progress ({progress}%): {message}")
+    # Use print for immediate console output only
+    print(f"🚀 Startup Progress ({progress}%): {message}", flush=True)
 
 
 async def initialize_model():
@@ -553,7 +581,7 @@ async def initialize_model():
 
         total_time = startup_progress["completed_at"] - \
             startup_progress["started_at"]
-        logger.info(f"🎉 Model initialization completed in {total_time:.2f}s")
+        print(f"✅ Model initialization completed in {total_time:.2f}s", flush=True)
 
     except Exception as e:
         update_startup_progress(0, f"Initialization failed: {str(e)}", "error")
@@ -565,8 +593,7 @@ async def initialize_model():
 async def lifespan(app: FastAPI):
     """Application lifespan management with progress tracking"""
     # Startup
-    logger.info("🔧 Application logging configured")
-    logger.info("📄 Detailed logs will be written to: logs/api_server.log")
+    # Logging is already configured in setup_application_logging()
 
     # Start model initialization in background
     asyncio.create_task(initialize_model())

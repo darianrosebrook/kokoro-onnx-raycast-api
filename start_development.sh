@@ -67,5 +67,6 @@ mkdir -p .cache
 
 # Start the development server with hot reload
 # Set TMPDIR to use the local cache
-# Filter out CoreML context leak warnings from uvicorn output
-TMPDIR=$(pwd)/.cache uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir api/ 2>&1 | grep -v "Context leak detected" | grep -v "msgtracer returned -1" 
+# Use --log-level info to ensure proper logging output
+# Note: Removed grep filtering to allow real-time logs to appear
+TMPDIR=$(pwd)/.cache uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir api/ --log-level info 

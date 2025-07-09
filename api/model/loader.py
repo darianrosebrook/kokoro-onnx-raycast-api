@@ -393,13 +393,8 @@ def detect_apple_silicon_capabilities():
         capabilities['provider_priority'] = ['CPUExecutionProvider']
         capabilities['recommended_provider'] = 'CPUExecutionProvider'
     
-    # Log comprehensive capabilities
-    logger.info(f"📊 Hardware Analysis Complete:")
-    logger.info(f"   • Chip: {capabilities.get('chip_family', 'Unknown')}")
-    logger.info(f"   • Neural Engine: {'✅ Available' if capabilities['has_neural_engine'] else '❌ Not Available'}")
-    logger.info(f"   • CPU Cores: {capabilities['cpu_cores']}")
-    logger.info(f"   • Memory: {capabilities['memory_gb']}GB")
-    logger.info(f"   • Recommended Provider: {capabilities['recommended_provider']}")
+    # Log key capabilities (condensed for cleaner output)
+    logger.info(f"📊 Hardware: {capabilities.get('chip_family', 'Unknown')} | Neural Engine: {'✅' if capabilities['has_neural_engine'] else '❌'} | Provider: {capabilities['recommended_provider']}")
     
     if capabilities['hardware_issues']:
         logger.warning(f"⚠️ Hardware issues detected: {capabilities['hardware_issues']}")
@@ -788,10 +783,9 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
         logger.error("❌ CPU provider not available - critical error")
         raise RuntimeError("CPU provider not available - cannot continue")
     
-    # Log final configuration
-    logger.info(f"🔧 Provider configuration complete:")
-    for i, (provider, options) in enumerate(providers):
-        logger.info(f"   {i+1}. {provider} - {options}")
+    # Log final configuration (condensed)
+    provider_names = [provider for provider, _ in providers]
+    logger.info(f"🔧 Providers configured: {' → '.join(provider_names)}")
     
     return providers, provider_options
 
@@ -887,12 +881,12 @@ def benchmark_providers():
     
     benchmark_results = {}
     
-    logger.info("🔬 Starting provider performance benchmarking...")
+    # Benchmarking is now handled by main.py progress tracking
     
     # Function to perform warmup inferences with timeout
     def warmup_provider(model, provider_name):
         """Perform warmup inferences to stabilize performance"""
-        logger.info(f"🔥 Warming up {provider_name}...")
+        # Warmup progress is now tracked by main.py
         warmup_runs = TTSConfig.BENCHMARK_WARMUP_RUNS
         for i in range(warmup_runs):
             try:
@@ -1196,7 +1190,7 @@ def initialize_model():
         logger.debug("🔄 Model already loaded, skipping initialization")
         return
         
-    logger.info("🚀 Starting comprehensive model initialization...")
+    # Progress is tracked by main.py, so we don't need to duplicate the start message
     start_time = time.time()
     
     # Add a simple progress tracking function for internal use
@@ -1380,8 +1374,7 @@ def initialize_model():
             
         # Log successful initialization
         init_time = time.time() - start_time
-        logger.info(f"🎉 Model initialization completed successfully in {init_time:.2f}s")
-        logger.info("👍🏼 Application startup complete, server is ready to accept requests")
+        # Completion message is handled by main.py progress tracking
             
     except Exception as e:
         # If the primary provider fails (especially CoreML), log it as a warning
@@ -1419,7 +1412,6 @@ def initialize_model():
                 
                 model_loaded = True
                 logger.info("✅ CPU fallback initialization successful")
-                logger.info("👍🏼 Application startup complete, server is ready to accept requests")
                 
                 # Benchmark CPU fallback if enabled
                 enable_benchmarking = os.environ.get("KOKORO_BENCHMARK_PROVIDERS", "true").lower() == "true"

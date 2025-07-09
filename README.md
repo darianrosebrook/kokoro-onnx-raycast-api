@@ -93,7 +93,7 @@ After the setup is complete, follow the instructions to start the API server and
 
 ## 📦 Installation
 
-If you prefer to install manually, follow the steps below.
+If you prefer to install manually, follow the steps below. **Note**: The automated `./setup.sh` script includes additional optimizations and validations that are recommended for production use.
 
 ### Prerequisites
 
@@ -137,14 +137,295 @@ wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v
 wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx
 ```
 
-### 4. Raycast Extension Setup
+### 4. Environment Validation (Recommended)
+
+Run environment diagnostics to ensure everything is set up correctly.
+
+```bash
+# Check environment setup
+python scripts/check_environment.py
+
+# Run comprehensive system diagnostics (Apple Silicon)
+python scripts/troubleshoot_coreml.py
+```
+
+### 5. ORT Optimization Setup (Apple Silicon)
+
+For Apple Silicon users, set up ORT optimization for better performance.
+
+```bash
+# Create cache directories
+mkdir -p .cache/ort
+
+# Enable ORT optimization
+export KOKORO_ORT_OPTIMIZATION=auto
+echo "export KOKORO_ORT_OPTIMIZATION=auto" >> .env
+
+# Optional: Pre-convert model for faster startup
+python scripts/convert_to_ort.py kokoro-v1.0.int8.onnx -o .cache/ort/kokoro-v1.0.int8.ort
+```
+
+### 6. Benchmark Frequency Configuration (Recommended)
+
+Configure how often the system should benchmark your hardware for optimal performance.
+
+```bash
+# Interactive configuration
+python scripts/configure_benchmark_frequency.py
+
+# Or set manually (recommended: weekly)
+export KOKORO_BENCHMARK_FREQUENCY=weekly
+echo "KOKORO_BENCHMARK_FREQUENCY=weekly" >> .env
+```
+
+### 7. Raycast Extension Setup
 
 Finally, install the dependencies for the Raycast extension.
 
 ```bash
 cd raycast
 npm install
+cd ..
 ```
+
+### Manual vs Automated Installation
+
+**Manual Installation** provides the basic setup required to run the TTS system. However, the automated `./setup.sh` script includes several additional features:
+
+- **Environment Diagnostics**: Automatic validation of system setup
+- **ORT Optimization**: Automatic Apple Silicon optimization setup
+- **System Validation**: Comprehensive CoreML and hardware diagnostics
+- **Benchmark Configuration**: Interactive setup of performance optimization
+- **Cache Management**: Automatic cache directory creation and optimization
+- **Error Handling**: Better error detection and recovery
+
+**Recommendation**: Use `./setup.sh` for the best experience, especially on Apple Silicon systems.
+
+## 🚀 Development Optimization Guide
+
+For developers who want to understand and manually configure the optimization features that `setup.sh` provides automatically, here's a detailed guide:
+
+### 1. Environment Diagnostics
+
+Run comprehensive environment checks to ensure your setup is optimal:
+
+```bash
+# Check Python environment, packages, and system compatibility
+python scripts/check_environment.py
+
+# Run detailed CoreML and hardware diagnostics (Apple Silicon)
+python scripts/troubleshoot_coreml.py
+
+# Quick performance test
+python scripts/quick_benchmark.py
+```
+
+### 2. ORT (ONNX Runtime) Optimization
+
+ORT optimization provides significant performance improvements on Apple Silicon:
+
+```bash
+# Create cache directories
+mkdir -p .cache/ort
+
+# Convert ONNX model to optimized ORT format
+python scripts/convert_to_ort.py kokoro-v1.0.int8.onnx -o .cache/ort/kokoro-v1.0.int8.ort
+
+# Enable ORT optimization in environment
+export KOKORO_ORT_OPTIMIZATION=auto
+echo "export KOKORO_ORT_OPTIMIZATION=auto" >> .env
+
+# Optional: Set specific ORT model path
+export KOKORO_ORT_MODEL_PATH=.cache/ort/kokoro-v1.0.int8.ort
+echo "KOKORO_ORT_MODEL_PATH=.cache/ort/kokoro-v1.0.int8.ort" >> .env
+```
+
+**Benefits of ORT Optimization:**
+- 🚀 **3-5x faster inference** on Apple Silicon with Neural Engine
+- 🚀 **2-3x faster inference** on Apple Silicon without Neural Engine
+- 🛡️ **Fewer temporary file issues** - ORT models require less runtime compilation
+- 🛡️ **Better CoreML compatibility** - optimized for Apple's ML frameworks
+
+### 3. Benchmark Frequency Configuration
+
+Configure how often the system benchmarks hardware for optimal provider selection:
+
+```bash
+# Interactive configuration with explanations
+python scripts/configure_benchmark_frequency.py
+
+# Show current configuration
+python scripts/configure_benchmark_frequency.py --show-current
+
+# Set frequency non-interactively
+python scripts/configure_benchmark_frequency.py --frequency weekly
+
+# Manual configuration via environment variables
+export KOKORO_BENCHMARK_FREQUENCY=weekly  # daily/weekly/monthly/manually
+echo "KOKORO_BENCHMARK_FREQUENCY=weekly" >> .env
+```
+
+**Frequency Options:**
+- **Daily** (24 hours): For development or frequently changing systems
+- **Weekly** (7 days): ⭐ **Recommended** for most users
+- **Monthly** (30 days): For stable production systems
+- **Manual**: Expert mode - only benchmark when explicitly requested
+
+### 4. Cache Management
+
+Manage benchmark cache and ORT models for optimal performance:
+
+```bash
+# Show detailed cache status and expiration
+python scripts/manage_benchmark_cache.py --status
+
+# Clear cache to force re-benchmark (e.g., after OS updates)
+python scripts/manage_benchmark_cache.py --clear
+
+# Force benchmark regardless of cache status
+python scripts/manage_benchmark_cache.py --force-benchmark
+
+# Inspect detailed cache contents
+python scripts/manage_benchmark_cache.py --inspect
+
+# Clean up cache files to prevent storage bloat
+python scripts/cleanup_cache.py --stats
+python scripts/cleanup_cache.py
+```
+
+### 5. Development Mode Optimization
+
+For faster development iteration, use these environment variables:
+
+```bash
+# Skip benchmarking for faster startup
+export KOKORO_DEVELOPMENT_MODE=true
+export KOKORO_SKIP_BENCHMARKING=true
+
+# Use extended cache duration for faster iteration
+export KOKORO_FAST_STARTUP=true
+
+# Add to .env for persistence
+echo "KOKORO_DEVELOPMENT_MODE=true" >> .env
+echo "KOKORO_SKIP_BENCHMARKING=true" >> .env
+echo "KOKORO_FAST_STARTUP=true" >> .env
+```
+
+### 6. Performance Monitoring
+
+Monitor system performance and optimization effectiveness:
+
+```bash
+# Get comprehensive system status
+curl http://localhost:8000/status | jq '.'
+
+# Monitor inference times
+curl -s http://localhost:8000/status | jq '.performance.average_inference_time'
+
+# Check provider usage
+curl -s http://localhost:8000/status | jq '.performance.provider_used'
+
+# View ORT optimization status
+curl -s http://localhost:8000/status | jq '.hardware'
+
+# Run comprehensive performance benchmark
+python run_benchmark.py --verbose
+```
+
+### 7. Troubleshooting Optimization Issues
+
+If optimization isn't working as expected:
+
+```bash
+# Check if ORT optimization is enabled
+python scripts/convert_to_ort.py --validate .cache/ort/kokoro-v1.0.int8.ort
+
+# Compare ORT vs ONNX performance
+python scripts/convert_to_ort.py kokoro-v1.0.int8.onnx --benchmark --compare-original
+
+# Diagnose CoreML issues
+python scripts/troubleshoot_coreml.py
+
+# Check environment setup
+python scripts/check_environment.py
+
+# Clear all caches and re-benchmark
+python scripts/manage_benchmark_cache.py --clear
+python scripts/cleanup_cache.py --aggressive
+```
+
+### 8. Production Optimization Checklist
+
+Before deploying to production, ensure these optimizations are in place:
+
+```bash
+# ✅ Environment diagnostics pass
+python scripts/check_environment.py
+
+# ✅ ORT optimization enabled (Apple Silicon)
+ls -la .cache/ort/kokoro-v1.0.int8.ort
+
+# ✅ Benchmark frequency configured
+python scripts/configure_benchmark_frequency.py --show-current
+
+# ✅ Cache management working
+python scripts/manage_benchmark_cache.py --status
+
+# ✅ Performance benchmark passes
+python run_benchmark.py --quick
+
+# ✅ System validation complete
+python scripts/troubleshoot_coreml.py
+```
+
+### 9. Environment Variables Reference
+
+Key environment variables for optimization:
+
+```bash
+# ORT Optimization
+export KOKORO_ORT_OPTIMIZATION=auto          # Enable ORT optimization
+export KOKORO_ORT_MODEL_PATH=.cache/ort/kokoro-v1.0.int8.ort  # Custom ORT model path
+
+# Benchmark Configuration
+export KOKORO_BENCHMARK_FREQUENCY=weekly     # Benchmark frequency
+export KOKORO_DEVELOPMENT_MODE=true          # Skip benchmarking for faster startup
+export KOKORO_SKIP_BENCHMARKING=true         # Completely disable benchmarking
+export KOKORO_FAST_STARTUP=true              # Use extended cache duration
+
+# Provider Selection
+export ONNX_PROVIDER=CoreMLExecutionProvider # Override provider selection
+export COREML_COMPUTE_UNITS=CPU_AND_NE       # Use Neural Engine
+
+# Performance Tuning
+export MEMORY_CLEANUP_THRESHOLD=50           # Memory cleanup frequency
+export MAX_SEGMENT_LENGTH=200                # Text segmentation length
+```
+
+### 10. Development Workflow
+
+Recommended development workflow with optimizations:
+
+```bash
+# 1. Initial setup with optimizations
+./setup.sh
+
+# 2. Development mode for faster iteration
+export KOKORO_DEVELOPMENT_MODE=true
+./start_development.sh
+
+# 3. Monitor performance during development
+curl -s http://localhost:8000/status | jq '.performance'
+
+# 4. Test optimizations before production
+python run_benchmark.py --verbose
+
+# 5. Production deployment with full optimizations
+export KOKORO_DEVELOPMENT_MODE=false
+./start_production.sh
+```
+
+This optimization guide provides developers with the same capabilities as the automated `setup.sh` script, allowing for fine-grained control over the TTS system's performance and behavior.
 
 ## ▶️ Running the Application
 
