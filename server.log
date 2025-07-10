@@ -1,5 +1,0 @@
-Starting development server on http://0.0.0.0:8000
- LOG_LEVEL is set to info
- Hot-reloading is enabled.
-INFO:     Will watch for changes in these directories: ['/Users/darianrosebrook/Desktop/Projects/kokoro-onnx']
-ERROR:    [Errno 48] Address already in use

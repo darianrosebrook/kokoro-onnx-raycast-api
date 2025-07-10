@@ -76,7 +76,7 @@
 import { showToast, Toast } from "@raycast/api";
 import type { VoiceOption, TTSConfig } from "../types";
 import { exec, ChildProcess, spawn } from "child_process";
-import { writeFile, unlink } from "fs/promises";
+import { writeFile, unlink, stat } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { StatusUpdate } from "../types";
@@ -960,9 +960,14 @@ export class TTSSpeechProcessor {
   private async cleanup(): Promise<void> {
     for (const file of this.tempFiles) {
       try {
+        // Check if file exists before attempting to delete
+        await stat(file);
         await unlink(file);
       } catch (error) {
-        console.warn(`Failed to delete temp file: ${file}`, error);
+        // Only warn if it's not a "file not found" error
+        if ((error as any).code !== "ENOENT") {
+          console.warn(`Failed to delete temp file: ${file}`, error);
+        }
       }
     }
     this.tempFiles = [];

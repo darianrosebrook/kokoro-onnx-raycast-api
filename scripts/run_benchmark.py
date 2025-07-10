@@ -56,10 +56,10 @@ import aiohttp
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from api.config import TTSConfig
-from api.model.loader import initialize_model, benchmark_providers
-from api.model.patch import get_patch_status
-from api.performance.reporting import save_benchmark_report
+from ..api.config import TTSConfig
+from ..api.model.loader import initialize_model, benchmark_providers
+from ..api.model.patch import get_patch_status
+from ..api.performance.reporting import save_benchmark_report
 from api.warnings import configure_onnx_runtime_logging, setup_coreml_warning_handler, suppress_phonemizer_warnings, suppress_onnx_warnings
 
 

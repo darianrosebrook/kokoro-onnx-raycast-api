@@ -192,7 +192,7 @@ from typing import Optional
 
 import numpy as np
 import onnxruntime as ort
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -216,6 +216,111 @@ from api.performance.stats import get_performance_stats
 from api.tts.core import _generate_audio_segment, stream_tts_audio
 from api.tts.text_processing import segment_text
 from api.warnings import setup_coreml_warning_handler, suppress_phonemizer_warnings, configure_onnx_runtime_logging
+from functools import lru_cache
+
+
+# Enhanced dependency injection caching for optimal performance
+# Reference: DEPENDENCY_RESEARCH.md section 2.2
+
+@lru_cache(maxsize=1)
+def get_tts_config():
+    """
+    Cached TTS configuration dependency.
+    
+    Returns cached TTSConfig instance to avoid repeated instantiation.
+    Cache size limited to 1 since configuration is static.
+    """
+    return TTSConfig()
+
+@lru_cache(maxsize=1)
+def get_model_capabilities():
+    """
+    Cached hardware capabilities dependency.
+    
+    Returns cached system capabilities to avoid repeated detection.
+    Cache size limited to 1 since hardware doesn't change during runtime.
+    """
+    from api.model.loader import detect_apple_silicon_capabilities
+    return detect_apple_silicon_capabilities()
+
+@lru_cache(maxsize=10)
+def get_cached_model_status():
+    """
+    Cached model status dependency with TTL-like behavior.
+    
+    Returns cached model status for performance optimization.
+    Cache size limited to 10 to handle different status states.
+    """
+    from api.model.loader import get_model_status
+    return get_model_status()
+
+@lru_cache(maxsize=1)
+def get_performance_tracker():
+    """
+    Cached performance tracker dependency.
+    
+    Returns cached performance tracking instance.
+    Cache size limited to 1 since tracker is singleton.
+    """
+    from api.performance.stats import PerformanceTracker
+    return PerformanceTracker()
+
+# Async cached dependencies for better performance
+import asyncio
+from functools import wraps
+
+def async_lru_cache(maxsize=128):
+    """
+    Async LRU cache decorator for async dependency functions.
+    
+    Provides caching for async functions with configurable cache size.
+    """
+    def decorator(func):
+        cache = {}
+        cache_order = []
+        
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Create cache key
+            key = str(args) + str(sorted(kwargs.items()))
+            
+            # Check cache hit
+            if key in cache:
+                # Move to end (most recently used)
+                cache_order.remove(key)
+                cache_order.append(key)
+                return cache[key]
+            
+            # Execute function
+            result = await func(*args, **kwargs)
+            
+            # Add to cache
+            cache[key] = result
+            cache_order.append(key)
+            
+            # Evict if over maxsize
+            if len(cache) > maxsize:
+                oldest_key = cache_order.pop(0)
+                del cache[oldest_key]
+            
+            return result
+        
+        return wrapper
+    return decorator
+
+@async_lru_cache(maxsize=5)
+async def get_cached_system_info():
+    """
+    Cached system information dependency.
+    
+    Returns cached system information for status endpoints.
+    """
+    import psutil
+    return {
+        'memory_usage': psutil.virtual_memory().percent,
+        'cpu_usage': psutil.cpu_percent(),
+        'disk_usage': psutil.disk_usage('/').percent,
+    }
 
 
 def setup_application_logging():
@@ -262,7 +367,7 @@ def setup_application_logging():
     logger = logging.getLogger(__name__)
     logger.info(f" Application logging configured")
     logger.info(f" Detailed logs will be written to: logs/api_server.log")
-    
+
     # Configure immediate flushing for console handler
     for handler in root_logger.handlers:
         if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
@@ -270,21 +375,22 @@ def setup_application_logging():
             handler.flush = lambda: handler.stream.flush()
             # Override emit to ensure flushing
             original_emit = handler.emit
+
             def emit_with_flush(record):
                 original_emit(record)
                 handler.stream.flush()
                 # Also force stdout flush
                 sys.stdout.flush()
             handler.emit = emit_with_flush
-    
+
     # Ensure stdout is unbuffered
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(line_buffering=True)
-    
+
     # Test logging to ensure it's working immediately
     logger.info(" Logging system initialized and ready")
     sys.stdout.flush()  # Force immediate output
-    
+
     # Also print directly to ensure immediate output
     print(" Direct output test - logging system ready", flush=True)
 
@@ -514,40 +620,41 @@ startup_progress = {
 class PerformanceMiddleware(BaseHTTPMiddleware):
     """
     Custom middleware for performance optimization and monitoring.
-    
+
     This middleware provides:
     - Request timing and performance headers
     - Memory usage optimization
     - Response compression hints
     - Security headers for production
     """
-    
+
     async def dispatch(self, request: StarletteRequest, call_next):
         # Start timing
         start_time = time.time()
-        
+
         # Process request
         response: StarletteResponse = await call_next(request)
-        
+
         # Calculate processing time
         process_time = time.time() - start_time
-        
+
         # Add performance headers
         response.headers["X-Process-Time"] = str(process_time)
         response.headers["X-API-Version"] = "2.1.0"
-        
+
         # Add security headers in production
-        is_prod = os.environ.get("KOKORO_PRODUCTION", "false").lower() == "true"
+        is_prod = os.environ.get(
+            "KOKORO_PRODUCTION", "false").lower() == "true"
         if is_prod:
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["X-XSS-Protection"] = "1; mode=block"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        
+
         # Add cache headers for static content
         if request.url.path.startswith("/health") or request.url.path.startswith("/status"):
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        
+
         return response
 
 
@@ -576,7 +683,7 @@ async def initialize_model():
     try:
         update_startup_progress(5, "Setting up warning management...")
         setup_coreml_warning_handler()
-        
+
         # Set TMPDIR to local cache to avoid CoreML permission issues
         local_cache_dir = os.path.abspath(".cache")
         os.environ['TMPDIR'] = local_cache_dir
@@ -594,7 +701,7 @@ async def initialize_model():
                     f" Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
         except Exception as e:
             logger.warning(f"⚠️ Cache cleanup failed: {e}")
-        
+
         # Clean up any existing CoreML temp files that might cause permission issues
         try:
             import shutil
@@ -604,7 +711,7 @@ async def initialize_model():
                 "/var/folders/by/jwzv5d892jgcbjj02895c5280000gn/T/onnxruntime-*",
                 "/private/var/folders/by/jwzv5d892jgcbjj02895c5280000gn/T/onnxruntime-*"
             ]
-            
+
             for temp_pattern in coreml_temp_dirs:
                 if "*" in temp_pattern:
                     # Handle glob patterns
@@ -612,17 +719,21 @@ async def initialize_model():
                         if os.path.exists(temp_dir):
                             try:
                                 shutil.rmtree(temp_dir)
-                                logger.info(f" Cleaned up CoreML temp directory: {temp_dir}")
+                                logger.info(
+                                    f" Cleaned up CoreML temp directory: {temp_dir}")
                             except Exception as e:
-                                logger.debug(f"⚠️ Could not clean up {temp_dir}: {e}")
+                                logger.debug(
+                                    f"⚠️ Could not clean up {temp_dir}: {e}")
                 else:
                     # Handle direct paths
                     if os.path.exists(temp_pattern):
                         try:
                             shutil.rmtree(temp_pattern)
-                            logger.info(f" Cleaned up CoreML temp directory: {temp_pattern}")
+                            logger.info(
+                                f" Cleaned up CoreML temp directory: {temp_pattern}")
                         except Exception as e:
-                            logger.debug(f"⚠️ Could not clean up {temp_pattern}: {e}")
+                            logger.debug(
+                                f"⚠️ Could not clean up {temp_pattern}: {e}")
         except Exception as e:
             logger.debug(f"⚠️ CoreML temp cleanup failed: {e}")
 
@@ -632,48 +743,58 @@ async def initialize_model():
         update_startup_progress(
             15, "Initializing model with hardware acceleration...")
 
-        # Create a wrapper function to track progress during model initialization
+        start_time = time.time()
+
         def track_model_init():
-            update_startup_progress(20, "Detecting hardware capabilities...")
-            initialize_model_sync()  # This function doesn't return the model
-            return True
+            nonlocal start_time
+            try:
+                initialize_model_sync()
+            except Exception as e:
+                logger.error(
+                    f"❌ Synchronous model initialization failed: {e}", exc_info=True)
 
-        await asyncio.get_event_loop().run_in_executor(
-            None, track_model_init
-        )
+        try:
+            # Show progress and handle timeouts
+            update_startup_progress(
+                30, "Initializing model (this may take a moment)...", "initializing")
+            # Timeout handling can be added here if needed
 
-        update_startup_progress(90, "Finalizing model setup...")
+            # Use a thread for the synchronous model initialization
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, track_model_init)
 
-        # Get the model from the global model loader
-        from api.model.loader import get_model, get_model_status
+            # Final progress update
+            if get_model_status():
+                model_initialization_complete = True  # Set global flag
+                update_startup_progress(
+                    100, "Model initialization complete!", "online")
+                logger.info(
+                    f"✅ Model initialization completed in {time.time() - start_time:.2f}s")
+                logger.info(
+                    "✅ Ready to start processing text to speech requests")
+            else:
+                model_initialization_complete = False  # Ensure flag is set
+                update_startup_progress(
+                    100, "Model initialization failed.", "error")
+                logger.error("❌ Model initialization failed.")
 
-        # Quick validation
-        if not get_model_status():
-            raise RuntimeError(
-                "Model initialization failed - model not loaded")
-
-        kokoro_model = get_model()
-        if kokoro_model is None:
-            raise RuntimeError("Model initialization failed - model is None")
-
-        update_startup_progress(100, "Model initialization complete!", "ready")
-        startup_progress["completed_at"] = time.time()
-        model_initialization_complete = True
-
-        total_time = startup_progress["completed_at"] - \
-            startup_progress["started_at"]
-        print(f"Model initialization completed in {total_time:.2f}s", flush=True)
-        print(f"✅ Ready to start processing text to speech requests")
+        except Exception as e:
+            logger.error(
+                f"Asynchronous model initialization failed: {e}", exc_info=True)
+            update_startup_progress(
+                100, f"Initialization failed: {e}", "error")
 
     except Exception as e:
-        update_startup_progress(0, f"Initialization failed: {str(e)}", "error")
-        logger.error(f"❌ Model initialization failed: {e}")
-        raise
+        logger.error(f"❌ Model initialization failed: {e}", exc_info=True)
+        update_startup_progress(
+            100, f"Initialization failed: {e}", "error")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan management with progress tracking"""
+    """
+    Application lifespan management with progress tracking
+    """
     # Startup
     # Logging is already configured in setup_application_logging()
 
@@ -696,30 +817,57 @@ app = FastAPI(
     lifespan=lifespan,
     # Production optimizations: disable documentation endpoints
     docs_url=None if is_production else "/docs",
-    redoc_url=None if is_production else "/redoc", 
+    redoc_url=None if is_production else "/redoc",
     openapi_url=None if is_production else "/openapi.json",
     # Use ORJSON for 2-3x faster JSON serialization
     default_response_class=ORJSONResponse
 )
 
-# Add performance and security middleware
-app.add_middleware(PerformanceMiddleware)  # Custom performance monitoring
-app.add_middleware(GZipMiddleware, minimum_size=1000)  # Compress responses > 1KB
+# Enhanced middleware configuration for optimal performance
+# Reference: DEPENDENCY_RESEARCH.md section 2.3
+
+# Add performance middleware first for accurate timing
+app.add_middleware(PerformanceMiddleware)
+
+# Enhanced CORS middleware configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: Restrict for production
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*", "X-Request-ID", "X-API-Key"],  # Add common headers
+    max_age=7200,  # Cache preflight requests for 2 hours (increased from 1 hour)
+    expose_headers=["X-Request-ID", "X-Response-Time"],  # Expose performance headers
+)
+
+# Enhanced GZip middleware configuration for TTS workloads
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=256,  # Lower threshold for TTS responses (optimized for audio data)
+    compresslevel=4,   # Faster compression for real-time audio streaming
+)
 
 # Add security middleware in production
-if is_production:
+if TTSConfig.is_production:
     allowed_hosts = os.environ.get("KOKORO_ALLOWED_HOSTS", "*").split(",")
     if allowed_hosts != ["*"]:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+    else:
+        # For safety, add a default if KOKORO_ALLOWED_HOSTS is just "*"
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
+                           "*.darianrosebrook.com", "localhost", "127.0.0.1"])
+else:
+    # In development, allow any host for ease of use
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+@app.on_event("startup")
+async def startup_event():
+    # Perform any startup tasks here, e.g., validate dependencies, model files
+    validate_dependencies()
+    validate_model_files()
+    validate_environment()
+    validate_patch_status()
 
 
 @app.get("/health")
@@ -730,7 +878,7 @@ async def health_check(response: Response):
     if model_initialization_complete:
         response.status_code = 200
         return {"status": "online", "model_ready": True}
-    
+
     response.status_code = 503
     if model_initialization_started:
         return {
@@ -793,10 +941,10 @@ async def trigger_cache_cleanup(aggressive: bool = False):
 async def get_warning_statistics():
     """
     Get detailed warning suppression statistics.
-    
+
     This endpoint provides comprehensive information about warning suppression
     performance, including stderr interception statistics and suppression rates.
-    
+
     **Response Format**:
     ```json
     {
@@ -811,41 +959,41 @@ async def get_warning_statistics():
         }
     }
     ```
-    
+
     **Information Provided**:
     - **Stderr Interceptor Status**: Whether the stderr interceptor is active
     - **Suppression Statistics**: Total warnings processed and suppressed
     - **Suppression Rate**: Percentage of warnings successfully suppressed
     - **Pattern Analysis**: Breakdown of warning types by pattern
-    
+
     **Use Cases**:
     - Performance monitoring and optimization
     - Debugging warning suppression effectiveness
     - Production monitoring and alerting
     - System health assessment
-    
+
     @returns JSON object with warning suppression statistics
     """
     try:
         from api.warnings import get_warning_suppression_stats
-        
+
         stats = get_warning_suppression_stats()
-        
+
         # Add additional context about warning patterns
         stats["warning_patterns"] = {
             "context_leaks": "tracked_via_performance_system",
             "msgtracer_warnings": "suppressed_via_stderr_interceptor",
             "onnx_warnings": "suppressed_via_logging_filters"
         }
-        
+
         stats["system_info"] = {
             "warning_handler_active": True,
             "stderr_interception_enabled": stats.get("stderr_interceptor_active", False),
             "comprehensive_filtering": True
         }
-        
+
         return stats
-        
+
     except Exception as e:
         logger.error(f"❌ Warning statistics endpoint error: {e}")
         return {
@@ -965,7 +1113,7 @@ async def get_status():
 
 
 @app.post("/v1/audio/speech")
-async def create_speech(request: Request, tts_request: TTSRequest):
+async def create_speech(request: Request, tts_request: TTSRequest, config: TTSConfig = Depends(get_tts_config)):
     """
     OpenAI-compatible TTS endpoint with streaming and hardware acceleration.
 
@@ -1054,7 +1202,7 @@ async def create_speech(request: Request, tts_request: TTSRequest):
     # Handle non-streaming requests with complete audio generation
     else:
         # Segment text for parallel processing
-        segments = segment_text(tts_request.text, TTSConfig.MAX_SEGMENT_LENGTH)
+        segments = segment_text(tts_request.text, config.MAX_SEGMENT_LENGTH)
         if not segments:
             raise HTTPException(
                 status_code=400,
@@ -1093,7 +1241,7 @@ async def create_speech(request: Request, tts_request: TTSRequest):
             # Convert to 16-bit PCM and create WAV file
             scaled_audio = np.int16(final_audio * 32767)
             sf.write(audio_io, scaled_audio,
-                     TTSConfig.SAMPLE_RATE, format="WAV")
+                     config.SAMPLE_RATE, format="WAV")
             media_type = "audio/wav"
         else:  # PCM format
             # Convert to raw 16-bit PCM data

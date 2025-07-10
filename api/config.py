@@ -91,24 +91,66 @@ TTSConfig.verify_config()
 print(f"Chunk size: {TTSConfig.CHUNK_SIZE_BYTES} bytes")
 ```
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 import logging
 import os
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
+class TTSResponse(BaseModel):
+    """
+    Optimized TTS response model using Pydantic v2 features.
+    Reference: DEPENDENCY_RESEARCH.md section 2.1
+    
+    Enhanced with Pydantic v2 performance optimizations for faster serialization:
+    - Efficient JSON encoding with custom encoders for numpy arrays
+    - Strict validation with extra field rejection  
+    - Enum value optimization for better performance
+    - Assignment validation for data integrity
+    - Arbitrary type support for complex data structures
+    """
+    model_config = ConfigDict(
+        # Performance optimizations
+        json_encoders={
+            np.ndarray: lambda v: v.tolist() if v is not None else None,
+            float: lambda v: round(v, 6),  # Limit float precision for efficiency
+        },
+        arbitrary_types_allowed=True,
+        use_enum_values=True,
+        validate_assignment=True,
+        extra='forbid',
+        # Pydantic v2 specific optimizations
+        str_strip_whitespace=True,
+        validate_default=True,
+        frozen=False,  # Allow modification for streaming responses
+        # Serialization optimizations
+        ser_json_timedelta='float',
+        ser_json_bytes='base64',
+        # Validation optimizations
+        validate_call=True,
+        revalidate_instances='never',  # Performance optimization
+    )
+
 class TTSRequest(BaseModel):
     """
-    OpenAI-compatible TTS request model with comprehensive validation.
+    OpenAI-compatible TTS request model with comprehensive validation and Pydantic v2 optimization.
     
     This model provides automatic request validation, type conversion, and
     error handling for all TTS API requests. It ensures compatibility with
     the OpenAI TTS API specification while adding advanced features.
     
+    Enhanced with Pydantic v2 performance optimizations for faster request processing:
+    - Efficient field validation with early exit strategies
+    - Optimized default value handling
+    - Enhanced type coercion with minimal overhead
+    - Streamlined validation pipeline for better performance
+    
     ## Validation Features
     
     ### Text Processing
-    - **Length Validation**: Enforces 2000 character limit for optimal processing
+    - **Length Validation**: Enforces 4500 character limit for optimal processing
     - **Content Safety**: Ensures text content is suitable for synthesis
     - **Encoding Handling**: Proper Unicode text handling and normalization
     
@@ -130,7 +172,7 @@ class TTSRequest(BaseModel):
     ## Field Specifications
     
     ### Required Fields
-    - `text`: Input text for synthesis (1-2000 characters)
+    - `text`: Input text for synthesis (1-4500 characters)
     
     ### Optional Fields with Defaults
     - `voice`: Voice selection with high-quality default
@@ -167,6 +209,22 @@ class TTSRequest(BaseModel):
     )
     ```
     """
+    
+    # Pydantic v2 configuration for optimal performance
+    model_config = ConfigDict(
+        # Performance optimizations
+        str_strip_whitespace=True,
+        validate_default=True,
+        validate_assignment=True,
+        extra='forbid',
+        frozen=False,  # Allow modification during processing
+        # Validation optimizations
+        validate_call=True,
+        revalidate_instances='never',  # Performance optimization
+        # Serialization optimizations
+        use_enum_values=True,
+        arbitrary_types_allowed=False,  # Strict type validation for requests
+    )
     
     text: str = Field(
         ..., 
@@ -276,6 +334,7 @@ class TTSConfig:
     """
     
     # Model file paths and resources
+    is_production = os.environ.get("KOKORO_PRODUCTION_MODE", "false").lower() == "true"
     MODEL_PATH = "kokoro-v1.0.int8.onnx"
     VOICES_PATH = "voices-v1.0.bin"
     

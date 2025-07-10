@@ -153,6 +153,15 @@ else
   print_warning "Environment diagnostic script not found - skipping diagnostics."
 fi
 
+# Make performance validation scripts executable
+print_progress "Setting up performance validation tools..."
+if [ -f "scripts/quick_performance_test.sh" ]; then
+  chmod +x scripts/quick_performance_test.sh
+  print_success "Performance validation tools configured."
+else
+  print_warning "Performance validation script not found - some validation features may not be available."
+fi
+
 # Install espeak-ng (platform-dependent)
 print_progress "Checking eSpeak-ng installation..."
 if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -431,7 +440,10 @@ echo ""
 echo "2.  Access the web interface:"
 echo "   http://localhost:8000/docs"
 echo ""
-echo "3.  Use Raycast extension (if installed):"
+echo "3.  Validate performance optimizations:"
+echo "   ./scripts/quick_performance_test.sh"
+echo ""
+echo "4.  Use Raycast extension (if installed):"
 echo "   Open Raycast and search for 'Speak Text' or 'Speak Selection'"
 echo ""
 
@@ -480,6 +492,11 @@ fi
 
 
 print_step "Useful Commands:"
+echo ""
+echo " Performance Validation:"
+echo "   ./scripts/quick_performance_test.sh     # Quick performance test (recommended)"
+echo "   python scripts/validate_optimization_performance.py  # Comprehensive validation"
+echo "   python scripts/baseline_comparison.py --days-ago 7   # Compare with previous version"
 echo ""
 echo " Diagnostic Tools:"
 echo "   python scripts/check_environment.py     # Check system setup"
