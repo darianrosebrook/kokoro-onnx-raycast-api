@@ -763,11 +763,11 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
         os.environ['COREML_TEMP_DIR'] = local_temp_dir
         logger.info(f" Set COREML_TEMP_DIR to: {local_temp_dir}")
 
-        # Set a dedicated cache path for compiled CoreML models
+        # Set a dedicated cache path for compiled CoreML models using the correct ONNX Runtime option
         coreml_cache_path = os.path.join(_cache_dir, "coreml_cache")
         os.makedirs(coreml_cache_path, exist_ok=True)
-        coreml_options['coreml_cache_path'] = coreml_cache_path
-        logger.info(f"️ Set CoreML cache path to: {coreml_cache_path}")
+        coreml_options['ModelCacheDirectory'] = coreml_cache_path
+        logger.info(f" Set CoreML ModelCacheDirectory to: {coreml_cache_path}")
         
         # Apple Silicon specific optimizations
         if TTSConfig.APPLE_SILICON_ORT_PREFERRED:
