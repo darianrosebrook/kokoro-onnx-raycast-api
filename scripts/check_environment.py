@@ -302,8 +302,8 @@ def main():
         compatibility = check_system_compatibility()
         structure_status, missing_files = check_project_structure()
         
-            # Provide recommendations
-    provide_installation_recommendations(analysis, missing_packages, package_status)
+        # Provide recommendations
+        provide_installation_recommendations(analysis, missing_packages, package_status)
         
         # Generate diagnostic report
         report = generate_diagnostic_report(analysis, package_status, compatibility, structure_status)
