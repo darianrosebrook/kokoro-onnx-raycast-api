@@ -616,6 +616,10 @@ def get_or_create_ort_model() -> str:
         session_options.optimized_model_filepath = ort_model_path
         session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         
+        # Configure local temp directory for CoreML to avoid permission issues
+        local_temp_dir = os.path.join(_cache_dir, "coreml_temp")
+        os.makedirs(local_temp_dir, exist_ok=True)
+        
         # Configure for Apple Silicon if available
         capabilities = detect_apple_silicon_capabilities()
         if capabilities['is_apple_silicon']:
@@ -752,6 +756,11 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
             'coreml_flags': 0,  # Default flags
             'enable_fast_path': True,  # Enable fast path optimizations
         }
+        
+        # Set environment variable for CoreML temp directory
+        local_temp_dir = os.path.join(_cache_dir, "coreml_temp")
+        os.environ['COREML_TEMP_DIR'] = local_temp_dir
+        logger.info(f"🔧 Set COREML_TEMP_DIR to: {local_temp_dir}")
         
         # Apple Silicon specific optimizations
         if TTSConfig.APPLE_SILICON_ORT_PREFERRED:
@@ -1205,6 +1214,17 @@ def initialize_model():
             if kokoro_model and hasattr(kokoro_model, 'sess'):
                 kokoro_model.sess = None
             gc.collect()
+            
+            # Clean up CoreML temp directory
+            local_temp_dir = os.path.join(_cache_dir, "coreml_temp")
+            if os.path.exists(local_temp_dir):
+                import shutil
+                try:
+                    shutil.rmtree(local_temp_dir)
+                    logger.debug(f"🧹 Cleaned up CoreML temp directory: {local_temp_dir}")
+                except Exception as e:
+                    logger.debug(f"⚠️ Could not clean up CoreML temp directory: {e}")
+            
             logger.debug("🧹 Model resource cleanup completed")
         except Exception as e:
             logger.debug(f"⚠️ Cleanup warning (non-critical): {e}")
@@ -1271,6 +1291,11 @@ def initialize_model():
         session_options.log_severity_level = 3  # Suppress most ONNX Runtime warnings
         session_options.enable_cpu_mem_arena = False  # Disable memory arena for better cleanup
         session_options.enable_mem_pattern = False  # Disable memory pattern optimization
+        
+        # Configure local temp directory for CoreML to avoid permission issues
+        local_temp_dir = os.path.join(_cache_dir, "coreml_temp")
+        os.makedirs(local_temp_dir, exist_ok=True)
+        logger.info(f"📁 Using local temp directory for CoreML: {local_temp_dir}")
         
         # Configure providers with ORT optimization support
         log_progress("Configuring execution providers...")

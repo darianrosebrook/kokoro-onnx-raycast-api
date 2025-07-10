@@ -251,6 +251,10 @@ class CoreMLTroubleshooter:
                     session_options = ort.SessionOptions()
                     session_options.log_severity_level = 3  # Minimize logging
                     
+                    # Configure local temp directory for CoreML to avoid permission issues
+                    local_temp_dir = os.path.join(".cache", "coreml_temp")
+                    os.makedirs(local_temp_dir, exist_ok=True)
+                    
                     if os.path.exists(TTSConfig.MODEL_PATH):
                         session = ort.InferenceSession(
                             TTSConfig.MODEL_PATH,

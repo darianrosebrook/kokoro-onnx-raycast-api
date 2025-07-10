@@ -67,6 +67,10 @@ def convert_onnx_to_ort(input_path: str, output_path: str = None, optimize_for_h
         session_options.optimized_model_filepath = output_path
         session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         
+        # Configure local temp directory for CoreML to avoid permission issues
+        local_temp_dir = os.path.join(".cache", "coreml_temp")
+        os.makedirs(local_temp_dir, exist_ok=True)
+        
         # Apply hardware-specific optimizations
         if optimize_for_hardware:
             capabilities = detect_apple_silicon_capabilities()

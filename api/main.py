@@ -531,6 +531,11 @@ async def initialize_model():
     try:
         update_startup_progress(5, "Setting up warning management...")
         setup_coreml_warning_handler()
+        
+        # Set TMPDIR to local cache to avoid CoreML permission issues
+        local_cache_dir = os.path.abspath(".cache")
+        os.environ['TMPDIR'] = local_cache_dir
+        logger.info(f"🔧 Set TMPDIR to local cache: {local_cache_dir}")
 
         update_startup_progress(8, "Cleaning up cache files...")
         try:
@@ -544,6 +549,37 @@ async def initialize_model():
                     f"🧹 Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
         except Exception as e:
             logger.warning(f"⚠️ Cache cleanup failed: {e}")
+        
+        # Clean up any existing CoreML temp files that might cause permission issues
+        try:
+            import shutil
+            import glob
+            coreml_temp_dirs = [
+                ".cache/coreml_temp",
+                "/var/folders/by/jwzv5d892jgcbjj02895c5280000gn/T/onnxruntime-*",
+                "/private/var/folders/by/jwzv5d892jgcbjj02895c5280000gn/T/onnxruntime-*"
+            ]
+            
+            for temp_pattern in coreml_temp_dirs:
+                if "*" in temp_pattern:
+                    # Handle glob patterns
+                    for temp_dir in glob.glob(temp_pattern):
+                        if os.path.exists(temp_dir):
+                            try:
+                                shutil.rmtree(temp_dir)
+                                logger.info(f"🧹 Cleaned up CoreML temp directory: {temp_dir}")
+                            except Exception as e:
+                                logger.debug(f"⚠️ Could not clean up {temp_dir}: {e}")
+                else:
+                    # Handle direct paths
+                    if os.path.exists(temp_pattern):
+                        try:
+                            shutil.rmtree(temp_pattern)
+                            logger.info(f"🧹 Cleaned up CoreML temp directory: {temp_pattern}")
+                        except Exception as e:
+                            logger.debug(f"⚠️ Could not clean up {temp_pattern}: {e}")
+        except Exception as e:
+            logger.debug(f"⚠️ CoreML temp cleanup failed: {e}")
 
         update_startup_progress(10, "Applying production patches...")
         apply_all_patches()
