@@ -26,12 +26,12 @@ from typing import AsyncGenerator, Dict, Optional, Tuple
 import numpy as np
 from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
+from kokoro_onnx import Kokoro
 
 from api.config import TTSConfig
-from api.model.loader import get_model, get_model_status
-from api.performance.stats import update_performance_stats, update_phonemizer_stats
+from api.model.loader import get_model, get_model_status, get_active_provider
+from api.performance.stats import update_performance_stats
 from api.tts.text_processing import (
-    clean_text,
     segment_text,
 )
 
@@ -41,68 +41,41 @@ logger = logging.getLogger(__name__)
 def _generate_audio_segment(
     idx: int, text: str, voice: str, speed: float, lang: str
 ) -> Tuple[int, Optional[np.ndarray], str]:
-    kokoro_model = get_model()
-    if not kokoro_model:
-        return idx, None, "Error: Model not initialized"
-
-    start_time = time.perf_counter()
-    provider = "unknown"
-
+    """
+    Generates a single audio segment in a thread-safe manner by creating
+    a new model instance for each thread.
+    """
     if not text or len(text.strip()) < 3:
-        logger.debug(f"[{idx}] Skipping segment - text too short or empty")
         return idx, None, "Text too short"
 
     try:
-        logger.debug(f"[{idx}] Attempting to generate audio for: {text[:100]}...")
-        samples, _ = kokoro_model.create(text, voice, speed, lang)
+        # Each thread creates its own model instance to ensure thread safety.
+        # This is less memory-efficient but prevents critical race conditions.
+        provider = get_active_provider()
+        local_model = Kokoro(
+            model_path=TTSConfig.MODEL_PATH,
+            voices_path=TTSConfig.VOICES_PATH,
+            providers=[provider]
+        )
 
+        logger.debug(f"[{idx}] Generating audio for: {text[:50]}...")
+        start_time = time.perf_counter()
+
+        samples, _ = local_model.create(text, voice, speed, lang)
+        
+        inference_time = time.perf_counter() - start_time
+        update_performance_stats(inference_time, provider)
+        
         if samples is not None and samples.size > 0:
-            if hasattr(kokoro_model, "sess") and hasattr(
-                kokoro_model.sess, "get_providers"
-            ):
-                provider = kokoro_model.sess.get_providers()[0]
-
-            inference_time = time.perf_counter() - start_time
-            update_performance_stats(inference_time, provider)
-            update_phonemizer_stats(fallback_used=False)
-
-            logger.info(
-                f"[{idx}] Segment processed in {inference_time:.4f}s"
-            )
+            logger.info(f"[{idx}] Segment processed in {inference_time:.4f}s using {provider}")
             return idx, samples, provider
         else:
-            logger.warning(
-                f"[{idx}] TTS model returned empty audio for text: {text[:100]}..."
-            )
+            logger.warning(f"[{idx}] TTS model returned empty audio for text: {text[:50]}...")
             return idx, None, "Empty audio returned"
 
     except Exception as e:
-        logger.error(f"[{idx}] TTS generation failed for text: {text[:100]}... Error: {e}")
-        # Attempt a minimal fallback for unexpected errors
-        try:
-            minimal_text = re.sub(r"[^a-zA-Z0-9\s.,!?]", " ", text)
-            minimal_text = re.sub(r"\s+", " ", minimal_text).strip()
-
-            if minimal_text and len(minimal_text) >= 3:
-                logger.info(f"[{idx}] Trying minimal fallback: {minimal_text[:50]}...")
-                samples, _ = kokoro_model.create(minimal_text, voice, speed, lang)
-
-                if samples is not None and samples.size > 0:
-                    if hasattr(kokoro_model, "sess") and hasattr(
-                        kokoro_model.sess, "get_providers"
-                    ):
-                        provider = kokoro_model.sess.get_providers()[0]
-
-                    inference_time = time.perf_counter() - start_time
-                    update_performance_stats(inference_time, provider)
-                    update_phonemizer_stats(fallback_used=True)
-                    logger.info(f"[{idx}] Minimal fallback successful")
-                    return idx, samples, provider
-        except Exception as fallback_e:
-            logger.error(f"[{idx}] Minimal fallback also failed: {fallback_e}")
-
-    logger.error(f"[{idx}] All strategies failed for text: {text[:100]}...")
-    return idx, None, "All processing strategies failed"
+        logger.error(f"[{idx}] TTS generation failed for text '{text[:50]}...': {e}", exc_info=True)
+        return idx, None, str(e)
 
 
 async def stream_tts_audio(

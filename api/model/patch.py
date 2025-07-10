@@ -162,6 +162,7 @@ try:
 except ImportError:
     # Fallback to regular phonemizer if phonemizer-fork is not available
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
+import inspect
 
 logger = logging.getLogger(__name__)
 
@@ -565,22 +566,32 @@ def _apply_kokoro_model_patch():
     original_kokoro_init = Kokoro.__init__
     _store_original_function(Kokoro, '__init__', original_kokoro_init)
     
-    def patched_kokoro_init(self, model_path, voices_path, espeak_config=None, vocab_config=None):
+    def patched_kokoro_init(self, model_path, voices_path, espeak_config=None, vocab_config=None, providers=None, **kwargs):
         """
         Enhanced Kokoro model initialization with improved error handling.
         
         This patched version provides better error reporting and recovery
-        for model initialization failures.
+        for model initialization failures, while supporting additional parameters
+        like providers for ONNX Runtime configuration.
         
         @param model_path: Path to the ONNX model file
         @param voices_path: Path to the voices NPZ file
         @param espeak_config: Optional eSpeak configuration
         @param vocab_config: Optional vocabulary configuration
+        @param providers: Optional ONNX Runtime providers list
+        @param **kwargs: Additional keyword arguments
         @raises RuntimeError: If model initialization fails
         """
         logger.debug(f" Initializing Kokoro model (patched)")
         try:
-            original_kokoro_init(self, model_path, voices_path, espeak_config, vocab_config)
+            # Inspect the original signature
+            sig = inspect.signature(original_kokoro_init)
+            params = sig.parameters
+            if 'providers' in params:
+                logger.debug(f" Using providers: {providers}")
+                original_kokoro_init(self, model_path, voices_path, espeak_config, vocab_config, providers=providers, **kwargs)
+            else:
+                original_kokoro_init(self, model_path, voices_path, espeak_config, vocab_config, **kwargs)
             logger.info("✅ Kokoro model initialized successfully")
         except Exception as e:
             logger.error(f"❌ Kokoro initialization failed: {e}")

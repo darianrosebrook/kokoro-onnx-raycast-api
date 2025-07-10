@@ -299,6 +299,7 @@ if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
   echo "   • 2-3x faster performance without Neural Engine"
   echo "   • Reduced memory usage and better stability"
   echo "   • Fewer temporary file issues"
+  echo "   • Historical benchmark reports with timestamps"
   
   # Optional: Pre-convert model for faster startup
   if [ -f "scripts/convert_to_ort.py" ] && [ -f "$MODEL_FILE" ]; then
@@ -465,6 +466,19 @@ echo ""
 echo "========================================================================
 " 
 
+# Final check and message
+print_step "Setup complete!"
+echo ""
+echo "You can now start the development server by running:"
+echo "  ./start_development.sh"
+if [[ "$(uname -m)" == "arm64" ]]; then
+    echo ""
+    echo "⚙️  NOTE: On first run, the server will perform a one-time optimization"
+    echo "    for Apple Silicon (ORT conversion), which may take ~15 seconds."
+    echo "    Subsequent startups will be much faster."
+fi
+
+
 print_step "Useful Commands:"
 echo ""
 echo " Diagnostic Tools:"
@@ -481,15 +495,3 @@ echo "Server Management:"
 echo "   ./start_development.sh   # Development server with hot reload"
 echo "   ./start_production.sh    # Production server with optimization"
 echo ""
-
-# Final check and message
-print_step "Setup complete!"
-echo ""
-echo "You can now start the development server by running:"
-echo "  ./start_development.sh"
-if [[ "$(uname -m)" == "arm64" ]]; then
-    echo ""
-    echo "⚙️  NOTE: On first run, the server will perform a one-time optimization"
-    echo "    for Apple Silicon (ORT conversion), which may take ~15 seconds."
-    echo "    Subsequent startups will be much faster."
-fi

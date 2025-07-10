@@ -45,8 +45,13 @@ import os
 import sys
 import time
 import traceback
+import subprocess
+import json
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
+
+import aiohttp
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -90,9 +95,10 @@ def setup_logging(verbose: bool = False):
     console_handler.setFormatter(simple_formatter)
     root_logger.addHandler(console_handler)
     
+    
     # File handler for detailed logging
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = f'benchmark_{timestamp}.log'
+    log_file = f'logs/benchmark_{timestamp}.log'
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.DEBUG)  # Always log everything to file
     file_handler.setFormatter(detailed_formatter)
@@ -185,6 +191,12 @@ Examples:
         help='Only validate configuration and dependencies without running benchmarks'
     )
     
+    parser.add_argument(
+        '--comprehensive',
+        action='store_true',
+        help='Run a comprehensive benchmark suite testing multiple configurations'
+    )
+    
     return parser.parse_args()
 
 
@@ -228,6 +240,9 @@ def validate_arguments(args):
     
     if args.quick and (args.warmup_runs > 1 or args.consistency_runs > 1):
         logger.warning("⚠️ --quick mode overrides custom warmup/consistency run counts")
+    
+    if args.comprehensive and args.quick:
+        raise ValueError("Cannot specify both --comprehensive and --quick mode")
     
     logger.info("✅ Command line arguments validated successfully")
 
@@ -285,7 +300,8 @@ def display_benchmark_info(args):
     print(f"   • Output file: {args.output_file}")
     print(f"   • Continue on error: {'✅ Yes' if args.continue_on_error else '❌ No'}")
     print(f"   • Validation only: {'✅ Yes' if args.validate_only else '❌ No'}")
-    print()
+    print(f"   • Comprehensive mode: {'✅ Yes' if args.comprehensive else '❌ No'}")
+    print("\n")
 
 
 def get_system_info():
@@ -506,35 +522,175 @@ def run_extended_benchmark_analysis(benchmark_results: Dict[str, float]):
             print("   ⚠️ High performance variability - consider more warmup runs")
 
 
-def main():
+async def run_comprehensive_benchmark(args):
     """
-    Main benchmark execution function with comprehensive error handling.
+    Run a comprehensive benchmark suite with multiple configurations.
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("Starting comprehensive benchmark suite...")
+
+    scenarios = define_benchmark_scenarios()
+    all_results = []
+
+    for scenario in scenarios:
+        logger.info(f"--- Running Scenario: {scenario['name']} ---")
+        server_process = None
+        try:
+            server_process = await start_server_for_scenario(scenario)
+            
+            # Run benchmarks for this scenario
+            scenario_results = await run_scenario_benchmarks(scenario)
+            all_results.append(scenario_results)
+            
+        except Exception as e:
+            logger.error(f"❌ Scenario '{scenario['name']}' failed: {e}")
+        finally:
+            if server_process:
+                logger.info("Stopping server...")
+                try:
+                    # Check if the process is still running before terminating
+                    if server_process.returncode is None:
+                        server_process.terminate()
+                        await server_process.wait()
+                    else:
+                        logger.warning(f"⚠️ Server for scenario '{scenario['name']}' already exited with code {server_process.returncode}.")
+                except ProcessLookupError:
+                    logger.warning(f"⚠️ Server process for scenario '{scenario['name']}' not found, it might have already been terminated.")
+
+    display_comprehensive_results(all_results)
+
+def define_benchmark_scenarios() -> List[Dict[str, Any]]:
+    """Defines the scenarios for the comprehensive benchmark."""
+    base_scenarios = [
+        {"name": "Dev Mode", "env": {"KOKORO_PRODUCTION": "false", "KOKORO_DEVELOPMENT_MODE": "true"}},
+        {"name": "Prod Mode", "env": {"KOKORO_PRODUCTION": "true", "KOKORO_DEVELOPMENT_MODE": "false"}},
+    ]
+
+    ort_levels = ["DISABLED", "BASIC", "EXTENDED", "ALL"]
+    for level in ort_levels:
+        base_scenarios.append({
+            "name": f"Prod Mode - ORT Level: {level}",
+            "env": {"KOKORO_PRODUCTION": "true", "KOKORO_GRAPH_OPT_LEVEL": level}
+        })
+
+    # Apple Silicon specific scenarios
+    if sys.platform == "darwin" and os.uname().machine == "arm64":
+        coreml_units = ["CPUOnly", "CPUAndGPU", "ALL"]
+        for unit in coreml_units:
+            base_scenarios.append({
+                "name": f"Prod Mode - CoreML Units: {unit}",
+                "env": {"KOKORO_PRODUCTION": "true", "KOKORO_COREML_COMPUTE_UNITS": unit}
+            })
+            
+    return base_scenarios
+
+def display_comprehensive_results(results: List[Dict[str, Any]]):
+    """Displays the results of the comprehensive benchmark in a formatted table."""
+    logger = logging.getLogger(__name__)
+    logger.info("\n--- Comprehensive Benchmark Results ---")
+    
+    # Header
+    header = f"| {'Scenario':<35} | {'Standard Text (s)':<20} | {'Article Text (s)':<20} |"
+    print(header)
+    print(f"|{'-'*37}|{'-'*22}|{'-'*22}|")
+
+    for result in results:
+        std_time = f"{result.get('standard_text_time', 'N/A'):.3f}" if isinstance(result.get('standard_text_time'), float) else "FAIL"
+        art_time = f"{result.get('article_text_time', 'N/A'):.3f}" if isinstance(result.get('article_text_time'), float) else "FAIL"
+        
+        row = f"| {result['name']:<35} | {std_time:<20} | {art_time:<20} |"
+        print(row)
+        
+    logger.info("\n--- End of Report ---")
+
+
+async def start_server_for_scenario(scenario: Dict[str, Any]) -> asyncio.subprocess.Process:
+    """Starts the Uvicorn server in a subprocess with a given environment."""
+    logger = logging.getLogger(__name__)
+    env = os.environ.copy()
+    env.update(scenario["env"])
+    
+    venv_python = Path(sys.executable)
+    cmd = [str(venv_python), "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", "8000"]
+    
+    logger.info(f"Starting server for '{scenario['name']}'...")
+    process = await asyncio.create_subprocess_exec(*cmd, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    
+    # Improved readiness check
+    for _ in range(60): # Try for 120 seconds
+        await asyncio.sleep(2)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("http://127.0.0.1:8000/health") as response:
+                    if response.status == 200:
+                        logger.info("✅ Server is ready.")
+                        return process
+        except aiohttp.ClientConnectorError:
+            continue
+            
+    raise RuntimeError("Server failed to start in time.")
+
+async def run_scenario_benchmarks(scenario: Dict[str, Any]) -> Dict[str, Any]:
+    """Runs a set of benchmarks for a single server configuration."""
+    logger = logging.getLogger(__name__)
+    results = {"name": scenario["name"]}
+    
+    async with aiohttp.ClientSession() as session:
+        # Standard Text Benchmark
+        try:
+            payload = {"text": TTSConfig.TEST_TEXT, "voice": "af_heart"}
+            start_time = time.perf_counter()
+            async with session.post("http://127.0.0.1:8000/v1/audio/speech", json=payload) as response:
+                if response.status == 200:
+                    await response.read() # Consume body
+                    results["standard_text_time"] = time.perf_counter() - start_time
+                    logger.info(f"Standard text benchmark: {results['standard_text_time']:.3f}s")
+                else:
+                    logger.error(f"Standard text benchmark failed with status: {response.status}")
+        except Exception as e:
+            logger.error(f"Standard text benchmark request failed: {e}")
+
+        # Article Text Benchmark
+        try:
+            payload = {"text": TTSConfig.BENCHMARK_ARTICLE_LENGTH_TEXT, "voice": "af_heart"}
+            start_time = time.perf_counter()
+            async with session.post("http://127.0.0.1:8000/v1/audio/speech", json=payload) as response:
+                if response.status == 200:
+                    await response.read() # Consume body
+                    results["article_text_time"] = time.perf_counter() - start_time
+                    logger.info(f"Article text benchmark: {results['article_text_time']:.3f}s")
+                else:
+                    logger.error(f"Article text benchmark failed with status: {response.status}")
+        except Exception as e:
+            logger.error(f"Article text benchmark request failed: {e}")
+
+    return results
+
+
+async def main():
+    """
+    Main function to run the TTS benchmark.
     
     This function orchestrates the entire benchmark process with robust
     error handling, detailed logging, and graceful degradation.
     
     @returns int: Exit code (0 for success, 1 for failure)
     """
-    logger = logging.getLogger(__name__)
+    # Parse arguments first, so we can configure logging
+    args = parse_arguments()
+    setup_logging(args.verbose)
     
+    # Now that logging is configured, get a logger instance
+    logger = logging.getLogger(__name__)
+
     try:
-        # Parse and validate arguments
-        args = parse_arguments()
-        validate_arguments(args)
-        
-        # Setup logging
-        setup_logging(args.verbose)
-        
-        # Initialize warning suppression systems
-        logger.info(" Initializing warning suppression systems...")
-        
-        # Set environment variables to suppress ONNX Runtime C++ warnings
-        os.environ["ORT_LOGGING_LEVEL"] = "3"  # Error level only
-        os.environ["ONNXRUNTIME_LOG_SEVERITY_LEVEL"] = "3"
-        
-        configure_onnx_runtime_logging()
-        setup_coreml_warning_handler()
-        suppress_phonemizer_warnings()
+        # Validate and apply settings
+        try:
+            validate_arguments(args)
+            configure_benchmark_settings(args)
+        except ValueError as e:
+            logger.error(f"❌ Invalid configuration: {e}")
+            return 1
         
         # Display benchmark information
         display_benchmark_info(args)
@@ -543,9 +699,6 @@ def main():
         if not validate_dependencies():
             logger.error("❌ Dependency validation failed")
             return 1
-        
-        # Configure benchmark settings
-        configure_benchmark_settings(args)
         
         # Check patch status
         patch_status = get_patch_status()
@@ -558,6 +711,11 @@ def main():
             logger.info("✅ Validation completed successfully")
             return 0
         
+        # Run comprehensive benchmark if requested
+        if args.comprehensive:
+            await run_comprehensive_benchmark(args)
+            return 0
+
         # Initialize the model
         logger.info("Initializing TTS model...")
         start_init = time.perf_counter()
@@ -578,6 +736,8 @@ def main():
         logger.info("\n Running comprehensive benchmark...")
         start_benchmark = time.perf_counter()
         
+        benchmark_results = {}
+        optimal_provider = "Unknown"
         try:
             # Use comprehensive warning suppression during benchmarking
             with suppress_onnx_warnings():
@@ -591,8 +751,6 @@ def main():
             if not args.continue_on_error:
                 return 1
             logger.warning("⚠️ Continuing with partial results")
-            optimal_provider = "Unknown"
-            benchmark_results = {}
         
         # Display results
         if benchmark_results:
@@ -606,7 +764,7 @@ def main():
             logger.info(f"\n Generating comprehensive report...")
             try:
                 system_info = get_system_info()
-                save_benchmark_report(system_info, benchmark_results, optimal_provider)
+                save_benchmark_report(system_info, benchmark_results, optimal_provider, args.output_file)
                 logger.info(f"✅ Report saved to: {args.output_file}")
             except Exception as e:
                 logger.error(f"❌ Failed to save benchmark report: {e}")
@@ -617,6 +775,9 @@ def main():
             logger.error("❌ Benchmark failed - no results obtained")
             if not args.continue_on_error:
                 return 1
+
+        logger.info("\n✅ Benchmark completed successfully!")
+        return 0
             
     except KeyboardInterrupt:
         logger.warning("\n⚠️ Benchmark interrupted by user")
@@ -626,10 +787,17 @@ def main():
         if args.verbose:
             logger.debug(f" Full traceback:\n{traceback.format_exc()}")
         return 1
-    
-    logger.info("\n Benchmark completed successfully!")
-    return 0
-
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    try:
+        exit_code = asyncio.run(main())
+        sys.exit(exit_code)
+    except KeyboardInterrupt:
+        print("\n⚠️ Benchmark execution cancelled.")
+        sys.exit(1)
+    except Exception as e:
+        # Fallback for errors that might occur outside the main async function
+        logging.basicConfig(level=logging.ERROR)
+        log = logging.getLogger(__name__)
+        log.error(f"An unexpected error occurred: {e}", exc_info=True)
+        sys.exit(1) 

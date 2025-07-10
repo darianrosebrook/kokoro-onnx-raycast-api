@@ -170,9 +170,9 @@ class TTSRequest(BaseModel):
     
     text: str = Field(
         ..., 
-        max_length=2000,
+        max_length=4500,
         min_length=1,
-        description="The text to synthesize. Maximum 2000 characters for optimal performance."
+        description="The text to synthesize. Maximum 4500 characters for optimal performance."
     )
     
     voice: str = Field(
@@ -201,6 +201,8 @@ class TTSRequest(BaseModel):
         default="pcm",
         description="Audio format: 'wav' for complete file with headers, 'pcm' for raw audio data."
     )
+
+from api.article import BENCHMARK_ARTICLE_TEXT
 
 class TTSConfig:
     """
@@ -299,12 +301,14 @@ class TTSConfig:
     degradation. This test also evaluates memory usage patterns, thermal behavior, and provider consistency across 
     different text lengths and complexity levels.
     """.strip()
+
+    BENCHMARK_ARTICLE_LENGTH_TEXT = BENCHMARK_ARTICLE_TEXT
     
     # Benchmark configuration parameters
     BENCHMARK_ENABLE_LONG_TEXT = False  # Disable long text benchmarking by default (too slow)
     BENCHMARK_WARMUP_RUNS = 1  # Reduced from 3 to 1 for faster benchmarking
     BENCHMARK_CONSISTENCY_RUNS = 1  # Reduced from 3 to 1 for faster benchmarking
-    BENCHMARK_MIN_IMPROVEMENT_PERCENT = float(os.environ.get("KOKORO_MIN_IMPROVEMENT_PERCENT", "10.0"))  # Minimum improvement required to recommend provider change
+    BENCHMARK_MIN_IMPROVEMENT_PERCENT = float(os.environ.get("KOKORO_MIN_IMPROVEMENT_PERCENT", "5.0"))  # Minimum improvement required to recommend provider change
     BENCHMARK_CACHE_DURATION = 86400  # Cache duration in seconds (24 hours)
     BENCHMARK_WARMUP_TEXT = "Hello, this is a warmup inference to optimize model performance."
     
@@ -347,7 +351,7 @@ class TTSConfig:
     STREAM_IDLE_TIMEOUT_SECONDS = 30.0  # Client disconnect detection
     
     # Text processing limits for optimal performance
-    MAX_TEXT_LENGTH = 2000  # OpenAI API compatibility limit
+    MAX_TEXT_LENGTH = 4500  # OpenAI API compatibility limit
     MAX_SEGMENT_LENGTH = 200  # Optimal segment size for parallel processing
     
     # ORT (ONNX Runtime) optimization settings

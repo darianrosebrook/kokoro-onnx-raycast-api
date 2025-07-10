@@ -723,13 +723,16 @@ app.add_middleware(
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(response: Response):
     """
     Enhanced health check that provides status during initialization
     """
     if model_initialization_complete:
+        response.status_code = 200
         return {"status": "online", "model_ready": True}
-    elif model_initialization_started:
+    
+    response.status_code = 503
+    if model_initialization_started:
         return {
             "status": "initializing",
             "model_ready": False,

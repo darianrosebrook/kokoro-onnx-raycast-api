@@ -109,17 +109,39 @@ The system includes tools for performance measurement and real-time monitoring.
 
 -   **Run Benchmarks**:
     ```bash
-    # Quick performance test
-    python scripts/quick_benchmark.py
-    # Full, detailed benchmark
-    python run_benchmark.py --verbose
+    # Standard benchmark (tests current configuration)
+    python run_benchmark.py
+
+    # Comprehensive benchmark (tests multiple production scenarios)
+    python run_benchmark.py --comprehensive
     ```
 -   **Real-time Metrics**: Access performance data at the `/status` endpoint.
     ```bash
     curl http://localhost:8000/status | jq '.performance'
     ```
+-   **Historical Reports**: Benchmark reports are automatically saved with timestamps in `reports/benchmarks/` for performance tracking.
 
 For a deep dive into configuring benchmark frequency, managing caches, and interpreting results, see the [**Benchmarking & Monitoring Guide](./docs/benchmarking.md)**.
+
+### Comprehensive Benchmark Suite
+The `run_benchmark.py --comprehensive` command runs an extensive test suite that evaluates performance across multiple configurations, providing a clear picture of how different optimization settings affect inference speed.
+
+**Scenarios Tested:**
+-   **Development vs. Production Mode**: Compares performance with and without production optimizations.
+-   **ONNX Runtime Optimization Levels**: Tests `DISABLED`, `BASIC`, `EXTENDED`, and `ALL` graph optimization levels.
+-   **CoreML Compute Units (Apple Silicon only)**: Tests `CPUOnly`, `CPUAndGPU`, and `ALL` to find the optimal hardware utilization strategy.
+
+**Recent Benchmark Insights:**
+-   **ORT Level: BASIC** typically provides the best performance balance
+-   **CoreML: CPUAndGPU** is optimal for long-form content processing
+-   **Production mode** consistently outperforms development mode by ~3%
+-   **Diminishing returns** observed with high-level optimizations (ALL levels)
+
+**Workloads Tested:**
+-   **Standard Text**: A medium-length paragraph to test typical TTS requests.
+-   **Article-Length Text**: A full-length article to evaluate performance on long-form content.
+
+The output is a formatted table that makes it easy to compare results and identify the best-performing configurations for your hardware.
 
 ## 🛠️ Development & Testing
 
@@ -171,14 +193,14 @@ The production mode automatically enables several performance and security optim
 # Enable production mode with all optimizations
 export KOKORO_PRODUCTION=true
 
-# ONNX Runtime optimization
-export KOKORO_GRAPH_OPT_LEVEL=ALL
+# ONNX Runtime optimization (BASIC level often performs best)
+export KOKORO_GRAPH_OPT_LEVEL=BASIC
 export KOKORO_MEMORY_ARENA_SIZE_MB=512
 export KOKORO_DISABLE_MEM_PATTERN=false
 
-# CoreML provider tuning (Apple Silicon)
+# CoreML provider tuning (Apple Silicon) - CPUAndGPU often optimal
 export KOKORO_COREML_MODEL_FORMAT=MLProgram
-export KOKORO_COREML_COMPUTE_UNITS=ALL
+export KOKORO_COREML_COMPUTE_UNITS=CPUAndGPU
 export KOKORO_COREML_SPECIALIZATION=FastPrediction
 
 # Security (production)

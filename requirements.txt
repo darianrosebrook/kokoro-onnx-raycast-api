@@ -1,17 +1,34 @@
+# Core FastAPI and web framework dependencies
 fastapi>=0.115.12
 uvicorn[standard]>=0.24.0
+gunicorn>=21.0.0
+starlette>=0.27.0
+
+# TTS and audio processing
 kokoro-onnx>=0.4.9
 soundfile>=0.12.0
-pydantic>=2.0.0
+pyaudio>=0.2.11
+phonemizer-fork>=0.1.0  # Required for kokoro-onnx compatibility
+espeakng-loader>=0.1.0  # Required for eSpeak integration
+
+# Machine learning and optimization
 onnxruntime>=1.20.1
+numpy>=1.26.0
+numba>=0.60.0
+
+# Data validation and serialization
+pydantic>=2.0.0
+
+# HTTP and networking
 requests>=2.32.0
 aiohttp>=3.10.0
-numpy>=1.26.0
-pyaudio>=0.2.11
-gunicorn>=21.0.0
+
+# Text processing
+inflect>=7.0.0
+
 # Production performance optimizations
 orjson>=3.10.0  # 2-3x faster JSON serialization
-uvloop>=0.19.0; sys_platform != "win32"
-numba>=0.60.0
-phonemizer
-inflect 
+uvloop>=0.19.0; sys_platform != "win32"  # Fast event loop (Unix only)
+
+# Optional dependencies (for enhanced functionality)
+psutil>=5.9.0  # System monitoring and diagnostics 
