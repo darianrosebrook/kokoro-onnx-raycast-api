@@ -90,10 +90,14 @@ If you prefer to install manually, follow these steps:
 Configure the application using environment variables. For a full list of options, see the [Development Guide](./docs/development.md).
 
 -   **Server Settings**: `HOST`, `PORT`, `LOG_LEVEL`
+-   **Production Mode**: `KOKORO_PRODUCTION` (enables production optimizations)
 -   **TTS Parameters**: `MAX_SEGMENT_LENGTH`, `SAMPLE_RATE`
 -   **Optimization Flags**: `KOKORO_ORT_OPTIMIZATION`, `KOKORO_BENCHMARK_FREQUENCY`, `KOKORO_DEVELOPMENT_MODE`
 -   **Hardware Providers**: `ONNX_PROVIDER`, `COREML_COMPUTE_UNITS`
 -   **Resource Management**: `MEMORY_CLEANUP_THRESHOLD` (e.g., `50` to clean up every 50 chunks)
+-   **Performance Tuning**: `KOKORO_GRAPH_OPT_LEVEL`, `KOKORO_MEMORY_ARENA_SIZE_MB`, `KOKORO_DISABLE_MEM_PATTERN`
+-   **CoreML Optimization**: `KOKORO_COREML_MODEL_FORMAT`, `KOKORO_COREML_COMPUTE_UNITS`, `KOKORO_COREML_SPECIALIZATION`
+-   **Security**: `KOKORO_ALLOWED_HOSTS` (comma-separated list for production)
 
 ### ORT Optimization (Apple Silicon)
 The API automatically uses ONNX Runtime (ORT) to accelerate performance on Apple Silicon. This can result in a **3-5x inference speedup**. It is enabled by default on compatible hardware.
@@ -140,10 +144,45 @@ For a complete walkthrough of the development process, including optimization wo
 
 ## Running in Production
 
-Use the `gunicorn`-based production script for deployment.
+### Quick Production Start
+Use the `gunicorn`-based production script for deployment with optimized settings.
 
 ```bash
 ./start_production.sh
+```
+
+### Production Optimizations
+The production mode automatically enables several performance and security optimizations:
+
+#### **FastAPI Production Features**
+- **ORJSON Serialization**: 2-3x faster JSON processing
+- **GZip Compression**: Automatic compression for responses >1KB  
+- **Security Headers**: XSS protection, content type validation, frame options
+- **Documentation Disabled**: API docs disabled for security
+- **Performance Middleware**: Request timing and monitoring
+
+#### **ONNX Runtime Optimizations**
+- **Graph Optimization**: Maximum optimization level for inference speed
+- **Memory Management**: Intelligent arena sizing and pattern optimization
+- **Provider Selection**: Hardware-accelerated CoreML with CPU fallback
+
+#### **Production Environment Variables**
+```bash
+# Enable production mode with all optimizations
+export KOKORO_PRODUCTION=true
+
+# ONNX Runtime optimization
+export KOKORO_GRAPH_OPT_LEVEL=ALL
+export KOKORO_MEMORY_ARENA_SIZE_MB=512
+export KOKORO_DISABLE_MEM_PATTERN=false
+
+# CoreML provider tuning (Apple Silicon)
+export KOKORO_COREML_MODEL_FORMAT=MLProgram
+export KOKORO_COREML_COMPUTE_UNITS=ALL
+export KOKORO_COREML_SPECIALIZATION=FastPrediction
+
+# Security (production)
+export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com
 ```
 
 **Note on Apple Silicon**: The production script includes logic to ensure CoreML stability by running a single worker, as the Neural Engine does not support multiprocessing.
@@ -155,6 +194,12 @@ else
   WORKERS=$(nproc)
 fi
 gunicorn -w $WORKERS …
+```
+
+### Performance Monitoring
+Monitor production performance using the status endpoint:
+```bash
+curl http://localhost:8000/status | jq '.performance'
 ```
 
 ## API Reference

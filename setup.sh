@@ -131,6 +131,14 @@ echo "This may take a few minutes depending on your internet speed..."
 pip3 install -r requirements.txt
 print_success "Python dependencies installed successfully."
 
+# Verify production optimization dependencies
+print_progress "Verifying production optimization dependencies..."
+if python3 -c "import orjson" 2>/dev/null; then
+  print_success "ORJSON (fast JSON serialization) installed successfully."
+else
+  print_warning "ORJSON not found - production JSON serialization will use standard library."
+fi
+
 # Run environment diagnostics
 print_progress "Running environment diagnostics..."
 if [ -f "scripts/check_environment.py" ]; then
@@ -429,10 +437,18 @@ echo ""
 
 print_step "Environment Variables (Optional):"
 echo ""
+echo "Performance & Optimization:"
 echo "   • KOKORO_BENCHMARK_FREQUENCY: Controls benchmark frequency (daily/weekly/monthly/manually)"
 echo "   • KOKORO_DEVELOPMENT_MODE: Skip benchmarking for faster development startup"
 echo "   • KOKORO_SKIP_BENCHMARKING: Completely disable automatic benchmarking"
 echo "   • ONNX_PROVIDER: Override provider selection (CoreMLExecutionProvider/CPUExecutionProvider)"
+echo ""
+echo "Production Optimizations:"
+echo "   • KOKORO_PRODUCTION=true: Enable production mode (ORJSON, GZip, security headers)"
+echo "   • KOKORO_GRAPH_OPT_LEVEL=ALL: Maximum ONNX Runtime optimization"
+echo "   • KOKORO_MEMORY_ARENA_SIZE_MB=512: Memory arena size for performance"
+echo "   • KOKORO_COREML_MODEL_FORMAT=MLProgram: Optimal CoreML format for Apple Silicon"
+echo "   • KOKORO_ALLOWED_HOSTS: Comma-separated allowed hosts for production security"
 echo ""
 
 print_step "Pro Tips:"

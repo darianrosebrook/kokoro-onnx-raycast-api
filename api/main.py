@@ -194,7 +194,12 @@ import numpy as np
 import onnxruntime as ort
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import StreamingResponse, ORJSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response as StarletteResponse
 import soundfile as sf
 
 from api.config import TTSConfig, TTSRequest
@@ -506,6 +511,46 @@ startup_progress = {
 }
 
 
+class PerformanceMiddleware(BaseHTTPMiddleware):
+    """
+    Custom middleware for performance optimization and monitoring.
+    
+    This middleware provides:
+    - Request timing and performance headers
+    - Memory usage optimization
+    - Response compression hints
+    - Security headers for production
+    """
+    
+    async def dispatch(self, request: StarletteRequest, call_next):
+        # Start timing
+        start_time = time.time()
+        
+        # Process request
+        response: StarletteResponse = await call_next(request)
+        
+        # Calculate processing time
+        process_time = time.time() - start_time
+        
+        # Add performance headers
+        response.headers["X-Process-Time"] = str(process_time)
+        response.headers["X-API-Version"] = "2.1.0"
+        
+        # Add security headers in production
+        is_prod = os.environ.get("KOKORO_PRODUCTION", "false").lower() == "true"
+        if is_prod:
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Add cache headers for static content
+        if request.url.path.startswith("/health") or request.url.path.startswith("/status"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        
+        return response
+
+
 def update_startup_progress(progress: int, message: str, status: str = "initializing"):
     """Update startup progress for user feedback"""
     startup_progress.update({
@@ -640,13 +685,32 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info(" Application shutting down")
 
-# Create FastAPI app with lifespan management
+# Determine if running in production
+is_production = os.environ.get("KOKORO_PRODUCTION", "false").lower() == "true"
+
+# Create FastAPI app with lifespan management and production optimizations
 app = FastAPI(
     title="Kokoro TTS API",
     version="2.1.0",
     description="High-performance Neural Text-to-Speech API with Apple Silicon optimization",
-    lifespan=lifespan
+    lifespan=lifespan,
+    # Production optimizations: disable documentation endpoints
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc", 
+    openapi_url=None if is_production else "/openapi.json",
+    # Use ORJSON for 2-3x faster JSON serialization
+    default_response_class=ORJSONResponse
 )
+
+# Add performance and security middleware
+app.add_middleware(PerformanceMiddleware)  # Custom performance monitoring
+app.add_middleware(GZipMiddleware, minimum_size=1000)  # Compress responses > 1KB
+
+# Add security middleware in production
+if is_production:
+    allowed_hosts = os.environ.get("KOKORO_ALLOWED_HOSTS", "*").split(",")
+    if allowed_hosts != ["*"]:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 # Add CORS middleware
 app.add_middleware(

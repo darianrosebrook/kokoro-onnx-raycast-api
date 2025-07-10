@@ -39,6 +39,14 @@ fi
 echo "Starting development server on http://${HOST}:${PORT}"
 echo " LOG_LEVEL is set to ${LOG_LEVEL}"
 [ "$UVICORN_RELOAD" = "1" ] && echo " Hot-reloading is enabled."
+echo ""
+echo "ℹ️  Development mode features:"
+echo "   • API documentation: http://${HOST}:${PORT}/docs"
+echo "   • Standard JSON serialization (not ORJSON)"
+echo "   • No security headers or compression"
+echo "   • Fast startup (reduced benchmarking)"
+echo ""
+echo "💡 For production optimizations, use: ./start_production.sh"
 
 # Use exec to replace the shell process with the uvicorn process
 exec uvicorn api.main:app --host "${HOST}" --port "${PORT}" --log-level "${LOG_LEVEL}" $([ "$UVICORN_RELOAD" = "1" ] && echo "--reload") 

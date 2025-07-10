@@ -35,6 +35,30 @@ fi
 # Activate virtual environment
 source .venv/bin/activate
 
+# --- Production Environment Setup ---
+# Enable production optimizations
+export KOKORO_PRODUCTION=true
+
+# Set production defaults if not already configured
+export KOKORO_GRAPH_OPT_LEVEL=${KOKORO_GRAPH_OPT_LEVEL:-"ALL"}
+export KOKORO_MEMORY_ARENA_SIZE_MB=${KOKORO_MEMORY_ARENA_SIZE_MB:-"512"}
+export KOKORO_DISABLE_MEM_PATTERN=${KOKORO_DISABLE_MEM_PATTERN:-"false"}
+
+# Apple Silicon CoreML optimizations
+if [[ "$(uname -m)" == "arm64" ]]; then
+    export KOKORO_COREML_MODEL_FORMAT=${KOKORO_COREML_MODEL_FORMAT:-"MLProgram"}
+    export KOKORO_COREML_COMPUTE_UNITS=${KOKORO_COREML_COMPUTE_UNITS:-"ALL"}
+    export KOKORO_COREML_SPECIALIZATION=${KOKORO_COREML_SPECIALIZATION:-"FastPrediction"}
+fi
+
+echo "🚀 Production optimizations enabled:"
+echo "   • ORJSON serialization: ✅"
+echo "   • GZip compression: ✅"
+echo "   • Security headers: ✅"
+echo "   • Graph optimization: ${KOKORO_GRAPH_OPT_LEVEL}"
+echo "   • Memory arena: ${KOKORO_MEMORY_ARENA_SIZE_MB}MB"
+[[ "$(uname -m)" == "arm64" ]] && echo "   • CoreML optimization: ✅"
+
 # --- Server Execution ---
 echo "Starting production server on http://${HOST}:${PORT} with ${WORKERS} worker(s)..."
 

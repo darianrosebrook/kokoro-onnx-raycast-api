@@ -793,6 +793,17 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
                 coreml_options['MLComputeUnits'] = 'CPUAndNeuralEngine'
                 logger.info(" Using Neural Engine for optimal Apple Silicon performance")
         
+        # Advanced CoreML optimizations from environment
+        coreml_env_options = {
+            'ModelFormat': os.environ.get('KOKORO_COREML_MODEL_FORMAT', 'MLProgram'),
+            'MLComputeUnits': os.environ.get('KOKORO_COREML_COMPUTE_UNITS', coreml_options.get('MLComputeUnits', 'ALL')),
+            'SpecializationStrategy': os.environ.get('KOKORO_COREML_SPECIALIZATION', 'FastPrediction'),
+            'AllowLowPrecisionAccumulationOnGPU': os.environ.get('KOKORO_COREML_LOW_PRECISION_GPU', '1'),
+        }
+        
+        # Update with environment overrides
+        coreml_options.update({k: v for k, v in coreml_env_options.items() if v})
+        
         providers.append(('CoreMLExecutionProvider', coreml_options))
         provider_options.append(coreml_options)
         
@@ -802,11 +813,26 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
     if validate_provider('CPUExecutionProvider'):
         logger.info("🖥️ Configuring CPU provider as fallback...")
         
-        # CPU provider configuration
+        # CPU provider configuration with advanced optimizations
         cpu_options = {
             'intra_op_num_threads': min(4, capabilities.get('cpu_cores', 4)),  # Limit threads
             'inter_op_num_threads': 1,  # Single thread for inter-op
+            'arena_extend_strategy': 'kSameAsRequested',  # Memory allocation strategy
+            'enable_cpu_mem_arena': '1',  # Enable memory arena for CPU
+            'enable_mem_pattern': '1',   # Enable memory pattern optimization
         }
+        
+        # Advanced CPU optimizations from environment
+        cpu_env_options = {
+            'intra_op_num_threads': os.environ.get('KOKORO_CPU_INTRA_THREADS'),
+            'inter_op_num_threads': os.environ.get('KOKORO_CPU_INTER_THREADS'),
+            'arena_extend_strategy': os.environ.get('KOKORO_CPU_ARENA_STRATEGY', 'kSameAsRequested'),
+            'enable_cpu_mem_arena': os.environ.get('KOKORO_CPU_MEM_ARENA', '1'),
+            'enable_mem_pattern': os.environ.get('KOKORO_CPU_MEM_PATTERN', '1'),
+        }
+        
+        # Update with environment overrides (only if value is provided)
+        cpu_options.update({k: v for k, v in cpu_env_options.items() if v})
         
         providers.append(('CPUExecutionProvider', cpu_options))
         provider_options.append(cpu_options)
@@ -1313,8 +1339,61 @@ def initialize_model():
         # Configure session options for optimal performance
         session_options = ort.SessionOptions()
         session_options.log_severity_level = 3  # Suppress most ONNX Runtime warnings
-        session_options.enable_cpu_mem_arena = False  # Disable memory arena for better cleanup
-        session_options.enable_mem_pattern = False  # Disable memory pattern optimization
+        
+        # Graph optimization settings for maximum performance
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        
+        # Thread configuration for optimal CPU utilization
+        cpu_cores = capabilities.get('cpu_cores', 4)
+        session_options.intra_op_num_threads = min(4, cpu_cores)  # Limit to 4 for TTS workloads
+        session_options.inter_op_num_threads = 1  # Sequential execution for TTS
+        
+        # Execution mode optimization
+        session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        
+        # Memory management configuration based on provider
+        if capabilities['is_apple_silicon'] and 'CoreMLExecutionProvider' in capabilities.get('provider_priority', []):
+            # Apple Silicon with CoreML: Disable arena for better CoreML integration
+            session_options.enable_cpu_mem_arena = False
+            session_options.enable_mem_pattern = False
+            logger.info("🔧 Using CoreML-optimized memory settings")
+        else:
+            # CPU-only systems: Enable memory optimizations
+            session_options.enable_cpu_mem_arena = True
+            session_options.enable_mem_pattern = True
+            logger.info("🔧 Using CPU-optimized memory settings")
+        
+        # Additional performance optimizations
+        session_options.use_deterministic_compute = False  # Allow non-deterministic optimizations
+        session_options.enable_profiling = False  # Disable profiling in production
+        
+        # Memory arena optimization based on environment
+        arena_size_mb = int(os.environ.get('KOKORO_MEMORY_ARENA_SIZE_MB', '0'))
+        if arena_size_mb > 0:
+            # Convert MB to bytes for arena size limit
+            try:
+                session_options.arena_size_limit = arena_size_mb * 1024 * 1024
+                logger.info(f"🔧 Set memory arena size limit: {arena_size_mb}MB")
+            except AttributeError:
+                # ONNX Runtime version doesn't support arena_size_limit
+                logger.warning(f"⚠️ arena_size_limit not supported in this ONNX Runtime version, skipping memory arena size setting")
+                pass
+        
+        # Memory pattern optimization strategy
+        if os.environ.get('KOKORO_DISABLE_MEM_PATTERN', 'false').lower() == 'true':
+            session_options.enable_mem_pattern = False
+            logger.info("🔧 Memory pattern optimization disabled")
+        
+        # Graph optimization level override
+        opt_level = os.environ.get('KOKORO_GRAPH_OPT_LEVEL', 'ALL')
+        if opt_level == 'BASIC':
+            session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+        elif opt_level == 'EXTENDED':
+            session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+        elif opt_level == 'DISABLED':
+            session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        else:  # ALL or default
+            session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         
         # Configure local temp directory for CoreML to avoid permission issues
         local_temp_dir = os.path.join(_cache_dir, "coreml_temp")
@@ -1327,6 +1406,8 @@ def initialize_model():
         
         # Create Kokoro model with optimized configuration
         log_progress("Loading Kokoro model with hardware acceleration...")
+        
+        # Initialize Kokoro model (session options are handled by ONNX Runtime internally)
         kokoro_model = Kokoro(
             model_path=model_path,
             voices_path=TTSConfig.VOICES_PATH
@@ -1442,6 +1523,19 @@ def initialize_model():
                 capabilities_cpu['is_apple_silicon'] = False  # Force CPU mode
                 
                 _, _, fallback_model_path = configure_ort_providers(capabilities_cpu)
+                
+                # Configure CPU-optimized session options for fallback
+                cpu_session_options = ort.SessionOptions()
+                cpu_session_options.log_severity_level = 3
+                cpu_session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                cpu_session_options.intra_op_num_threads = min(4, capabilities.get('cpu_cores', 4))
+                cpu_session_options.inter_op_num_threads = 1
+                cpu_session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+                cpu_session_options.enable_cpu_mem_arena = True
+                cpu_session_options.enable_mem_pattern = True
+                cpu_session_options.use_deterministic_compute = False
+                cpu_session_options.enable_profiling = False
+                
                 kokoro_model = Kokoro(
                     model_path=fallback_model_path,
                     voices_path=TTSConfig.VOICES_PATH
