@@ -358,7 +358,7 @@ class TTSConfig:
 
     # Apple Silicon specific ORT settings
     APPLE_SILICON_ORT_PREFERRED = os.environ.get("KOKORO_APPLE_SILICON_ORT_PREFERRED", "true").lower() == "true"
-    ORT_DEVICE_TYPES = ["CPUAndNeuralEngine", "CPUAndGPU", "CPUOnly"]
+    ORT_COMPUTE_UNITS = ["CPUAndNeuralEngine", "CPUAndGPU", "CPUOnly", "ALL"]
     
     @classmethod
     def verify_config(cls):

@@ -232,17 +232,17 @@ class CoreMLTroubleshooter:
                 {
                     'name': 'Basic CoreML',
                     'providers': ['CoreMLExecutionProvider', 'CPUExecutionProvider'],
-                    'provider_options': [{'device_type': 'CPUOnly'}, {}]
+                    'provider_options': [{'MLComputeUnits': 'CPUOnly'}, {}]
                 },
                 {
                     'name': 'CoreML with GPU',
                     'providers': ['CoreMLExecutionProvider', 'CPUExecutionProvider'],
-                    'provider_options': [{'device_type': 'CPUAndGPU'}, {}]
+                    'provider_options': [{'MLComputeUnits': 'CPUAndGPU'}, {}]
                 },
                 {
                     'name': 'CoreML with Neural Engine',
                     'providers': ['CoreMLExecutionProvider', 'CPUExecutionProvider'],
-                    'provider_options': [{'device_type': 'CPUAndNeuralEngine'}, {}]
+                    'provider_options': [{'MLComputeUnits': 'CPUAndNeuralEngine'}, {}]
                 }
             ]
             
@@ -326,7 +326,7 @@ class CoreMLTroubleshooter:
         
         # Advanced configuration
         recommendations.append("# Advanced CoreML Configuration")
-        recommendations.append("export COREML_DEVICE_TYPE=CPUAndNeuralEngine")
+        recommendations.append("export COREML_COMPUTE_UNITS=CPUAndNeuralEngine")
         recommendations.append("export COREML_ENABLE_FAST_PATH=false")
         recommendations.append("")
         

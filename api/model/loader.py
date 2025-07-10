@@ -750,11 +750,28 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
         
         logger.info(" Configuring CoreML provider for Apple Silicon...")
         
-        # Enhanced CoreML provider configuration with ORT optimization
+        # Enhanced CoreML provider configuration with official ONNX Runtime options
         coreml_options = {
-            'device_type': 'CPUAndGPU',  # Use both CPU and GPU
-            'coreml_flags': 0,  # Default flags
-            'enable_fast_path': True,  # Enable fast path optimizations
+            # Use MLProgram format for better performance on newer Apple devices (iOS 15+, macOS 12+)
+            'ModelFormat': 'MLProgram',
+            
+            # Use all available compute units (CPU, GPU, Neural Engine)
+            'MLComputeUnits': 'ALL',
+            
+            # Allow dynamic input shapes (good for TTS with variable text lengths)
+            'RequireStaticInputShapes': '0',
+            
+            # Enable subgraph optimization
+            'EnableOnSubgraphs': '0',
+            
+            # Optimize for fast prediction (ideal for TTS)
+            'SpecializationStrategy': 'FastPrediction',
+            
+            # Disable compute plan profiling (enable for debugging if needed)
+            'ProfileComputePlan': '0',
+            
+            # Use float16 for GPU acceleration when possible
+            'AllowLowPrecisionAccumulationOnGPU': '1',
         }
         
         # Set environment variable for CoreML temp directory
@@ -773,7 +790,7 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
         if TTSConfig.APPLE_SILICON_ORT_PREFERRED:
             # Try Neural Engine first if available
             if capabilities.get('neural_engine_cores', 0) > 0:
-                coreml_options['device_type'] = 'CPUAndNeuralEngine'
+                coreml_options['MLComputeUnits'] = 'CPUAndNeuralEngine'
                 logger.info(" Using Neural Engine for optimal Apple Silicon performance")
         
         providers.append(('CoreMLExecutionProvider', coreml_options))
