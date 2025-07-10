@@ -5,7 +5,7 @@
 # --- Configuration ---
 HOST=${HOST:-"0.0.0.0"}
 PORT=${PORT:-8000}
-LOG_LEVEL=${LOG_LEVEL:-"INFO"}
+LOG_LEVEL=${LOG_LEVEL:-"info"}
 # Automatically enable reload in development, unless explicitly disabled.
 UVICORN_RELOAD=${UVICORN_RELOAD:-"1"}
 # Set a flag to indicate development mode for the application logic
@@ -26,6 +26,13 @@ source .venv/bin/activate
 if [[ "$(uname -m)" == "arm64" ]] && [ ! -f ".cache/ort/kokoro-v1.0.int8.ort" ]; then
     echo "⚙️  First-time ORT conversion may be triggered on startup..."
     echo "This can take ~15s. Subsequent startups will be faster."
+fi
+
+# Check if port is in use and kill the process
+if lsof -i :${PORT} > /dev/null; then
+    echo "Port ${PORT} is in use. Attempting to kill the process..."
+    kill -9 $(lsof -t -i:${PORT})
+    sleep 2 # Give time for the port to be released
 fi
 
 # --- Server Execution ---
