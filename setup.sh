@@ -37,15 +37,15 @@ function print_info() {
 }
 
 function print_progress() {
-  echo "🔄 $1"
+  echo " $1"
 }
 
 function print_step() {
-  echo "📋 $1"
+  echo " $1"
 }
 
 # --- Welcome Message ---
-echo "🎤 Welcome to Kokoro TTS Setup!"
+echo " Welcome to Kokoro TTS Setup!"
 echo ""
 echo "This script will set up a complete Text-to-Speech system with:"
 echo "   • High-quality neural TTS with 60+ voices"
@@ -276,7 +276,7 @@ print_header "Step 3b: Setting up ORT Optimization for Apple Silicon"
 
 # Check if we're on Apple Silicon
 if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
-  print_info "🍎 Apple Silicon detected - setting up performance optimization..."
+  print_info " Apple Silicon detected - setting up performance optimization..."
   
   # Enable ORT optimization by default on Apple Silicon
   export KOKORO_ORT_OPTIMIZATION=auto
@@ -360,7 +360,7 @@ echo ""
 if [ -f "scripts/configure_benchmark_frequency.py" ]; then
   # Check if frequency is already configured
   if [ -f ".env" ] && grep -q "KOKORO_BENCHMARK_FREQUENCY" .env; then
-    echo "📋 Benchmark frequency already configured:"
+    echo " Benchmark frequency already configured:"
     python scripts/configure_benchmark_frequency.py --show-current
     echo ""
     
@@ -392,37 +392,37 @@ else
 fi
 
 # --- 7. Final Instructions ---
-print_header "🎉 Setup Complete! 🎉"
+print_header " Setup Complete! "
 
 print_success "Your Kokoro TTS system is ready with the following features:"
 echo ""
-echo "🚀 Performance Features:"
-echo "   • 🧠 Apple Silicon optimization with CoreML and Neural Engine"
-echo "   • 🚀 ORT (ONNX Runtime) acceleration for better performance"
-echo "   • ⚡ Configurable benchmark frequency for optimal startup times"
+echo "Performance Features:"
+echo "   •  Apple Silicon optimization with CoreML and Neural Engine"
+echo "   • ORT (ONNX Runtime) acceleration for better performance"
+echo "   •  Configurable benchmark frequency for optimal startup times"
 echo ""
-echo "🎤 TTS Capabilities:"
+echo " TTS Capabilities:"
 echo "   • 60+ voices across multiple languages"
 echo "   • Real-time streaming audio generation"
 echo "   • OpenAI-compatible API endpoints"
 echo "   • Intelligent text processing and segmentation"
 echo ""
 echo "🛠️  System Features:"
-echo "   • 🩺 Comprehensive diagnostic and troubleshooting tools"
-echo "   • 📊 Automatic performance monitoring and optimization"
-echo "   • 🔧 Production-ready error handling and fallbacks"
-echo "   • 📱 Raycast integration for quick access"
+echo "   •  Comprehensive diagnostic and troubleshooting tools"
+echo "   •  Automatic performance monitoring and optimization"
+echo "   •  Production-ready error handling and fallbacks"
+echo "   •  Raycast integration for quick access"
 echo ""
 
 print_step "Next Steps:"
 echo ""
-echo "1. 🚀 Start the development server:"
+echo "1. Start the development server:"
 echo "   ./start_development.sh"
 echo ""
-echo "2. 🌐 Access the web interface:"
+echo "2.  Access the web interface:"
 echo "   http://localhost:8000/docs"
 echo ""
-echo "3. 📱 Use Raycast extension (if installed):"
+echo "3.  Use Raycast extension (if installed):"
 echo "   Open Raycast and search for 'Speak Text' or 'Speak Selection'"
 echo ""
 
@@ -451,17 +451,29 @@ echo "========================================================================
 
 print_step "Useful Commands:"
 echo ""
-echo "🔧 Diagnostic Tools:"
+echo " Diagnostic Tools:"
 echo "   python scripts/check_environment.py     # Check system setup"
 echo "   python scripts/troubleshoot_coreml.py   # Diagnose CoreML issues"
 echo "   python scripts/configure_benchmark_frequency.py  # Configure benchmark frequency"
 echo ""
-echo "📊 Performance Management:"
+echo " Performance Management:"
 echo "   python scripts/configure_benchmark_frequency.py --show-current  # Show current settings"
 echo "   python scripts/configure_benchmark_frequency.py --frequency weekly  # Set frequency"
 echo "   rm .cache/coreml_config.json  # Clear cache to force re-benchmark"
 echo ""
-echo "🚀 Server Management:"
+echo "Server Management:"
 echo "   ./start_development.sh   # Development server with hot reload"
 echo "   ./start_production.sh    # Production server with optimization"
 echo ""
+
+# Final check and message
+print_step "Setup complete!"
+echo ""
+echo "You can now start the development server by running:"
+echo "  ./start_development.sh"
+if [[ "$(uname -m)" == "arm64" ]]; then
+    echo ""
+    echo "⚙️  NOTE: On first run, the server will perform a one-time optimization"
+    echo "    for Apple Silicon (ORT conversion), which may take ~15 seconds."
+    echo "    Subsequent startups will be much faster."
+fi

@@ -215,12 +215,12 @@ const optimalProvider = selectBestProvider(benchmarkResults);
 
 ## Features & Implementation
 
-### 🎤 **High-Quality TTS with Kokoro ONNX**
+###  **High-Quality TTS with Kokoro ONNX**
 - **67 voices** across 9 languages with quality grades
 - **Neural speech synthesis** using state-of-the-art models
 - **Hardware acceleration** on Apple Silicon (CoreML + Neural Engine)
 
-### 🌊 **Real-Time Streaming Audio**
+###  **Real-Time Streaming Audio**
 - **Sub-second latency**: Audio starts playing within 200-500ms
 - **Chunk-based processing**: 50ms audio chunks for smooth playback
 - **Intelligent buffering**: Balances latency vs. quality
@@ -230,12 +230,12 @@ const optimalProvider = selectBestProvider(benchmarkResults);
 - **Speed adjustment**: 0.1x to 3.0x with pitch preservation
 - **Stop/Restart**: Immediate response with proper cleanup
 
-### 📝 **Smart Text Processing**
+###  **Smart Text Processing**
 - **Automatic segmentation**: Optimizes for natural speech rhythm
 - **Preprocessing**: Handles problematic characters and formatting
 - **Length optimization**: Respects model limits while maintaining context
 
-### 🚀 **Performance Optimizations**
+### **Performance Optimizations**
 - **Parallel processing**: Multiple segments synthesize simultaneously
 - **Streaming pipeline**: Audio plays while generating
 - **Memory efficiency**: Temporary files prevent memory leaks
@@ -305,15 +305,15 @@ export KOKORO_MAX_CONCURRENT_SEGMENTS=4  # Parallel processing limit
 
 | Language | Count | Examples | Quality Range |
 |----------|-------|----------|---------------|
-| 🇺🇸 American English | 22 | af_heart, am_adam, af_bella | A-C |
-| 🇬🇧 British English | 8 | bf_emma, bm_george | B-C |
-| 🇯🇵 Japanese | 6 | jf_gongitsune, jm_kumo | B-C |
-| 🇨🇳 Mandarin | 8 | zf_xiaobei, zm_yunxi | B-C |
-| 🇪🇸 Spanish | 3 | ef_dora, em_alex | B-C |
-| 🇫🇷 French | 1 | ff_siwis | B |
-| 🇮🇳 Hindi | 4 | hf_alpha, hm_omega | B-C |
-| 🇮🇹 Italian | 2 | if_sara, im_nicola | B-C |
-| 🇧🇷 Portuguese | 3 | pf_dora, pm_alex | B-C |
+|  American English | 22 | af_heart, am_adam, af_bella | A-C |
+|  British English | 8 | bf_emma, bm_george | B-C |
+|  Japanese | 6 | jf_gongitsune, jm_kumo | B-C |
+|  Mandarin | 8 | zf_xiaobei, zm_yunxi | B-C |
+|  Spanish | 3 | ef_dora, em_alex | B-C |
+|  French | 1 | ff_siwis | B |
+|  Hindi | 4 | hf_alpha, hm_omega | B-C |
+|  Italian | 2 | if_sara, im_nicola | B-C |
+|  Portuguese | 3 | pf_dora, pm_alex | B-C |
 
 ## Troubleshooting
 

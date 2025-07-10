@@ -19,7 +19,7 @@ from pathlib import Path
 def analyze_python_environment():
     """Analyze the current Python environment setup."""
     
-    print("🔍 Python Environment Analysis")
+    print(" Python Environment Analysis")
     print("=" * 50)
     
     analysis = {
@@ -60,10 +60,10 @@ def analyze_python_environment():
     except:
         pass
     
-    print(f"🐍 Python: {sys.version}")
-    print(f"📍 Path: {sys.executable}")
+    print(f" Python: {sys.version}")
+    print(f" Path: {sys.executable}")
     print(f"🏗️  Platform: {platform.platform()}")
-    print(f"🔧 Architecture: {platform.machine()}")
+    print(f" Architecture: {platform.machine()}")
     print()
     
     return analysis
@@ -71,7 +71,7 @@ def analyze_python_environment():
 def check_required_packages():
     """Check installation status of required packages."""
     
-    print("📦 Package Installation Status")
+    print(" Package Installation Status")
     print("=" * 50)
     
     # Core packages for the TTS system
@@ -121,15 +121,15 @@ def check_required_packages():
         providers = ort.get_available_providers()
         package_status['onnxruntime']['providers'] = providers
         
-        print(f"\n🔧 ONNX Runtime Providers:")
+        print(f"\n ONNX Runtime Providers:")
         for provider in providers:
-            marker = "✅" if provider == 'CoreMLExecutionProvider' else "ℹ️"
+            marker = "✅" if provider == 'CoreMLExecutionProvider' else "⚠️"
             print(f"   {marker} {provider}")
         
         if 'CoreMLExecutionProvider' not in providers:
             print("   ⚠️  CoreMLExecutionProvider not available")
     except ImportError:
-        print("🔧 ONNX Runtime: Not installed")
+        print(" ONNX Runtime: Not installed")
     
     print()
     return package_status, missing_packages
@@ -159,14 +159,14 @@ def check_system_compatibility():
         if result.returncode == 0:
             arch = result.stdout.strip()
             compatibility['is_apple_silicon'] = arch == 'arm64'
-            print(f"🔧 Architecture: {arch}")
+            print(f" Architecture: {arch}")
             
             if not compatibility['is_apple_silicon']:
                 compatibility['recommendations'].append(
                     "Consider using CPU execution instead of CoreML on Intel"
                 )
     except:
-        print("❓ Could not determine architecture")
+        print(" Could not determine architecture")
     
     # Check macOS version
     try:
@@ -174,7 +174,7 @@ def check_system_compatibility():
         if result.returncode == 0:
             version = result.stdout.strip()
             compatibility['macos_version'] = version
-            print(f"🍎 macOS Version: {version}")
+            print(f" macOS Version: {version}")
             
             # Parse version for compatibility check
             version_parts = version.split('.')
@@ -185,7 +185,7 @@ def check_system_compatibility():
                     f"macOS 11.0+ required for CoreML - current: {version}"
                 )
     except:
-        print("❓ Could not determine macOS version")
+        print(" Could not determine macOS version")
     
     print()
     return compatibility
@@ -193,7 +193,7 @@ def check_system_compatibility():
 def provide_installation_recommendations(analysis, missing_packages, package_status):
     """Provide specific installation recommendations based on the analysis."""
     
-    print("💡 Installation Recommendations")
+    print(" Installation Recommendations")
     print("=" * 50)
     
     # Filter to only required missing packages
@@ -203,22 +203,22 @@ def provide_installation_recommendations(analysis, missing_packages, package_sta
         print("✅ All required packages are installed!")
         return
     
-    print("📦 Missing packages need to be installed:")
+    print(" Missing packages need to be installed:")
     print(f"   Packages: {', '.join(required_missing)}")
     print()
     
     if analysis['externally_managed'] and not analysis['virtual_env']:
-        print("🔒 Externally-managed environment detected")
+        print(" Externally-managed environment detected")
         print("   This is common with Homebrew Python on macOS")
         print()
         
-        print("🎯 Recommended solution: Use virtual environment")
+        print(" Recommended solution: Use virtual environment")
         print("   python3 -m venv kokoro-env")
         print("   source kokoro-env/bin/activate")
         print(f"   pip install {' '.join(missing_packages)}")
         print()
         
-        print("🔧 Alternative: Install with --user flag")
+        print(" Alternative: Install with --user flag")
         print(f"   pip3 install --user {' '.join(missing_packages)}")
         print()
         
@@ -230,7 +230,7 @@ def provide_installation_recommendations(analysis, missing_packages, package_sta
         print(f"   pip install {' '.join(missing_packages)}")
     
     else:
-        print("🔧 Standard installation:")
+        print(" Standard installation:")
         print(f"   pip install {' '.join(missing_packages)}")
     
     print()
@@ -238,7 +238,7 @@ def provide_installation_recommendations(analysis, missing_packages, package_sta
 def check_project_structure():
     """Check if the project structure is correct."""
     
-    print("📁 Project Structure")
+    print(" Project Structure")
     print("=" * 50)
     
     expected_files = [
@@ -291,7 +291,7 @@ def generate_diagnostic_report(analysis, package_status, compatibility, structur
 def main():
     """Main diagnostic function."""
     
-    print("🔍 Kokoro TTS Environment Diagnostic Tool")
+    print(" Kokoro TTS Environment Diagnostic Tool")
     print("=" * 60)
     print()
     
@@ -315,7 +315,7 @@ def main():
         with open(report_file, 'w') as f:
             json.dump(report, f, indent=2)
         
-        print("📄 Next Steps")
+        print(" Next Steps")
         print("=" * 50)
         
         if report['overall_status'] == 'ready':
@@ -330,8 +330,8 @@ def main():
             if compatibility['issues']:
                 print(f"   3. Address compatibility issues: {', '.join(compatibility['issues'])}")
         
-        print(f"\n📊 Full diagnostic report saved to: {report_file}")
-        print("\n🚀 For setup help, see: ORT_OPTIMIZATION_GUIDE.md")
+        print(f"\n Full diagnostic report saved to: {report_file}")
+        print("\nFor setup help, see: ORT_OPTIMIZATION_GUIDE.md")
         
         return 0 if report['overall_status'] == 'ready' else 1
         

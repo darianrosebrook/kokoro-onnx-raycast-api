@@ -86,7 +86,7 @@ Examples:
                     
         else:
             # Perform cleanup
-            print(f"\n🧹 Starting cache cleanup...")
+            print(f"\n Starting cache cleanup...")
             
             if args.aggressive:
                 print("   Using aggressive cleanup policies")
@@ -96,7 +96,7 @@ Examples:
             if args.json:
                 print(json.dumps(cleanup_result, indent=2))
             else:
-                print(f"\n🎉 Cache cleanup completed!")
+                print(f"\n Cache cleanup completed!")
                 print(f"   Initial Size: {cleanup_result.get('initial_size_mb', 0):.1f} MB")
                 print(f"   Final Size: {cleanup_result.get('final_size_mb', 0):.1f} MB")
                 print(f"   Total Freed: {cleanup_result.get('total_freed_mb', 0):.1f} MB")
@@ -104,7 +104,7 @@ Examples:
                 # Show detailed results
                 results = cleanup_result.get('cleanup_results', {})
                 if results:
-                    print(f"\n📊 Cleanup Details:")
+                    print(f"\n Cleanup Details:")
                     for method, result in results.items():
                         if isinstance(result, dict):
                             freed = result.get('freed_space_mb', 0)

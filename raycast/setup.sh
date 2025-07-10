@@ -2,7 +2,7 @@
 
 # Kokoro TTS Raycast Extension Setup Script
 
-echo "🎤 Setting up Kokoro TTS Raycast Extension..."
+echo " Setting up Kokoro TTS Raycast Extension..."
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then
@@ -23,7 +23,7 @@ if ! command -v npm &> /dev/null; then
 fi
 
 # Install dependencies
-echo "📦 Installing dependencies..."
+echo " Installing dependencies..."
 npm install
 
 # Check if Raycast CLI is available
@@ -33,7 +33,7 @@ if ! command -v ray &> /dev/null; then
 fi
 
 # Check if TTS server is running
-echo "🔍 Checking TTS server connection..."
+echo " Checking TTS server connection..."
 if curl -s http://localhost:8000/ > /dev/null; then
     echo "✅ TTS server is running on localhost:8000"
 else
@@ -42,7 +42,7 @@ else
 fi
 
 echo ""
-echo "🚀 Setup complete! Next steps:"
+echo "Setup complete! Next steps:"
 echo ""
 echo "1. Make sure the TTS server is running:"
 echo "   cd .. && python api.py"
@@ -53,6 +53,6 @@ echo ""
 echo "3. Or build for production:"
 echo "   npm run build"
 echo ""
-echo "📖 See README.md for detailed usage instructions."
+echo " See README.md for detailed usage instructions."
 echo ""
 echo "�� Happy speaking!" 

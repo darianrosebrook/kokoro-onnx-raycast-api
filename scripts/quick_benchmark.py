@@ -31,7 +31,7 @@ def quick_benchmark():
     """Run a quick benchmark test"""
     logger = logging.getLogger(__name__)
     
-    print("🏃 Quick Benchmark for Kokoro TTS")
+    print(" Quick Benchmark for Kokoro TTS")
     print("=" * 50)
     
     # Initialize model
@@ -90,7 +90,7 @@ def quick_benchmark():
     except Exception as e:
         print(f"   ⚠️ Provider detection failed: {e}")
     
-    print("\n🎉 Quick benchmark completed successfully!")
+    print("\n Quick benchmark completed successfully!")
     return True
 
 def main():

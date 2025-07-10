@@ -291,7 +291,7 @@ def detect_apple_silicon_capabilities():
         _capabilities_cache = capabilities
         return capabilities
     
-    logger.info("🍎 Apple Silicon system detected - analyzing capabilities...")
+    logger.info(" Apple Silicon system detected - analyzing capabilities...")
     
     # Enhanced Apple Silicon detection
     try:
@@ -300,7 +300,7 @@ def detect_apple_silicon_capabilities():
                               capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             cpu_info = result.stdout.strip()
-            logger.debug(f"🔍 CPU: {cpu_info}")
+            logger.debug(f" CPU: {cpu_info}")
             
             # Detect specific Apple Silicon variants
             if 'M1' in cpu_info:
@@ -330,7 +330,7 @@ def detect_apple_silicon_capabilities():
                               capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             capabilities['cpu_cores'] = int(result.stdout.strip())
-            logger.debug(f"🔍 CPU Cores: {capabilities['cpu_cores']}")
+            logger.debug(f" CPU Cores: {capabilities['cpu_cores']}")
     except Exception as e:
         logger.warning(f"⚠️ Could not detect CPU cores: {e}")
         capabilities['cpu_cores'] = 8  # Conservative default
@@ -342,7 +342,7 @@ def detect_apple_silicon_capabilities():
         if result.returncode == 0:
             mem_bytes = int(result.stdout.strip())
             capabilities['memory_gb'] = round(mem_bytes / (1024**3), 1)
-            logger.debug(f"🔍 Memory: {capabilities['memory_gb']}GB")
+            logger.debug(f" Memory: {capabilities['memory_gb']}GB")
     except Exception as e:
         logger.warning(f"⚠️ Could not detect memory size: {e}")
         capabilities['memory_gb'] = 8  # Conservative default
@@ -351,7 +351,7 @@ def detect_apple_silicon_capabilities():
     try:
         import onnxruntime as ort
         available_providers = ort.get_available_providers()
-        logger.debug(f"🔍 Available ONNX providers: {available_providers}")
+        logger.debug(f" Available ONNX providers: {available_providers}")
         
         # Build provider priority list based on capabilities
         provider_priority = []
@@ -382,7 +382,7 @@ def detect_apple_silicon_capabilities():
         # Set recommended provider
         if provider_priority:
             capabilities['recommended_provider'] = provider_priority[0]
-            logger.info(f"🎯 Recommended provider: {capabilities['recommended_provider']}")
+            logger.info(f" Recommended provider: {capabilities['recommended_provider']}")
         else:
             logger.error("❌ No suitable providers available")
             capabilities['hardware_issues'].append('No suitable providers available')
@@ -394,7 +394,7 @@ def detect_apple_silicon_capabilities():
         capabilities['recommended_provider'] = 'CPUExecutionProvider'
     
     # Log key capabilities (condensed for cleaner output)
-    logger.info(f"📊 Hardware: {capabilities.get('chip_family', 'Unknown')} | Neural Engine: {'✅' if capabilities['has_neural_engine'] else '❌'} | Provider: {capabilities['recommended_provider']}")
+    logger.info(f" Hardware: {capabilities.get('chip_family', 'Unknown')} | Neural Engine: {'✅' if capabilities['has_neural_engine'] else '❌'} | Provider: {capabilities['recommended_provider']}")
     
     if capabilities['hardware_issues']:
         logger.warning(f"⚠️ Hardware issues detected: {capabilities['hardware_issues']}")
@@ -443,7 +443,7 @@ def validate_provider(provider_name: str) -> bool:
             logger.warning(f"⚠️ Provider {provider_name} not in available providers: {available_providers}")
             return False
         
-        logger.debug(f"🔍 Validating provider: {provider_name}")
+        logger.debug(f" Validating provider: {provider_name}")
         
         # Create a minimal test session to validate provider
         try:
@@ -461,7 +461,7 @@ def validate_provider(provider_name: str) -> bool:
             if provider_name == 'CoreMLExecutionProvider':
                 # CoreML-specific validation
                 providers = [(provider_name, {})]
-                logger.debug("🔍 Testing CoreML provider with minimal configuration")
+                logger.debug(" Testing CoreML provider with minimal configuration")
                 
                 # Note: We can't create a real session without a model, but we can test provider setup
                 logger.debug("✅ CoreML provider validation passed")
@@ -470,7 +470,7 @@ def validate_provider(provider_name: str) -> bool:
             elif provider_name == 'CPUExecutionProvider':
                 # CPU provider validation
                 providers = [(provider_name, {})]
-                logger.debug("🔍 Testing CPU provider with minimal configuration")
+                logger.debug(" Testing CPU provider with minimal configuration")
                 
                 # CPU provider is generally reliable
                 logger.debug("✅ CPU provider validation passed")
@@ -478,7 +478,7 @@ def validate_provider(provider_name: str) -> bool:
                 
             else:
                 # Unknown provider - assume it's valid if available
-                logger.debug(f"🔍 Testing unknown provider: {provider_name}")
+                logger.debug(f" Testing unknown provider: {provider_name}")
                 logger.debug("✅ Provider validation passed (assumed valid)")
                 return True
                 
@@ -528,10 +528,10 @@ def should_use_ort_optimization(capabilities: Dict[str, Any]) -> bool:
     
     # Check explicit configuration
     if TTSConfig.ORT_OPTIMIZATION_ENABLED == "true":
-        logger.info("🚀 ORT optimization explicitly enabled")
+        logger.info("ORT optimization explicitly enabled")
         return True
     elif TTSConfig.ORT_OPTIMIZATION_ENABLED == "false":
-        logger.info("🚫 ORT optimization explicitly disabled")
+        logger.info(" ORT optimization explicitly disabled")
         return False
     
     # Auto-detection based on hardware (default behavior)
@@ -541,10 +541,10 @@ def should_use_ort_optimization(capabilities: Dict[str, Any]) -> bool:
     
     # Apple Silicon optimization logic
     if capabilities['has_neural_engine']:
-        logger.info("🍎 Apple Silicon with Neural Engine - ORT optimization recommended")
+        logger.info(" Apple Silicon with Neural Engine - ORT optimization recommended")
         return True
     elif capabilities['is_apple_silicon']:
-        logger.info("🍎 Apple Silicon without Neural Engine - ORT optimization beneficial")
+        logger.info(" Apple Silicon without Neural Engine - ORT optimization beneficial")
         return True
     
     return False
@@ -586,7 +586,7 @@ def get_or_create_ort_model() -> str:
     
     # Check for explicit ORT model path
     if TTSConfig.ORT_MODEL_PATH and os.path.exists(TTSConfig.ORT_MODEL_PATH):
-        logger.info(f"📁 Using explicit ORT model: {TTSConfig.ORT_MODEL_PATH}")
+        logger.info(f" Using explicit ORT model: {TTSConfig.ORT_MODEL_PATH}")
         return TTSConfig.ORT_MODEL_PATH
     
     # Generate ORT model path from standard ONNX
@@ -605,7 +605,7 @@ def get_or_create_ort_model() -> str:
             logger.warning(f"⚠️ Existing ORT model validation failed: {e}")
     
     # Create ORT model from standard ONNX
-    logger.info("🔄 Creating ORT model from ONNX (this may take a moment)...")
+    logger.info(" Creating ORT model from ONNX (this may take a moment)...")
     
     try:
         # Import ORT tools for model conversion
@@ -628,7 +628,7 @@ def get_or_create_ort_model() -> str:
             session_options.enable_mem_pattern = False
             
         # Create session to generate optimized model
-        logger.info("🔧 Optimizing model for current hardware...")
+        logger.info(" Optimizing model for current hardware...")
         temp_session = ort.InferenceSession(TTSConfig.MODEL_PATH, session_options)
         
         # Validate the optimized model was created
@@ -643,7 +643,7 @@ def get_or_create_ort_model() -> str:
         
     except Exception as e:
         logger.error(f"❌ ORT model creation failed: {e}")
-        logger.info("🔄 Falling back to standard ONNX model")
+        logger.info(" Falling back to standard ONNX model")
         return TTSConfig.MODEL_PATH
 
 
@@ -689,10 +689,10 @@ def configure_ort_providers(capabilities: Optional[Dict[str, Any]] = None):
     if use_ort:
         try:
             model_path = get_or_create_ort_model()
-            logger.info("🚀 Using ORT-optimized model for enhanced performance")
+            logger.info("Using ORT-optimized model for enhanced performance")
         except Exception as e:
             logger.warning(f"⚠️ ORT optimization failed: {e}")
-            logger.info("🔄 Falling back to standard ONNX model")
+            logger.info(" Falling back to standard ONNX model")
             model_path = TTSConfig.MODEL_PATH
     else:
         model_path = TTSConfig.MODEL_PATH
@@ -748,7 +748,7 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
         capabilities['has_neural_engine'] and
         validate_provider('CoreMLExecutionProvider')):
         
-        logger.info("🍎 Configuring CoreML provider for Apple Silicon...")
+        logger.info(" Configuring CoreML provider for Apple Silicon...")
         
         # Enhanced CoreML provider configuration with ORT optimization
         coreml_options = {
@@ -761,20 +761,20 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
         local_temp_dir = os.path.join(_cache_dir, "coreml_temp")
         os.makedirs(local_temp_dir, exist_ok=True) # Ensure the directory exists
         os.environ['COREML_TEMP_DIR'] = local_temp_dir
-        logger.info(f"🔧 Set COREML_TEMP_DIR to: {local_temp_dir}")
+        logger.info(f" Set COREML_TEMP_DIR to: {local_temp_dir}")
 
         # Set a dedicated cache path for compiled CoreML models
         coreml_cache_path = os.path.join(_cache_dir, "coreml_cache")
         os.makedirs(coreml_cache_path, exist_ok=True)
         coreml_options['coreml_cache_path'] = coreml_cache_path
-        logger.info(f"⚡️ Set CoreML cache path to: {coreml_cache_path}")
+        logger.info(f"️ Set CoreML cache path to: {coreml_cache_path}")
         
         # Apple Silicon specific optimizations
         if TTSConfig.APPLE_SILICON_ORT_PREFERRED:
             # Try Neural Engine first if available
             if capabilities.get('neural_engine_cores', 0) > 0:
                 coreml_options['device_type'] = 'CPUAndNeuralEngine'
-                logger.info("🧠 Using Neural Engine for optimal Apple Silicon performance")
+                logger.info(" Using Neural Engine for optimal Apple Silicon performance")
         
         providers.append(('CoreMLExecutionProvider', coreml_options))
         provider_options.append(coreml_options)
@@ -801,7 +801,7 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
     
     # Log final configuration (condensed)
     provider_names = [provider for provider, _ in providers]
-    logger.info(f"🔧 Providers configured: {' → '.join(provider_names)}")
+    logger.info(f" Providers configured: {' → '.join(provider_names)}")
     
     return providers, provider_options
 
@@ -906,7 +906,7 @@ def benchmark_providers():
         warmup_runs = TTSConfig.BENCHMARK_WARMUP_RUNS
         for i in range(warmup_runs):
             try:
-                logger.debug(f"🔥 Starting warmup {i+1}/{warmup_runs}...")
+                logger.debug(f" Starting warmup {i+1}/{warmup_runs}...")
                 start_warmup = time.perf_counter()
                 samples, _ = model.create(warmup_text, "af_heart", 1.0, "en-us")
                 warmup_time = time.perf_counter() - start_warmup
@@ -929,9 +929,9 @@ def benchmark_providers():
         results = {}
         
         # Test 1: Standard text performance
-        logger.debug(f"🧪 Testing {provider_name} with standard text...")
+        logger.debug(f" Testing {provider_name} with standard text...")
         try:
-            logger.debug(f"🧪 Starting standard text inference...")
+            logger.debug(f" Starting standard text inference...")
             start_time = time.perf_counter()
             samples, _ = model.create(test_text, "af_heart", 1.0, "en-us")
             standard_time = time.perf_counter() - start_time
@@ -940,7 +940,7 @@ def benchmark_providers():
                 raise RuntimeError("Standard text test returned None samples")
             
             results['standard_text'] = standard_time
-            logger.info(f"📊 {provider_name} standard text: {standard_time:.3f}s")
+            logger.info(f" {provider_name} standard text: {standard_time:.3f}s")
             
         except Exception as e:
             logger.error(f"❌ {provider_name} standard text failed: {e}")
@@ -949,9 +949,9 @@ def benchmark_providers():
         
         # Test 2: Long text performance (optional) - Skip if standard test failed
         if TTSConfig.BENCHMARK_ENABLE_LONG_TEXT and results.get('standard_text') is not None:
-            logger.debug(f"🧪 Testing {provider_name} with long text...")
+            logger.debug(f" Testing {provider_name} with long text...")
             try:
-                logger.debug(f"🧪 Starting long text inference...")
+                logger.debug(f" Starting long text inference...")
                 start_time = time.perf_counter()
                 samples, _ = model.create(long_text, "af_heart", 1.0, "en-us")
                 long_time = time.perf_counter() - start_time
@@ -960,23 +960,23 @@ def benchmark_providers():
                     raise RuntimeError("Long text test returned None samples")
                 
                 results['long_text'] = long_time
-                logger.info(f"📊 {provider_name} long text: {long_time:.3f}s")
+                logger.info(f" {provider_name} long text: {long_time:.3f}s")
                 
             except Exception as e:
                 logger.error(f"❌ {provider_name} long text failed: {e}")
                 # Don't fail completely if long text fails
                 results['long_text'] = None
         else:
-            logger.debug(f"🧪 Skipping long text test for {provider_name} (disabled or standard test failed)")
+            logger.debug(f" Skipping long text test for {provider_name} (disabled or standard test failed)")
         
         # Test 3: Multiple short inferences (consistency test) - Skip if standard test failed
         if results.get('standard_text') is not None:
-            logger.debug(f"🧪 Testing {provider_name} consistency...")
+            logger.debug(f" Testing {provider_name} consistency...")
             consistency_times = []
             consistency_runs = TTSConfig.BENCHMARK_CONSISTENCY_RUNS
             for i in range(consistency_runs):
                 try:
-                    logger.debug(f"🧪 Starting consistency test {i+1}/{consistency_runs}...")
+                    logger.debug(f" Starting consistency test {i+1}/{consistency_runs}...")
                     start_time = time.perf_counter()
                     samples, _ = model.create(f"This is consistency test number {i+1}.", "af_heart", 1.0, "en-us")
                     consistency_time = time.perf_counter() - start_time
@@ -992,18 +992,18 @@ def benchmark_providers():
             if consistency_times:
                 avg_consistency = sum(consistency_times) / len(consistency_times)
                 results['consistency'] = avg_consistency
-                logger.info(f"📊 {provider_name} consistency: {avg_consistency:.3f}s avg ({len(consistency_times)}/{consistency_runs} successful)")
+                logger.info(f" {provider_name} consistency: {avg_consistency:.3f}s avg ({len(consistency_times)}/{consistency_runs} successful)")
             else:
                 logger.warning(f"⚠️ {provider_name} consistency test failed completely")
                 results['consistency'] = None
         else:
-            logger.debug(f"🧪 Skipping consistency test for {provider_name} (standard test failed)")
+            logger.debug(f" Skipping consistency test for {provider_name} (standard test failed)")
         
         return results
     
     # Test current provider (should be CoreML if available)
     try:
-        logger.debug("🧪 Testing current provider performance...")
+        logger.debug(" Testing current provider performance...")
         
         # Determine current provider
         current_provider = "unknown"
@@ -1014,7 +1014,7 @@ def benchmark_providers():
             logger.warning("⚠️ Cannot determine current provider")
             return "CPUExecutionProvider", {}
         
-        logger.info(f"🧪 Current provider: {current_provider}")
+        logger.info(f" Current provider: {current_provider}")
         
         # Warmup current provider with error handling
         try:
@@ -1043,7 +1043,7 @@ def benchmark_providers():
     # Test CPU provider if CoreML is currently active
     if 'CoreMLExecutionProvider' in benchmark_results:
         try:
-            logger.debug("🧪 Testing CPU provider performance...")
+            logger.debug(" Testing CPU provider performance...")
             
             # Save current environment
             original_provider = os.environ.get("ONNX_PROVIDER")
@@ -1102,19 +1102,19 @@ def benchmark_providers():
         improvement = ((slowest_time - fastest_time) / slowest_time) * 100
         
         # Log comprehensive performance analysis
-        logger.info(f"🏆 Performance Analysis:")
+        logger.info(f" Performance Analysis:")
         logger.info(f"   • Fastest: {fastest_provider} ({fastest_time:.3f}s)")
         logger.info(f"   • Slowest: {slowest_provider} ({slowest_time:.3f}s)")
         logger.info(f"   • Improvement: {improvement:.1f}% ({slowest_time - fastest_time:.3f}s)")
         
         # Log detailed benchmark results with better formatting
-        logger.info("📊 Detailed Benchmark Results:")
+        logger.info(" Detailed Benchmark Results:")
         for provider, time_taken in sorted(benchmark_results.items(), key=lambda x: x[1]):
             relative_perf = time_taken / fastest_time
             if time_taken == fastest_time:
-                status = "🏆 Fastest"
+                status = " Fastest"
             elif relative_perf < 1.2:
-                status = "⚡ Excellent"
+                status = " Excellent"
             elif relative_perf < 1.5:
                 status = "✅ Good"
             else:
@@ -1128,7 +1128,7 @@ def benchmark_providers():
             logger.info(f"✅ Recommending {fastest_provider} for {improvement:.1f}% performance gain")
             return fastest_provider, benchmark_results
         else:
-            logger.info(f"📊 Performance difference minimal ({improvement:.1f}% < {min_improvement:.1f}%)")
+            logger.info(f" Performance difference minimal ({improvement:.1f}% < {min_improvement:.1f}%)")
             logger.info(f"   • Keeping current provider: {current_provider}")
             logger.info(f"   • Consider manually switching to {fastest_provider} if consistent performance is needed")
             return current_provider, benchmark_results
@@ -1136,7 +1136,7 @@ def benchmark_providers():
     elif len(benchmark_results) == 1:
         # Only one provider tested successfully
         provider = list(benchmark_results.keys())[0]
-        logger.info(f"📊 Single provider benchmark: {provider}")
+        logger.info(f" Single provider benchmark: {provider}")
         return provider, benchmark_results
     else:
         # No successful benchmarks
@@ -1203,7 +1203,7 @@ def initialize_model():
     
     # Prevent duplicate initialization
     if model_loaded:
-        logger.debug("🔄 Model already loaded, skipping initialization")
+        logger.debug(" Model already loaded, skipping initialization")
         return
         
     # Progress is tracked by main.py, so we don't need to duplicate the start message
@@ -1212,7 +1212,7 @@ def initialize_model():
     # Add a simple progress tracking function for internal use
     def log_progress(message):
         elapsed = time.time() - start_time
-        logger.info(f"🔄 [{elapsed:.1f}s] {message}")
+        logger.info(f" [{elapsed:.1f}s] {message}")
     
     # Register cleanup handler for proper resource management
     def cleanup_coreml_context():
@@ -1228,11 +1228,11 @@ def initialize_model():
                 import shutil
                 try:
                     shutil.rmtree(local_temp_dir)
-                    logger.debug(f"🧹 Cleaned up CoreML temp directory: {local_temp_dir}")
+                    logger.debug(f" Cleaned up CoreML temp directory: {local_temp_dir}")
                 except Exception as e:
                     logger.debug(f"⚠️ Could not clean up CoreML temp directory: {e}")
             
-            logger.debug("🧹 Model resource cleanup completed")
+            logger.debug(" Model resource cleanup completed")
         except Exception as e:
             logger.debug(f"⚠️ Cleanup warning (non-critical): {e}")
     
@@ -1261,26 +1261,26 @@ def initialize_model():
                 if cached_provider and cache_age < cache_duration:
                     recommended_provider = cached_provider
                     cache_hit = True
-                    logger.info(f"📋 Using cached provider recommendation: {cached_provider} (cache age: {cache_age/3600:.1f}h, expires in: {(cache_duration - cache_age)/3600:.1f}h)")
+                    logger.info(f" Using cached provider recommendation: {cached_provider} (cache age: {cache_age/3600:.1f}h, expires in: {(cache_duration - cache_age)/3600:.1f}h)")
     except Exception as e:
         logger.warning(f"⚠️ Could not read provider cache: {e}")
     
     # Set execution provider based on capabilities or cache
     if recommended_provider and validate_provider(recommended_provider):
         os.environ["ONNX_PROVIDER"] = recommended_provider
-        logger.info(f"🎯 Using cached provider: {recommended_provider}")
+        logger.info(f" Using cached provider: {recommended_provider}")
     elif capabilities['provider_priority']:
         # Use first available provider from priority list
         primary_provider = capabilities['provider_priority'][0]
         if validate_provider(primary_provider):
             os.environ["ONNX_PROVIDER"] = primary_provider
-            logger.info(f"🎯 Using primary provider: {primary_provider}")
+            logger.info(f" Using primary provider: {primary_provider}")
         else:
             # Fallback to next available provider
             for provider in capabilities['provider_priority'][1:]:
                 if validate_provider(provider):
                     os.environ["ONNX_PROVIDER"] = provider
-                    logger.info(f"🔄 Using fallback provider: {provider}")
+                    logger.info(f" Using fallback provider: {provider}")
                     break
             else:
                 logger.error("❌ No valid providers available")
@@ -1302,7 +1302,7 @@ def initialize_model():
         # Configure local temp directory for CoreML to avoid permission issues
         local_temp_dir = os.path.join(_cache_dir, "coreml_temp")
         os.makedirs(local_temp_dir, exist_ok=True)
-        logger.info(f"📁 Using local temp directory for CoreML: {local_temp_dir}")
+        logger.info(f" Using local temp directory for CoreML: {local_temp_dir}")
         
         # Configure providers with ORT optimization support
         log_progress("Configuring execution providers...")
@@ -1352,7 +1352,7 @@ def initialize_model():
         
         # Skip benchmarking in development mode or if explicitly disabled
         if TTSConfig.DEVELOPMENT_MODE or TTSConfig.SKIP_BENCHMARKING:
-            logger.info("🚀 Skipping benchmarking (development mode or explicitly disabled)")
+            logger.info("Skipping benchmarking (development mode or explicitly disabled)")
             enable_benchmarking = False
         
         if enable_benchmarking and capabilities['is_apple_silicon']:
@@ -1400,7 +1400,7 @@ def initialize_model():
                 report_optimal_provider = "CPUExecutionProvider"
             
             save_benchmark_report(capabilities, benchmark_results, report_optimal_provider)
-            logger.info("📊 Benchmark report generated successfully")
+            logger.info(" Benchmark report generated successfully")
         except Exception as e:
             logger.warning(f"⚠️ Could not generate benchmark report: {e}")
             
@@ -1416,7 +1416,7 @@ def initialize_model():
             "CoreML building plan error" in str(e)):
             
             logger.warning(f"⚠️ CoreML initialization failed: {e}. This is often recoverable.", exc_info=False)
-            logger.info("🔄 Attempting CPU fallback...")
+            logger.info(" Attempting CPU fallback...")
             os.environ["ONNX_PROVIDER"] = "CPUExecutionProvider"
             
             try:
@@ -1450,7 +1450,7 @@ def initialize_model():
                 if enable_benchmarking and capabilities['is_apple_silicon']:
                     try:
                         optimal_provider, benchmark_results = benchmark_providers()
-                        logger.info("📊 CPU fallback benchmarking completed")
+                        logger.info(" CPU fallback benchmarking completed")
                     except Exception as fallback_benchmark_e:
                         logger.warning(f"⚠️ CPU fallback benchmark failed: {fallback_benchmark_e}")
                         

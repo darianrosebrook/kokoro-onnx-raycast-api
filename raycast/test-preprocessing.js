@@ -7,7 +7,7 @@ const testCases = [
   },
   {
     name: "Text with emojis and bullets",
-    input: "✅ Yes • Item 1 • Item 2\nNew line with emoji 🚀",
+    input: "✅ Yes • Item 1 • Item 2\nNew line with emoji ",
     expected: "Yes Item 1 Item 2 New line with emoji",
   },
   {
@@ -61,7 +61,7 @@ function preprocessText(text) {
 }
 
 // Run tests
-console.log("🧪 Testing text preprocessing fixes...\n");
+console.log(" Testing text preprocessing fixes...\n");
 
 let passed = 0;
 let failed = 0;
@@ -84,8 +84,8 @@ testCases.forEach((testCase, index) => {
   }
 });
 
-console.log(`📊 Results: ${passed} passed, ${failed} failed`);
-console.log(failed === 0 ? "🎉 All tests passed!" : "⚠️ Some tests failed");
+console.log(` Results: ${passed} passed, ${failed} failed`);
+console.log(failed === 0 ? " All tests passed!" : "⚠️ Some tests failed");
 
 // Test segmentation
 function segmentTextForPauses(text) {
@@ -120,7 +120,7 @@ function segmentTextForPauses(text) {
   return reconstructedSegments;
 }
 
-console.log("\n🧪 Testing text segmentation...\n");
+console.log("\n Testing text segmentation...\n");
 
 const segmentationTests = [
   {

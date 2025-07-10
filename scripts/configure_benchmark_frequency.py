@@ -79,7 +79,7 @@ def get_frequency_descriptions() -> Dict[str, Dict[str, str]]:
             "best_for": "Most users with stable systems",
             "startup_impact": "Rare 20-30 second delays (once per week)",
             "battery_impact": "Very minimal - benchmarking is rare",
-            "recommendation": "⭐ RECOMMENDED for most users"
+            "recommendation": " RECOMMENDED for most users"
         },
         "monthly": {
             "name": "Monthly",
@@ -105,7 +105,7 @@ def get_frequency_descriptions() -> Dict[str, Dict[str, str]]:
 def display_frequency_options() -> None:
     """Display all available benchmark frequency options with detailed descriptions."""
     print("\n" + "="*80)
-    print("🔧 BENCHMARK FREQUENCY CONFIGURATION")
+    print(" BENCHMARK FREQUENCY CONFIGURATION")
     print("="*80)
     print()
     print("The TTS system benchmarks your hardware to determine the optimal provider")
@@ -191,7 +191,7 @@ def interactive_configuration() -> Optional[str]:
     display_frequency_options()
     
     print("\n" + "="*80)
-    print("🤔 HARDWARE CONTEXT")
+    print(" HARDWARE CONTEXT")
     print("="*80)
     print()
     print("Why cache benchmark results?")
@@ -252,7 +252,7 @@ def show_current_configuration() -> None:
     config = get_current_configuration()
     
     print("\n" + "="*60)
-    print("📊 CURRENT BENCHMARK FREQUENCY CONFIGURATION")
+    print(" CURRENT BENCHMARK FREQUENCY CONFIGURATION")
     print("="*60)
     print()
     print(f"Current Setting: {config['frequency']}")
@@ -281,7 +281,7 @@ def show_current_configuration() -> None:
             if cache_age < config['cache_duration_hours'] * 3600:
                 print("Status: ✅ Cache is valid and will be used")
             else:
-                print("Status: ⏰ Cache is expired - will benchmark on next startup")
+                print("Status:  Cache is expired - will benchmark on next startup")
                 
         except Exception as e:
             print(f"Cache File: {cache_file} (error reading: {e})")
@@ -328,7 +328,7 @@ def main():
         return
     
     # Interactive mode
-    print("🔧 Kokoro TTS Benchmark Frequency Configuration")
+    print(" Kokoro TTS Benchmark Frequency Configuration")
     print("This tool helps you configure how often the system should benchmark your hardware.")
     
     selected_frequency = interactive_configuration()
@@ -341,7 +341,7 @@ def main():
             print(f"   Cache duration: {descriptions[selected_frequency]['duration']}")
             print(f"   Configuration saved to .env file")
             print()
-            print("🚀 Next steps:")
+            print("Next steps:")
             print("   • Restart the TTS server to apply the new settings")
             print("   • The system will use cached results until the next benchmark")
             print("   • You can run this script again anytime to change settings")

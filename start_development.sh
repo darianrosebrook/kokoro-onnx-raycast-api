@@ -1,71 +1,37 @@
 #!/bin/bash
+# Description: Starts the development server with Uvicorn and hot-reloading.
+# This script ensures the application runs with optimal settings for a development environment.
 
-# Development startup script for Kokoro TTS API with hot reload and comprehensive validation
+# --- Configuration ---
+HOST=${HOST:-"0.0.0.0"}
+PORT=${PORT:-8000}
+LOG_LEVEL=${LOG_LEVEL:-"INFO"}
+# Automatically enable reload in development, unless explicitly disabled.
+UVICORN_RELOAD=${UVICORN_RELOAD:-"1"}
+# Set a flag to indicate development mode for the application logic
+export KOKORO_DEVELOPMENT_MODE="true"
 
-echo "🔧 Starting Kokoro TTS API in Development Mode..."
-
-# Check if we're in the right directory
-if [ ! -f "api/main.py" ]; then
-    echo "❌ Error: api/main.py not found. Make sure you're in the kokoro-onnx directory."
-    exit 1
-fi
-
-# Check if virtual environment exists
+# --- Pre-flight Checks ---
+# Check if .venv exists
 if [ ! -d ".venv" ]; then
-    echo "❌ Error: Virtual environment not found. Please create one with:"
-    echo "   python3 -m venv .venv"
+    echo "ERROR: Virtual environment '.venv' not found."
+    echo "Please run the setup script first: ./setup.sh"
     exit 1
 fi
 
 # Activate virtual environment
-echo "🔄 Activating virtual environment..."
 source .venv/bin/activate
 
-# Load environment variables from .env file if it exists
-if [ -f ".env" ]; then
-    echo "🔧 Loading environment variables from .env file..."
-    export $(grep -v '^#' .env | xargs)
+# Check for ORT model and inform user about first-time conversion
+if [[ "$(uname -m)" == "arm64" ]] && [ ! -f ".cache/ort/kokoro-v1.0.int8.ort" ]; then
+    echo "⚙️  First-time ORT conversion may be triggered on startup..."
+    echo "This can take ~15s. Subsequent startups will be faster."
 fi
 
-# Python application will handle all validation (dependencies, models, etc.)
-echo "🐍 Handing off to Python for validation and startup..."
+# --- Server Execution ---
+echo "Starting development server on http://${HOST}:${PORT}"
+echo " LOG_LEVEL is set to ${LOG_LEVEL}"
+[ "$UVICORN_RELOAD" = "1" ] && echo " Hot-reloading is enabled."
 
-# Set environment variables for development
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-export PYTHONUNBUFFERED=1
-export PYTHONDONTWRITEBYTECODE=1
-export UVICORN_RELOAD=1
-
-# Development mode optimizations for faster startup
-export KOKORO_DEVELOPMENT_MODE=true
-export KOKORO_SKIP_BENCHMARKING=true
-export KOKORO_FAST_STARTUP=true
-
-# Suppress CoreML warnings at the system level
-export ORT_LOGGING_LEVEL=3
-export ONNXRUNTIME_LOG_SEVERITY_LEVEL=3
-export TF_CPP_MIN_LOG_LEVEL=3
-export CORE_ML_LOG_LEVEL=3
-
-# Note: ONNX_PROVIDER is NOT set here. The Python application will intelligently
-# select the best provider based on hardware benchmarking and caching.
-
-echo "🔧 Starting development server with hot reload..."
-echo "📡 Server will be available at: http://localhost:8000"
-echo "🎵 Streaming endpoint: http://localhost:8000/v1/audio/speech"
-echo "🏥 Health check: http://localhost:8000/health"
-echo "📊 Status endpoint: http://localhost:8000/status"
-echo "📚 API docs: http://localhost:8000/docs"
-echo ""
-echo "🔄 Hot reload enabled - changes to files in the 'api' directory will restart the server"
-echo "Press Ctrl+C to stop the server"
-echo ""
-
-# Create a local cache directory for CoreML compiled models to avoid permissions issues in /var/folders
-mkdir -p .cache
-
-# Start the development server with hot reload
-# Set TMPDIR to use the local cache
-# Use --log-level info to ensure proper logging output
-# Note: Removed grep filtering to allow real-time logs to appear
-TMPDIR=$(pwd)/.cache uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir api/ --log-level info 
+# Use exec to replace the shell process with the uvicorn process
+exec uvicorn api.main:app --host "${HOST}" --port "${PORT}" --log-level "${LOG_LEVEL}" $([ "$UVICORN_RELOAD" = "1" ] && echo "--reload") 

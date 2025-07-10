@@ -101,15 +101,15 @@ const generateVoiceOptions = (): { value: VoiceOption; title: string }[] => {
   };
 
   // Add languages in order of preference/quality
-  addLanguageGroup(getAmericanEnglishVoices(), "🇺🇸");
-  addLanguageGroup(getBritishEnglishVoices(), "🇬🇧");
-  addLanguageGroup(getFrenchVoices(), "🇫🇷");
-  addLanguageGroup(getJapaneseVoices(), "🇯🇵");
-  addLanguageGroup(getHindiVoices(), "🇮🇳");
-  addLanguageGroup(getItalianVoices(), "🇮🇹");
-  addLanguageGroup(getMandarinChineseVoices(), "🇨🇳");
-  addLanguageGroup(getSpanishVoices(), "🇪🇸");
-  addLanguageGroup(getBrazilianPortugueseVoices(), "🇧🇷");
+  addLanguageGroup(getAmericanEnglishVoices(), "");
+  addLanguageGroup(getBritishEnglishVoices(), "");
+  addLanguageGroup(getFrenchVoices(), "");
+  addLanguageGroup(getJapaneseVoices(), "");
+  addLanguageGroup(getHindiVoices(), "");
+  addLanguageGroup(getItalianVoices(), "");
+  addLanguageGroup(getMandarinChineseVoices(), "");
+  addLanguageGroup(getSpanishVoices(), "");
+  addLanguageGroup(getBrazilianPortugueseVoices(), "");
 
   return voiceOptions;
 };
@@ -302,7 +302,7 @@ export default function SpeakTextSimple() {
 
           <Action
             title="Paste from Clipboard"
-            icon="📋"
+            icon=""
             shortcut={{ modifiers: ["cmd"], key: "v" }}
             onAction={async () => {
               try {

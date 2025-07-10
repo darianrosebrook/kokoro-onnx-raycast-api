@@ -77,7 +77,7 @@ def convert_onnx_to_ort(input_path: str, output_path: str = None, optimize_for_h
             logger.info(f"Hardware capabilities: {capabilities}")
             
             if capabilities['is_apple_silicon']:
-                logger.info("🍎 Applying Apple Silicon optimizations...")
+                logger.info(" Applying Apple Silicon optimizations...")
                 session_options.enable_cpu_mem_arena = False
                 session_options.enable_mem_pattern = False
                 session_options.use_deterministic_compute = True
@@ -86,7 +86,7 @@ def convert_onnx_to_ort(input_path: str, output_path: str = None, optimize_for_h
                 session_options.inter_op_num_threads = 1
         
         # Create session to trigger optimization
-        logger.info("🔧 Creating optimized session...")
+        logger.info(" Creating optimized session...")
         session = ort.InferenceSession(input_path, session_options)
         
         # Validate the output was created
@@ -98,9 +98,9 @@ def convert_onnx_to_ort(input_path: str, output_path: str = None, optimize_for_h
         output_size = os.path.getsize(output_path) / (1024 * 1024)
         
         logger.info(f"✅ Conversion successful!")
-        logger.info(f"📊 Input size: {input_size:.1f}MB")
-        logger.info(f"📊 Output size: {output_size:.1f}MB")
-        logger.info(f"📊 Size change: {((output_size - input_size) / input_size * 100):+.1f}%")
+        logger.info(f" Input size: {input_size:.1f}MB")
+        logger.info(f" Output size: {output_size:.1f}MB")
+        logger.info(f" Size change: {((output_size - input_size) / input_size * 100):+.1f}%")
         
         # Clean up session
         del session
@@ -164,7 +164,7 @@ Examples:
         )
         
         print(f"\n✅ Successfully converted to: {output_path}")
-        print("\n💡 To use the optimized model:")
+        print("\n To use the optimized model:")
         print(f"   export KOKORO_ORT_MODEL_PATH={output_path}")
         print("   ./start_development.sh")
         

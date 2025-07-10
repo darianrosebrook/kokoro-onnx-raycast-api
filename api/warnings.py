@@ -198,7 +198,7 @@ class StderrInterceptor:
         if should_suppress and not should_show:
             # Suppress this warning but track it
             self.suppressed_count += 1
-            logger.debug(f"🔍 Suppressed stderr warning: {text.strip()}")
+            logger.debug(f" Suppressed stderr warning: {text.strip()}")
             
             # Track in performance monitoring
             try:
@@ -243,7 +243,7 @@ def activate_stderr_interceptor():
     global _stderr_interceptor_active
     
     if _stderr_interceptor_active:
-        logger.debug("🔧 Stderr interceptor already active, skipping activation")
+        logger.debug(" Stderr interceptor already active, skipping activation")
         return
     
     try:
@@ -254,7 +254,7 @@ def activate_stderr_interceptor():
         
         _stderr_interceptor_active = True
         logger.info("✅ Stderr interceptor activated for early warning suppression")
-        logger.debug("🔍 Will suppress CoreML context leaks and msgtracer warnings")
+        logger.debug(" Will suppress CoreML context leaks and msgtracer warnings")
         
     except Exception as e:
         logger.warning(f"⚠️ Failed to activate stderr interceptor: {e}")
@@ -276,7 +276,7 @@ def setup_comprehensive_logging_filter():
         if not existing_filters:
             warning_filter = ONNXRuntimeWarningFilter()
             root_logger.addFilter(warning_filter)
-            logger.debug("🔧 Comprehensive logging filter added to root logger")
+            logger.debug(" Comprehensive logging filter added to root logger")
         
         # Configure specific loggers
         loggers_to_configure = [
@@ -290,11 +290,11 @@ def setup_comprehensive_logging_filter():
             try:
                 specific_logger = logging.getLogger(logger_name)
                 specific_logger.setLevel(logging.ERROR)
-                logger.debug(f"🔧 Logger '{logger_name}' set to ERROR level")
+                logger.debug(f" Logger '{logger_name}' set to ERROR level")
             except Exception as e:
                 logger.debug(f"⚠️ Could not configure logger '{logger_name}': {e}")
         
-        logger.debug("🔧 Comprehensive logging filter setup complete")
+        logger.debug(" Comprehensive logging filter setup complete")
         
     except Exception as e:
         logger.warning(f"⚠️ Failed to setup comprehensive logging filter: {e}")
@@ -410,9 +410,9 @@ def configure_onnx_runtime_logging():
         # Set global logging level if available
         try:
             ort.set_default_logger_severity(3)
-            logger.debug("🔧 ONNX Runtime global logging set to error-only")
+            logger.debug(" ONNX Runtime global logging set to error-only")
         except AttributeError:
-            logger.debug("🔧 ONNX Runtime global logging not available")
+            logger.debug(" ONNX Runtime global logging not available")
         
         # Suppress specific warning patterns
         warnings.filterwarnings("ignore", message=".*Some nodes were not assigned.*")
@@ -422,7 +422,7 @@ def configure_onnx_runtime_logging():
         warnings.filterwarnings("ignore", message=".*Context leak detected.*")
         warnings.filterwarnings("ignore", message=".*msgtracer returned -1.*")
         
-        logger.debug("🔧 ONNX Runtime logging configured for minimal noise")
+        logger.debug(" ONNX Runtime logging configured for minimal noise")
         
     except Exception as e:
         logger.debug(f"⚠️ Could not configure ONNX Runtime logging: {e}")
@@ -455,8 +455,8 @@ def suppress_phonemizer_warnings():
         warning_filter = ONNXRuntimeWarningFilter()
         root_logger.addFilter(warning_filter)
         
-        logger.debug("🔧 Phonemizer, espeak, and ONNX Runtime logging set to error-only")
-        logger.debug("🔧 Custom warning filter added to root logger")
+        logger.debug(" Phonemizer, espeak, and ONNX Runtime logging set to error-only")
+        logger.debug(" Custom warning filter added to root logger")
     except Exception as e:
         logger.debug(f"⚠️ Could not configure phonemizer logging: {e}")
 
@@ -565,10 +565,10 @@ def setup_coreml_warning_handler():
     
     # Prevent duplicate handler registration
     if _warning_handler_setup:
-        logger.debug("🔧 CoreML warning handler already initialized, skipping setup")
+        logger.debug(" CoreML warning handler already initialized, skipping setup")
         return
     
-    logger.info("🔧 Initializing CoreML warning management system...")
+    logger.info(" Initializing CoreML warning management system...")
     
     # Store original warning handler for fallback
     original_showwarning = warnings.showwarning
@@ -636,7 +636,7 @@ def setup_coreml_warning_handler():
                 "words count mismatch" in msg_str or
                 "CoreMLExecutionProvider::GetCapability" in msg_str):
                 # These are known harmless warnings - suppress display but track performance
-                logger.debug(f"🔍 Suppressing known warning: {msg_str[:50]}...")
+                logger.debug(f" Suppressing known warning: {msg_str[:50]}...")
                 
                 # Track warning in performance monitoring system
                 # This provides visibility without log spam
@@ -647,7 +647,7 @@ def setup_coreml_warning_handler():
             
             # For all other warnings, use default behavior
             # This ensures we don't accidentally suppress important system warnings
-            logger.debug(f"📢 Passing through warning: {msg_str[:50]}...")
+            logger.debug(f" Passing through warning: {msg_str[:50]}...")
             original_showwarning(message, category, filename, lineno, file, line)
             
         except Exception as e:
@@ -672,8 +672,8 @@ def setup_coreml_warning_handler():
     _warning_handler_setup = True
     
     logger.info("✅ CoreML warning management system initialized successfully")
-    logger.info("🔧 Warning handler will suppress CoreML context leaks and track performance")
-    logger.debug("🔍 Handler will process warnings: Context leak, msgtracer, ONNX Runtime, and others")
+    logger.info(" Warning handler will suppress CoreML context leaks and track performance")
+    logger.debug(" Handler will process warnings: Context leak, msgtracer, ONNX Runtime, and others")
     
     # Also configure ONNX Runtime logging to reduce noise
     try:
@@ -681,10 +681,10 @@ def setup_coreml_warning_handler():
         # Set ONNX Runtime logging to error level only (if available)
         try:
             ort.set_default_logger_severity(3)  # 3 = Error level only
-            logger.debug("🔧 ONNX Runtime logging level set to error-only")
+            logger.debug(" ONNX Runtime logging level set to error-only")
         except AttributeError:
             # Fallback for older ONNX Runtime versions
-            logger.debug("🔧 ONNX Runtime logging level setting not available")
+            logger.debug(" ONNX Runtime logging level setting not available")
         
         # Suppress specific ONNX Runtime warnings about node assignment
         # These are normal and expected with CoreML provider
@@ -692,7 +692,7 @@ def setup_coreml_warning_handler():
         warnings.filterwarnings("ignore", message=".*Rerunning with verbose output.*")
         warnings.filterwarnings("ignore", message=".*Context leak detected.*")
         warnings.filterwarnings("ignore", message=".*msgtracer returned -1.*")
-        logger.debug("🔧 ONNX Runtime node assignment warnings suppressed")
+        logger.debug(" ONNX Runtime node assignment warnings suppressed")
     except Exception as e:
         logger.debug(f"⚠️ Could not configure ONNX Runtime logging: {e}")
 

@@ -100,8 +100,8 @@ def setup_logging(verbose: bool = False):
     
     # Log initial setup
     logger = logging.getLogger(__name__)
-    logger.info(f"🔧 Logging configured - Level: {logging.getLevelName(level)}")
-    logger.info(f"📄 Detailed logs will be written to: {log_file}")
+    logger.info(f" Logging configured - Level: {logging.getLevelName(level)}")
+    logger.info(f" Detailed logs will be written to: {log_file}")
 
 
 def parse_arguments():
@@ -218,7 +218,7 @@ def validate_arguments(args):
     if output_dir and not os.path.exists(output_dir):
         try:
             os.makedirs(output_dir, exist_ok=True)
-            logger.info(f"📁 Created output directory: {output_dir}")
+            logger.info(f" Created output directory: {output_dir}")
         except Exception as e:
             raise ValueError(f"Cannot create output directory {output_dir}: {e}")
     
@@ -244,7 +244,7 @@ def configure_benchmark_settings(args):
     logger = logging.getLogger(__name__)
     
     if args.quick:
-        logger.info("🚀 Configuring quick benchmark mode")
+        logger.info("Configuring quick benchmark mode")
         TTSConfig.BENCHMARK_WARMUP_RUNS = 1
         TTSConfig.BENCHMARK_CONSISTENCY_RUNS = 1
         TTSConfig.BENCHMARK_ENABLE_LONG_TEXT = False
@@ -257,7 +257,7 @@ def configure_benchmark_settings(args):
         elif args.enable_long_text:
             TTSConfig.BENCHMARK_ENABLE_LONG_TEXT = True
     
-    logger.info(f"🔧 Benchmark configuration applied:")
+    logger.info(f" Benchmark configuration applied:")
     logger.info(f"   • Warmup runs: {TTSConfig.BENCHMARK_WARMUP_RUNS}")
     logger.info(f"   • Consistency runs: {TTSConfig.BENCHMARK_CONSISTENCY_RUNS}")
     logger.info(f"   • Long text testing: {'✅ Enabled' if TTSConfig.BENCHMARK_ENABLE_LONG_TEXT else '❌ Disabled'}")
@@ -274,10 +274,10 @@ def display_benchmark_info(args):
     """
     logger = logging.getLogger(__name__)
     
-    print("🎯 Kokoro-ONNX TTS Performance Benchmark")
+    print(" Kokoro-ONNX TTS Performance Benchmark")
     print("=" * 50)
-    print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🔧 Configuration:")
+    print(f" Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f" Configuration:")
     print(f"   • Warmup runs: {TTSConfig.BENCHMARK_WARMUP_RUNS}")
     print(f"   • Consistency runs: {TTSConfig.BENCHMARK_CONSISTENCY_RUNS}")
     print(f"   • Long text testing: {'✅ Enabled' if TTSConfig.BENCHMARK_ENABLE_LONG_TEXT else '❌ Disabled'}")
@@ -333,7 +333,7 @@ def get_system_info():
             'psutil_available': True
         }
         
-        logger.debug(f"📊 System info collected with psutil: {cpu_count} cores, {memory_gb:.1f}GB RAM")
+        logger.debug(f" System info collected with psutil: {cpu_count} cores, {memory_gb:.1f}GB RAM")
         
     except ImportError:
         # Fallback without psutil
@@ -356,7 +356,7 @@ def get_system_info():
         import onnxruntime as ort
         system_info['onnxruntime_version'] = ort.__version__
         system_info['available_providers'] = ort.get_available_providers()
-        logger.debug(f"📦 ONNX Runtime {ort.__version__} with providers: {ort.get_available_providers()}")
+        logger.debug(f" ONNX Runtime {ort.__version__} with providers: {ort.get_available_providers()}")
     except Exception as e:
         logger.warning(f"⚠️ Could not get ONNX Runtime info: {e}")
         system_info['onnxruntime_version'] = 'Unknown'
@@ -375,7 +375,7 @@ def validate_dependencies():
     @returns bool: True if all dependencies are valid, False otherwise
     """
     logger = logging.getLogger(__name__)
-    logger.info("🔍 Validating dependencies...")
+    logger.info(" Validating dependencies...")
     
     missing_deps = []
     version_issues = []
@@ -423,7 +423,7 @@ def validate_dependencies():
     # Report results
     if missing_deps:
         logger.error(f"❌ Missing required dependencies: {', '.join(missing_deps)}")
-        logger.error("💡 Install missing packages with: pip install " + " ".join(missing_deps))
+        logger.error(" Install missing packages with: pip install " + " ".join(missing_deps))
         return False
     
     if version_issues:
@@ -448,7 +448,7 @@ def run_extended_benchmark_analysis(benchmark_results: Dict[str, float]):
         logger.error("❌ No benchmark results to analyze")
         return
     
-    print("\n📊 Extended Performance Analysis")
+    print("\n Extended Performance Analysis")
     print("-" * 40)
     
     # Calculate performance metrics
@@ -466,7 +466,7 @@ def run_extended_benchmark_analysis(benchmark_results: Dict[str, float]):
         median_time = statistics.median(times)
         std_dev = statistics.stdev(times) if len(times) > 1 else 0
         
-        print(f"⚡ Performance Summary:")
+        print(f" Performance Summary:")
         print(f"   • Fastest: {fastest_time:.3f}s")
         print(f"   • Slowest: {slowest_time:.3f}s")
         print(f"   • Mean: {mean_time:.3f}s")
@@ -476,32 +476,32 @@ def run_extended_benchmark_analysis(benchmark_results: Dict[str, float]):
         print(f"   • Speed-up: {slowest_time/fastest_time:.2f}x")
         
         # Detailed comparison
-        print(f"\n📈 Provider Comparison:")
+        print(f"\n Provider Comparison:")
         for i, (provider, time_taken) in enumerate(sorted(benchmark_results.items(), key=lambda x: x[1])):
             relative_perf = time_taken / fastest_time
-            rank = "🥇" if i == 0 else "🥈" if i == 1 else "🥉"
+            rank = "" if i == 0 else "" if i == 1 else ""
             print(f"   {rank} {provider}: {time_taken:.3f}s ({relative_perf:.2f}x)")
     
     # Performance recommendations
-    print(f"\n💡 Recommendations:")
+    print(f"\n Recommendations:")
     best_provider = min(benchmark_results, key=benchmark_results.get)
     
     if 'CoreML' in best_provider:
         print("   ✅ CoreML is optimal for your Apple Silicon system")
-        print("   🚀 Hardware acceleration is working effectively")
+        print("   Hardware acceleration is working effectively")
     elif 'CPU' in best_provider:
-        print("   💻 CPU provider is optimal for your system")
-        print("   ⚡ Consider checking CoreML compatibility if available")
+        print("    CPU provider is optimal for your system")
+        print("    Consider checking CoreML compatibility if available")
     
-    print(f"   🎯 Recommended provider: {best_provider}")
+    print(f"    Recommended provider: {best_provider}")
     
     # Performance insights
     if len(times) > 1:
         cv = (std_dev / mean_time) * 100 if mean_time > 0 else 0
         if cv < 5:
-            print("   📊 Excellent performance consistency")
+            print("    Excellent performance consistency")
         elif cv < 15:
-            print("   📊 Good performance consistency")
+            print("    Good performance consistency")
         else:
             print("   ⚠️ High performance variability - consider more warmup runs")
 
@@ -526,7 +526,7 @@ def main():
         setup_logging(args.verbose)
         
         # Initialize warning suppression systems
-        logger.info("🔧 Initializing warning suppression systems...")
+        logger.info(" Initializing warning suppression systems...")
         
         # Set environment variables to suppress ONNX Runtime C++ warnings
         os.environ["ORT_LOGGING_LEVEL"] = "3"  # Error level only
@@ -549,7 +549,7 @@ def main():
         
         # Check patch status
         patch_status = get_patch_status()
-        logger.info(f"🔧 Patch status: {patch_status['applied']}")
+        logger.info(f" Patch status: {patch_status['applied']}")
         if patch_status['patch_errors']:
             logger.warning(f"⚠️ Patch errors detected: {patch_status['patch_errors']}")
         
@@ -559,7 +559,7 @@ def main():
             return 0
         
         # Initialize the model
-        logger.info("🚀 Initializing TTS model...")
+        logger.info("Initializing TTS model...")
         start_init = time.perf_counter()
         
         try:
@@ -575,7 +575,7 @@ def main():
             logger.warning("⚠️ Continuing with benchmark despite initialization failure")
         
         # Run benchmark
-        logger.info("\n🔬 Running comprehensive benchmark...")
+        logger.info("\n Running comprehensive benchmark...")
         start_benchmark = time.perf_counter()
         
         try:
@@ -587,7 +587,7 @@ def main():
         except Exception as e:
             logger.error(f"❌ Benchmark execution failed: {e}")
             if args.verbose:
-                logger.debug(f"📋 Full traceback:\n{traceback.format_exc()}")
+                logger.debug(f" Full traceback:\n{traceback.format_exc()}")
             if not args.continue_on_error:
                 return 1
             logger.warning("⚠️ Continuing with partial results")
@@ -596,14 +596,14 @@ def main():
         
         # Display results
         if benchmark_results:
-            logger.info(f"\n🏆 Benchmark Results:")
+            logger.info(f"\n Benchmark Results:")
             logger.info(f"   • Optimal provider: {optimal_provider}")
             
             # Run extended analysis
             run_extended_benchmark_analysis(benchmark_results)
             
             # Generate comprehensive report
-            logger.info(f"\n📄 Generating comprehensive report...")
+            logger.info(f"\n Generating comprehensive report...")
             try:
                 system_info = get_system_info()
                 save_benchmark_report(system_info, benchmark_results, optimal_provider)
@@ -624,10 +624,10 @@ def main():
     except Exception as e:
         logger.error(f"❌ Benchmark failed with unexpected error: {e}")
         if args.verbose:
-            logger.debug(f"📋 Full traceback:\n{traceback.format_exc()}")
+            logger.debug(f" Full traceback:\n{traceback.format_exc()}")
         return 1
     
-    logger.info("\n🎉 Benchmark completed successfully!")
+    logger.info("\n Benchmark completed successfully!")
     return 0
 
 

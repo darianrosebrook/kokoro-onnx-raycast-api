@@ -133,7 +133,7 @@ def clear_cache() -> bool:
 def show_cache_status() -> None:
     """Display comprehensive cache status information."""
     print("\n" + "="*70)
-    print("📊 BENCHMARK CACHE STATUS")
+    print(" BENCHMARK CACHE STATUS")
     print("="*70)
     
     # Show current configuration
@@ -171,7 +171,7 @@ def show_cache_status() -> None:
     is_valid = cache_age < cache_duration
     expires_in = (cache_duration - cache_age) / 3600
     
-    print(f"Cache Status: {'✅ Valid' if is_valid else '⏰ Expired'}")
+    print(f"Cache Status: {'✅ Valid' if is_valid else ' Expired'}")
     print(f"  • Cache Age: {cache_age_hours:.1f} hours ({cache_age_days:.1f} days)")
     print(f"  • Benchmark Date: {datetime.fromtimestamp(benchmark_date).strftime('%Y-%m-%d %H:%M:%S')}")
     
@@ -197,17 +197,17 @@ def show_cache_status() -> None:
     
     # Show recommendations
     if not is_valid:
-        print("💡 Recommendations:")
+        print(" Recommendations:")
         print("  • Cache is expired - next startup will benchmark")
         print("  • Consider using 'weekly' or 'monthly' frequency for less frequent benchmarking")
         print("  • Use --clear to force immediate re-benchmarking")
     elif frequency == "manually":
-        print("💡 Manual Mode:")
+        print(" Manual Mode:")
         print("  • Cache will not expire automatically")
         print("  • Use --force-benchmark to run benchmarks when needed")
         print("  • Use --clear to reset cache")
     else:
-        print("💡 Status:")
+        print(" Status:")
         print("  • Cache is valid and will be used")
         print("  • No benchmarking needed until expiration")
 
@@ -215,7 +215,7 @@ def show_cache_status() -> None:
 def inspect_cache() -> None:
     """Display detailed cache inspection information."""
     print("\n" + "="*70)
-    print("🔍 DETAILED CACHE INSPECTION")
+    print(" DETAILED CACHE INSPECTION")
     print("="*70)
     
     cache_file = get_cache_file_path()
@@ -263,7 +263,7 @@ def force_benchmark() -> bool:
     @returns bool: True if benchmarking succeeded
     """
     print("\n" + "="*70)
-    print("🔬 FORCING BENCHMARK EXECUTION")
+    print(" FORCING BENCHMARK EXECUTION")
     print("="*70)
     print()
     print("This will benchmark your hardware to determine optimal provider...")
@@ -272,7 +272,7 @@ def force_benchmark() -> bool:
     
     # Initialize model if needed
     if not get_model_status():
-        print("🔄 Initializing model for benchmarking...")
+        print(" Initializing model for benchmarking...")
         try:
             initialize_model()
             print("✅ Model initialized successfully")
@@ -282,7 +282,7 @@ def force_benchmark() -> bool:
     
     # Run benchmark
     try:
-        print("🔬 Running benchmark...")
+        print(" Running benchmark...")
         optimal_provider, benchmark_results = benchmark_providers()
         
         if not benchmark_results:

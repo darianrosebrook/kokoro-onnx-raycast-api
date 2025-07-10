@@ -44,7 +44,7 @@ def post_fork(server, worker):
         # Import the initializer function here, within the worker process.
         from api.model.loader import initialize_model
         
-        worker.log.info("🚀 Initializing TTS model in Gunicorn worker...")
+        worker.log.info("Initializing TTS model in Gunicorn worker...")
         initialize_model()
         worker.log.info("✅ Model initialized successfully in worker.")
         

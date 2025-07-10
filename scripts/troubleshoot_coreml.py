@@ -37,12 +37,12 @@ class CoreMLTroubleshooter:
         self.issues_found = []
         self.recommendations = []
         self.temp_dir = tempfile.mkdtemp(prefix="kokoro_coreml_troubleshoot_")
-        logger.info(f"🔧 Using temp directory: {self.temp_dir}")
+        logger.info(f" Using temp directory: {self.temp_dir}")
     
     def check_system_requirements(self) -> Dict[str, Any]:
         """Check comprehensive system requirements for CoreML."""
         
-        logger.info("🔍 Checking system requirements...")
+        logger.info(" Checking system requirements...")
         
         # Use existing hardware detection
         capabilities = detect_apple_silicon_capabilities()
@@ -90,7 +90,7 @@ class CoreMLTroubleshooter:
     def check_package_installation(self) -> Dict[str, Any]:
         """Check package installation with version compatibility."""
         
-        logger.info("🔍 Checking package installation...")
+        logger.info(" Checking package installation...")
         
         results = {
             'packages': {},
@@ -128,9 +128,9 @@ class CoreMLTroubleshooter:
             results['available_providers'] = providers
             results['onnxruntime_version'] = ort.__version__
             
-            logger.info(f"🔧 ONNX Runtime {ort.__version__} providers:")
+            logger.info(f" ONNX Runtime {ort.__version__} providers:")
             for provider in providers:
-                marker = "✅" if provider == 'CoreMLExecutionProvider' else "ℹ️"
+                marker = "✅" if provider == 'CoreMLExecutionProvider' else "⚠️"
                 logger.info(f"   {marker} {provider}")
             
             if 'CoreMLExecutionProvider' not in providers:
@@ -144,7 +144,7 @@ class CoreMLTroubleshooter:
     def check_model_files(self) -> Dict[str, Any]:
         """Check model file accessibility and validation."""
         
-        logger.info("🔍 Checking model files...")
+        logger.info(" Checking model files...")
         
         results = {
             'model_status': {},
@@ -195,9 +195,9 @@ class CoreMLTroubleshooter:
                     'cache_dir': ort_path,
                     'files': ort_files
                 }
-                logger.info(f"📁 ORT cache directory: {ort_path}")
+                logger.info(f" ORT cache directory: {ort_path}")
                 for ort_file in ort_files:
-                    logger.info(f"   📄 {ort_file}")
+                    logger.info(f"    {ort_file}")
         except Exception as e:
             logger.warning(f"Could not check ORT models: {e}")
         
@@ -206,7 +206,7 @@ class CoreMLTroubleshooter:
     def test_coreml_functionality(self) -> Dict[str, Any]:
         """Test CoreML functionality with comprehensive diagnostics."""
         
-        logger.info("🔍 Testing CoreML functionality...")
+        logger.info(" Testing CoreML functionality...")
         
         results = {
             'provider_validation': {},
@@ -338,7 +338,7 @@ class CoreMLTroubleshooter:
     def run_comprehensive_diagnosis(self) -> Dict[str, Any]:
         """Run comprehensive CoreML diagnosis."""
         
-        logger.info("🚀 Starting comprehensive CoreML diagnosis...")
+        logger.info("Starting comprehensive CoreML diagnosis...")
         
         diagnosis = {
             'timestamp': str(os.popen('date').read().strip()),
@@ -375,11 +375,11 @@ class CoreMLTroubleshooter:
         """Print a comprehensive troubleshooting report."""
         
         print("\n" + "="*70)
-        print("🔍 COMPREHENSIVE COREML TROUBLESHOOTING REPORT")
+        print(" COMPREHENSIVE COREML TROUBLESHOOTING REPORT")
         print("="*70)
         
-        print(f"\n📅 Generated: {diagnosis['timestamp']}")
-        print(f"🎯 Overall Status: {diagnosis['overall_status'].upper()}")
+        print(f"\n Generated: {diagnosis['timestamp']}")
+        print(f" Overall Status: {diagnosis['overall_status'].upper()}")
         
         # System summary
         sys_req = diagnosis['system_requirements']
@@ -393,7 +393,7 @@ class CoreMLTroubleshooter:
         
         # Package status
         pkg_info = diagnosis['package_installation']
-        print(f"\n📦 PACKAGE STATUS:")
+        print(f"\n PACKAGE STATUS:")
         for pkg, info in pkg_info.get('packages', {}).items():
             if info.get('installed', False):
                 print(f"   ✅ {pkg}: {info.get('version', 'unknown')}")
@@ -402,7 +402,7 @@ class CoreMLTroubleshooter:
         
         # Model files
         model_info = diagnosis['model_files']
-        print(f"\n📁 MODEL FILES:")
+        print(f"\n MODEL FILES:")
         for model_type, info in model_info.get('model_status', {}).items():
             if info.get('exists', False):
                 size = info.get('size_mb', 0)
@@ -412,7 +412,7 @@ class CoreMLTroubleshooter:
         
         # CoreML functionality
         coreml_info = diagnosis['coreml_functionality']
-        print(f"\n🔧 COREML FUNCTIONALITY:")
+        print(f"\n COREML FUNCTIONALITY:")
         for test_name, result in coreml_info.get('session_creation', {}).items():
             if result.get('success', False):
                 active = result.get('coreml_active', False)
@@ -431,12 +431,12 @@ class CoreMLTroubleshooter:
         # Recommendations
         recommendations = diagnosis['recommendations']
         if recommendations:
-            print(f"\n💡 RECOMMENDATIONS:")
+            print(f"\n RECOMMENDATIONS:")
             for rec in recommendations:
                 print(f"   • {rec}")
         
         # Troubleshooting steps
-        print(f"\n🔧 TROUBLESHOOTING STEPS:")
+        print(f"\n TROUBLESHOOTING STEPS:")
         for step in diagnosis['troubleshooting_recommendations']:
             print(f"   {step}")
         
@@ -449,14 +449,14 @@ class CoreMLTroubleshooter:
         try:
             import shutil
             shutil.rmtree(self.temp_dir)
-            logger.debug(f"🧹 Cleaned up temp directory: {self.temp_dir}")
+            logger.debug(f" Cleaned up temp directory: {self.temp_dir}")
         except Exception as e:
             logger.warning(f"⚠️ Failed to cleanup temp directory: {e}")
 
 def main():
     """Main troubleshooting function."""
     
-    print("🔍 Comprehensive CoreML Troubleshooting Tool")
+    print(" Comprehensive CoreML Troubleshooting Tool")
     print("=" * 60)
     
     troubleshooter = CoreMLTroubleshooter()
@@ -475,7 +475,7 @@ def main():
         with open(report_file, 'w') as f:
             json.dump(diagnosis, f, indent=2)
         
-        print(f"\n📄 Full diagnosis saved to: {report_file}")
+        print(f"\n Full diagnosis saved to: {report_file}")
         
         # Return appropriate exit code
         return 0 if diagnosis['overall_status'] == 'healthy' else 1

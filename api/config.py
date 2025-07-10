@@ -413,7 +413,7 @@ class TTSConfig:
             sys.exit(1)
         ```
         """
-        logger.info("🔧 Verifying TTS configuration parameters...")
+        logger.info(" Verifying TTS configuration parameters...")
         
         # Calculate expected chunk size for validation
         expected_samples = int(cls.CHUNK_DURATION_MS / 1000 * cls.SAMPLE_RATE)
@@ -424,7 +424,7 @@ class TTSConfig:
             logger.warning(
                 f"⚠️ CHUNK_SIZE_BYTES mismatch! Expected {expected_bytes}, got {cls.CHUNK_SIZE_BYTES}"
             )
-            logger.info(f"🔧 Correcting chunk size calculation...")
+            logger.info(f" Correcting chunk size calculation...")
             
             # Automatically correct the chunk size
             cls.CHUNK_SIZE_BYTES = expected_bytes
@@ -457,7 +457,7 @@ class TTSConfig:
         logger.info("✅ Configuration validation completed successfully")
         
         # Log current configuration for debugging
-        logger.info(f"📊 Configuration summary:")
+        logger.info(f" Configuration summary:")
         logger.info(f"   - Sample rate: {cls.SAMPLE_RATE}Hz")
         logger.info(f"   - Chunk size: {cls.CHUNK_SIZE_BYTES} bytes ({cls.CHUNK_DURATION_MS}ms)")
         logger.info(f"   - Max concurrent segments: {cls.MAX_CONCURRENT_SEGMENTS}")

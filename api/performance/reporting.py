@@ -142,7 +142,7 @@ def generate_benchmark_insights(benchmark_results: Dict[str, float], optimal_pro
     for provider, time_taken in sorted_results:
         relative_perf = time_taken / fastest_time
         if provider == fastest_provider:
-            insights.append(f"🏆 **{provider}**: {time_taken:.3f}s (baseline)")
+            insights.append(f" **{provider}**: {time_taken:.3f}s (baseline)")
         else:
             insights.append(f"• **{provider}**: {time_taken:.3f}s ({relative_perf:.1f}x slower)")
     
@@ -153,11 +153,11 @@ def generate_benchmark_insights(benchmark_results: Dict[str, float], optimal_pro
     insights.append("")
     
     if improvement_percent < 5:
-        insights.append("💡 **Minimal Difference**: Performance difference is negligible - current provider is fine")
+        insights.append(" **Minimal Difference**: Performance difference is negligible - current provider is fine")
     elif improvement_percent < 15:
-        insights.append("⚡ **Moderate Improvement**: Consider switching for consistent workloads")
+        insights.append(" **Moderate Improvement**: Consider switching for consistent workloads")
     else:
-        insights.append("🚀 **Significant Improvement**: Strongly recommend switching to fastest provider")
+        insights.append("**Significant Improvement**: Strongly recommend switching to fastest provider")
     
     insights.append("")
     
@@ -270,12 +270,12 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         for i, (provider, time_taken) in enumerate(sorted_results):
             relative_perf = time_taken / fastest_time
             if time_taken == fastest_time:
-                status = "🏆 **Fastest**"
+                status = " **Fastest**"
                 performance_indicator = "1.0x (baseline)"
             else:
                 performance_indicator = f"{relative_perf:.1f}x slower"
                 if relative_perf < 1.2:
-                    status = "⚡ **Excellent**"
+                    status = " **Excellent**"
                 elif relative_perf < 1.5:
                     status = "✅ **Good**"
                 else:
@@ -304,7 +304,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             else:
                 md_content += f"⚠️ **Recommendation**: Using `{optimal_provider}` despite `{sorted_results[0][0]}` being {improvement_percent:.1f}% faster\n\n"
         else:
-            md_content += f"💡 **Recommendation**: Consider using `{sorted_results[0][0]}` for best performance\n\n"
+            md_content += f" **Recommendation**: Consider using `{sorted_results[0][0]}` for best performance\n\n"
         
         # Add detailed insights if we have multiple providers
         if len(benchmark_results) >= 2:
@@ -334,15 +334,15 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
     
     if capabilities.get('is_apple_silicon') and capabilities.get('has_neural_engine'):
-        md_content += """- 🍎 **Apple Silicon Detected**: Hardware acceleration available
-- 🚀 **Neural Engine**: Available for CoreML optimization
-- 📊 **Expected Performance**: Variable based on workload and model optimization
-- ⚡ **Provider Selection**: Performance-based recommendation from benchmarking
+        md_content += """-  **Apple Silicon Detected**: Hardware acceleration available
+- **Neural Engine**: Available for CoreML optimization
+-  **Expected Performance**: Variable based on workload and model optimization
+-  **Provider Selection**: Performance-based recommendation from benchmarking
 """
     else:
-        md_content += """- 💻 **Standard System**: CPU-based inference
-- ⚡ **Hardware Acceleration**: Limited to CPU optimizations
-- 📊 **Expected Performance**: Standard CPU-based inference
+        md_content += """-  **Standard System**: CPU-based inference
+-  **Hardware Acceleration**: Limited to CPU optimizations
+-  **Expected Performance**: Standard CPU-based inference
 """
     
     # Add environment configuration section
@@ -448,7 +448,7 @@ def save_benchmark_report(
             f.write(md_content)
         
         # Log success (commented out to avoid spam in production)
-        # logger.info(f"📊 Benchmark report saved to {report_file}")
+        # logger.info(f" Benchmark report saved to {report_file}")
         return report_file
         
     except Exception as e:
@@ -536,7 +536,7 @@ Current performance metrics (updated live):
         with open(report_file, 'w') as f:
             f.write(updated_content)
         
-        logger.debug("📊 Runtime stats updated in benchmark report")
+        logger.debug(" Runtime stats updated in benchmark report")
         
     except Exception as e:
         # Log at debug level since report updates are not critical for TTS functionality

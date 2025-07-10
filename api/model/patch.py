@@ -187,7 +187,7 @@ def _store_original_function(class_obj: Any, method_name: str, original_func: Ca
     key = f"{class_obj.__name__}.{method_name}"
     if key not in _patch_state['original_functions']:
         _patch_state['original_functions'][key] = original_func
-        logger.debug(f"💾 Stored original function: {key}")
+        logger.debug(f" Stored original function: {key}")
 
 def _is_already_patched(class_obj: Any, method_name: str) -> bool:
     """
@@ -259,10 +259,10 @@ def apply_all_patches():
     
     # Check if patches have already been applied
     if _patch_state['applied']:
-        logger.debug("🔧 Patches already applied, skipping...")
+        logger.debug(" Patches already applied, skipping...")
         return
     
-    logger.info("🔧 Applying production patches to kokoro-onnx library...")
+    logger.info(" Applying production patches to kokoro-onnx library...")
     start_time = time.perf_counter()
     
     try:
@@ -303,7 +303,7 @@ def _rollback_patches():
     This function restores all original functions that were stored before patching,
     providing a safety mechanism in case of patch failures.
     """
-    logger.warning("🔄 Rolling back patches due to application failure...")
+    logger.warning(" Rolling back patches due to application failure...")
     
     try:
         # Restore original functions
@@ -318,7 +318,7 @@ def _rollback_patches():
                 elif method_name == 'create':
                     Kokoro.create = original_func
             
-            logger.debug(f"🔄 Restored original function: {key}")
+            logger.debug(f" Restored original function: {key}")
         
         # Reset patch state
         _patch_state['applied'] = False
@@ -344,12 +344,12 @@ def _apply_espeak_wrapper_patch():
     - **Static Method Support**: Properly implements static methods
     - **Error Handling**: Graceful handling of attribute assignment failures
     """
-    logger.debug("🔧 Applying EspeakWrapper compatibility patch...")
+    logger.debug(" Applying EspeakWrapper compatibility patch...")
     
     try:
         # Add missing methods to EspeakWrapper if they don't exist
         if not hasattr(EspeakWrapper, 'set_data_path'):
-            logger.debug("🔧 Adding set_data_path method to EspeakWrapper")
+            logger.debug(" Adding set_data_path method to EspeakWrapper")
             
             @staticmethod
             def set_data_path(data_path):
@@ -360,7 +360,7 @@ def _apply_espeak_wrapper_patch():
             EspeakWrapper.set_data_path = _mark_as_patched(set_data_path)
         
         if not hasattr(EspeakWrapper, 'set_library'):
-            logger.debug("🔧 Adding set_library method to EspeakWrapper")
+            logger.debug(" Adding set_library method to EspeakWrapper")
             
             @staticmethod
             def set_library(lib_path):
@@ -426,11 +426,11 @@ def _apply_tokenizer_espeak_patch():
     
     @raises RuntimeError: If no eSpeak library can be found or loaded
     """
-    logger.debug("🔧 Applying eSpeak integration patch...")
+    logger.debug(" Applying eSpeak integration patch...")
     
     # Check if already patched
     if _is_already_patched(Tokenizer, '__init__'):
-        logger.debug("🔧 Tokenizer.__init__ already patched, skipping...")
+        logger.debug(" Tokenizer.__init__ already patched, skipping...")
         return
     
     # Store original Tokenizer.__init__ for reference
@@ -481,29 +481,29 @@ def _apply_tokenizer_espeak_patch():
         espeak_config.data_path = f"{espeak_ng_prefix}/share/espeak-ng-data"
         espeak_config.lib_path = f"{espeak_ng_prefix}/lib/libespeak-ng.dylib"
         
-        logger.debug(f"🔍 Trying Homebrew eSpeak paths:")
+        logger.debug(f" Trying Homebrew eSpeak paths:")
         logger.debug(f"   Data: {espeak_config.data_path}")
         logger.debug(f"   Library: {espeak_config.lib_path}")
         
         # Validate Homebrew paths and fallback if needed
         if not os.path.exists(espeak_config.data_path):
             logger.warning(f"⚠️ Homebrew eSpeak data not found at {espeak_config.data_path}")
-            logger.info("🔄 Falling back to espeakng-loader for data path")
+            logger.info(" Falling back to espeakng-loader for data path")
             espeak_config.data_path = espeakng_loader.get_data_path()
             
         if not os.path.exists(espeak_config.lib_path):
             logger.warning(f"⚠️ Homebrew eSpeak library not found at {espeak_config.lib_path}")
-            logger.info("🔄 Falling back to espeakng-loader for library path")
+            logger.info(" Falling back to espeakng-loader for library path")
             espeak_config.lib_path = espeakng_loader.get_library_path()
         
         # Validate library loading with ctypes
         try:
-            logger.debug(f"📚 Loading eSpeak library: {espeak_config.lib_path}")
+            logger.debug(f" Loading eSpeak library: {espeak_config.lib_path}")
             ctypes.cdll.LoadLibrary(espeak_config.lib_path)
             logger.debug("✅ eSpeak library loaded successfully")
         except Exception as e:
             logger.warning(f"⚠️ Failed to load eSpeak library: {e}")
-            logger.info("🔍 Attempting system library search...")
+            logger.info(" Attempting system library search...")
             
             # Final fallback: system library search
             fallback_lib = ctypes.util.find_library("espeak-ng") or ctypes.util.find_library("espeak")
@@ -513,11 +513,11 @@ def _apply_tokenizer_espeak_patch():
                     "Please install eSpeak-ng via Homebrew: brew install espeak-ng"
                 )
             
-            logger.info(f"🔄 Using system library: {fallback_lib}")
+            logger.info(f" Using system library: {fallback_lib}")
             espeak_config.lib_path = fallback_lib
         
         # Configure EspeakWrapper with validated paths
-        logger.debug("🔧 Configuring EspeakWrapper with validated paths")
+        logger.debug(" Configuring EspeakWrapper with validated paths")
         # Fix for phonemizer 3.3.0+ compatibility
         try:
             # Try the new API first (phonemizer 3.3.0+)
@@ -534,7 +534,7 @@ def _apply_tokenizer_espeak_patch():
                 logger.debug("⚠️ EspeakWrapper.set_library not available, using default library")
         except Exception as e:
             logger.warning(f"⚠️ Could not configure EspeakWrapper: {e}")
-            logger.debug("🔄 Continuing with default eSpeak configuration")
+            logger.debug(" Continuing with default eSpeak configuration")
         
         logger.debug("✅ eSpeak integration patch applied successfully")
     
@@ -554,11 +554,11 @@ def _apply_kokoro_model_patch():
     - **Patch Guard**: Prevents double-patching
     - **Error Handling**: Enhanced error reporting and recovery
     """
-    logger.debug("🔧 Applying Kokoro model patch...")
+    logger.debug(" Applying Kokoro model patch...")
     
     # Check if already patched
     if _is_already_patched(Kokoro, '__init__'):
-        logger.debug("🔧 Kokoro.__init__ already patched, skipping...")
+        logger.debug(" Kokoro.__init__ already patched, skipping...")
         return
     
     # Store original Kokoro.__init__ for reference
@@ -578,7 +578,7 @@ def _apply_kokoro_model_patch():
         @param vocab_config: Optional vocabulary configuration
         @raises RuntimeError: If model initialization fails
         """
-        logger.debug(f"📦 Initializing Kokoro model (patched)")
+        logger.debug(f" Initializing Kokoro model (patched)")
         try:
             original_kokoro_init(self, model_path, voices_path, espeak_config, vocab_config)
             logger.info("✅ Kokoro model initialized successfully")
@@ -612,11 +612,11 @@ def _apply_type_safety_patch():
     
     @raises TypeError: If parameters cannot be converted to correct types
     """
-    logger.debug("🔧 Applying type safety patch...")
+    logger.debug(" Applying type safety patch...")
     
     # Check if already patched
     if _is_already_patched(Kokoro, 'create'):
-        logger.debug("🔧 Kokoro.create already patched, skipping...")
+        logger.debug(" Kokoro.create already patched, skipping...")
         return
     
     # Store original Kokoro.create for reference
@@ -655,7 +655,7 @@ def _apply_type_safety_patch():
         # This prevents runtime errors from type mismatches
         try:
             speed_float = float(speed)
-            logger.debug(f"🔢 Speed parameter converted: {speed} -> {speed_float}")
+            logger.debug(f" Speed parameter converted: {speed} -> {speed_float}")
         except (ValueError, TypeError) as e:
             raise TypeError(f"Speed parameter must be convertible to float: {e}")
         
@@ -707,6 +707,6 @@ def get_patch_status() -> Dict[str, Any]:
 
 # Auto-apply patches when module is imported
 # This ensures patches are active as soon as the module is imported
-logger.debug("🔧 Auto-applying patches on module import...")
+logger.debug(" Auto-applying patches on module import...")
 apply_all_patches()
 logger.debug("✅ All patches applied automatically on import") 

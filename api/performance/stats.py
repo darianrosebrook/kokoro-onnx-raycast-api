@@ -267,7 +267,7 @@ def handle_coreml_context_warning():
         # Throttled logging to avoid spam while maintaining visibility
         # Log every 10th warning to balance monitoring with performance
         if coreml_performance_stats['coreml_context_warnings'] % 10 == 0:
-            logger.debug(f"🔍 CoreML context warnings detected: {coreml_performance_stats['coreml_context_warnings']} (this is normal with CoreML + ONNX Runtime)")
+            logger.debug(f" CoreML context warnings detected: {coreml_performance_stats['coreml_context_warnings']} (this is normal with CoreML + ONNX Runtime)")
             
         # Trigger cleanup when warnings accumulate significantly
         # This helps prevent potential memory pressure from accumulated contexts
@@ -275,7 +275,7 @@ def handle_coreml_context_warning():
             import gc
             gc.collect()  # Force garbage collection to clean up accumulated contexts
             coreml_performance_stats['memory_cleanup_count'] += 1
-            logger.debug("🧹 Triggered memory cleanup due to CoreML context warnings")
+            logger.debug(" Triggered memory cleanup due to CoreML context warnings")
             
     except Exception as e:
         logger.debug(f"Error handling CoreML context warning: {e}")

@@ -255,8 +255,8 @@ def setup_application_logging():
     os.makedirs(logs_dir, exist_ok=True)
 
     logger = logging.getLogger(__name__)
-    logger.info(f"🔧 Application logging configured")
-    logger.info(f"📄 Detailed logs will be written to: logs/api_server.log")
+    logger.info(f" Application logging configured")
+    logger.info(f" Detailed logs will be written to: logs/api_server.log")
     
     # Configure immediate flushing for console handler
     for handler in root_logger.handlers:
@@ -277,11 +277,11 @@ def setup_application_logging():
         sys.stdout.reconfigure(line_buffering=True)
     
     # Test logging to ensure it's working immediately
-    logger.info("🔧 Logging system initialized and ready")
+    logger.info(" Logging system initialized and ready")
     sys.stdout.flush()  # Force immediate output
     
     # Also print directly to ensure immediate output
-    print("🔧 Direct output test - logging system ready", flush=True)
+    print(" Direct output test - logging system ready", flush=True)
 
 
 def validate_dependencies():
@@ -294,7 +294,7 @@ def validate_dependencies():
     @raises RuntimeError: If critical dependencies are missing
     """
     logger = logging.getLogger(__name__)
-    logger.info("🔍 Validating application dependencies...")
+    logger.info(" Validating application dependencies...")
 
     missing_deps = []
     version_issues = []
@@ -347,7 +347,7 @@ def validate_dependencies():
         error_msg = f"Missing required dependencies: {', '.join(missing_deps)}"
         logger.error(f"❌ {error_msg}")
         logger.error(
-            "💡 Install missing packages with: pip install " + " ".join(missing_deps))
+            " Install missing packages with: pip install " + " ".join(missing_deps))
         raise RuntimeError(error_msg)
 
     if version_issues:
@@ -367,7 +367,7 @@ def validate_model_files():
     @raises RuntimeError: If model files are missing or inaccessible
     """
     logger = logging.getLogger(__name__)
-    logger.info("🔍 Validating model files...")
+    logger.info(" Validating model files...")
 
     model_files = {
         'model': TTSConfig.MODEL_PATH,
@@ -410,7 +410,7 @@ def validate_environment():
     @raises RuntimeError: If environment validation fails
     """
     logger = logging.getLogger(__name__)
-    logger.info("🔍 Validating environment configuration...")
+    logger.info(" Validating environment configuration...")
 
     # The main hardware capability detection is now handled in the model loader.
     # This check is a lightweight validation to ensure ONNX Runtime is functional.
@@ -418,7 +418,7 @@ def validate_environment():
     # Check ONNX Runtime providers
     try:
         available_providers = ort.get_available_providers()
-        logger.info(f"📦 Available ONNX providers: {available_providers}")
+        logger.info(f" Available ONNX providers: {available_providers}")
 
         if 'CPUExecutionProvider' not in available_providers:
             raise RuntimeError("CPU provider not available - critical error")
@@ -446,7 +446,7 @@ def validate_patch_status():
     @raises RuntimeError: If critical patches failed to apply
     """
     logger = logging.getLogger(__name__)
-    logger.info("🔍 Validating patch status...")
+    logger.info(" Validating patch status...")
 
     try:
         patch_status = get_patch_status()
@@ -461,7 +461,7 @@ def validate_patch_status():
         logger.info(
             f"✅ Patches applied successfully in {patch_status['application_time']:.3f}s")
         logger.info(
-            f"📊 Original functions stored: {patch_status['original_functions_stored']}")
+            f" Original functions stored: {patch_status['original_functions_stored']}")
 
         # Log patch guard status
         guard_status = patch_status.get('patch_guard_status', {})
@@ -480,7 +480,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize warning handlers for various noise sources
 # This must be called before any ONNX Runtime operations
-logger.info("🔧 Initializing warning management systems...")
+logger.info(" Initializing warning management systems...")
 configure_onnx_runtime_logging()
 setup_coreml_warning_handler()
 suppress_phonemizer_warnings()
@@ -490,7 +490,7 @@ suppress_phonemizer_warnings()
 
 # Apply monkey patches for eSpeak integration and Kokoro model fixes
 # These patches fix known issues with the upstream kokoro-onnx library
-logger.info("🔧 Applying production patches to kokoro-onnx library...")
+logger.info(" Applying production patches to kokoro-onnx library...")
 apply_all_patches()
 
 # Global variables for application state
@@ -515,7 +515,7 @@ def update_startup_progress(progress: int, message: str, status: str = "initiali
         "started_at": startup_progress.get("started_at") or time.time()
     })
     # Use print for immediate console output only
-    print(f"🚀 Startup Progress ({progress}%): {message}", flush=True)
+    print(f"Startup Progress ({progress}%): {message}", flush=True)
 
 
 async def initialize_model():
@@ -535,7 +535,7 @@ async def initialize_model():
         # Set TMPDIR to local cache to avoid CoreML permission issues
         local_cache_dir = os.path.abspath(".cache")
         os.environ['TMPDIR'] = local_cache_dir
-        logger.info(f"🔧 Set TMPDIR to local cache: {local_cache_dir}")
+        logger.info(f" Set TMPDIR to local cache: {local_cache_dir}")
 
         update_startup_progress(8, "Cleaning up cache files...")
         try:
@@ -543,10 +543,10 @@ async def initialize_model():
             if cache_info.get('needs_cleanup', False):
                 cleanup_result = cleanup_cache(aggressive=False)
                 logger.info(
-                    f"🧹 Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
+                    f" Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
             else:
                 logger.info(
-                    f"🧹 Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
+                    f" Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
         except Exception as e:
             logger.warning(f"⚠️ Cache cleanup failed: {e}")
         
@@ -567,7 +567,7 @@ async def initialize_model():
                         if os.path.exists(temp_dir):
                             try:
                                 shutil.rmtree(temp_dir)
-                                logger.info(f"🧹 Cleaned up CoreML temp directory: {temp_dir}")
+                                logger.info(f" Cleaned up CoreML temp directory: {temp_dir}")
                             except Exception as e:
                                 logger.debug(f"⚠️ Could not clean up {temp_dir}: {e}")
                 else:
@@ -575,7 +575,7 @@ async def initialize_model():
                     if os.path.exists(temp_pattern):
                         try:
                             shutil.rmtree(temp_pattern)
-                            logger.info(f"🧹 Cleaned up CoreML temp directory: {temp_pattern}")
+                            logger.info(f" Cleaned up CoreML temp directory: {temp_pattern}")
                         except Exception as e:
                             logger.debug(f"⚠️ Could not clean up {temp_pattern}: {e}")
         except Exception as e:
@@ -637,7 +637,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("🔄 Application shutting down")
+    logger.info(" Application shutting down")
 
 # Create FastAPI app with lifespan management
 app = FastAPI(
@@ -1043,7 +1043,7 @@ async def create_speech(request: Request, tts_request: TTSRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    logger.info("🚀 Starting development server...")
+    logger.info("Starting development server...")
     uvicorn.run(
         app,
         host="0.0.0.0",
