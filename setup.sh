@@ -186,7 +186,21 @@ VOICES_URL="https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-
 
 # Check and download model file
 if [ -f "$MODEL_FILE" ]; then
-  print_success "Model file '$MODEL_FILE' already exists."
+  # Verify file size to ensure it's not corrupted
+  file_size=$(stat -f%z "$MODEL_FILE" 2>/dev/null || stat -c%s "$MODEL_FILE" 2>/dev/null || echo "0")
+  if [ "$file_size" -gt 50000000 ]; then  # Should be ~88MB
+    print_success "Model file '$MODEL_FILE' already exists (${file_size} bytes)."
+  else
+    print_warning "Model file exists but appears to be incomplete (${file_size} bytes). Re-downloading..."
+    rm -f "$MODEL_FILE"
+    print_progress "Downloading main neural model (88MB)..."
+    echo "This may take a few minutes depending on your internet speed..."
+    if wget -O "$MODEL_FILE" "$MODEL_URL" --progress=bar:force; then
+      print_success "Main neural model downloaded successfully."
+    else
+      print_error "Failed to download model file. Please check your internet connection and try again."
+    fi
+  fi
 else
   print_progress "Downloading main neural model (88MB)..."
   echo "This may take a few minutes depending on your internet speed..."
@@ -199,7 +213,21 @@ fi
 
 # Check and download voices file
 if [ -f "$VOICES_FILE" ]; then
-  print_success "Voices file '$VOICES_FILE' already exists."
+  # Verify file size to ensure it's not corrupted
+  file_size=$(stat -f%z "$VOICES_FILE" 2>/dev/null || stat -c%s "$VOICES_FILE" 2>/dev/null || echo "0")
+  if [ "$file_size" -gt 20000000 ]; then  # Should be ~27MB
+    print_success "Voices file '$VOICES_FILE' already exists (${file_size} bytes)."
+  else
+    print_warning "Voices file exists but appears to be incomplete (${file_size} bytes). Re-downloading..."
+    rm -f "$VOICES_FILE"
+    print_progress "Downloading voice data (27MB)..."
+    echo "This may take a minute depending on your internet speed..."
+    if wget -O "$VOICES_FILE" "$VOICES_URL" --progress=bar:force; then
+      print_success "Voice data downloaded successfully."
+    else
+      print_error "Failed to download voices file. Please check your internet connection and try again."
+    fi
+  fi
 else
   print_progress "Downloading voice data (27MB)..."
   echo "This may take a minute depending on your internet speed..."
@@ -210,7 +238,38 @@ else
   fi
 fi
 
-print_info "All model files are ready!"
+# Final verification that both files exist and have reasonable sizes
+if [ ! -f "$MODEL_FILE" ] || [ ! -f "$VOICES_FILE" ]; then
+  print_error "Critical error: Model files are missing after download attempt.
+  
+  Please check:
+  • Internet connection
+  • Available disk space
+  • File permissions
+  
+  You can manually download the files from:
+  • Model: $MODEL_URL
+  • Voices: $VOICES_URL"
+  exit 1
+fi
+
+# Verify file sizes one more time
+model_size=$(stat -f%z "$MODEL_FILE" 2>/dev/null || stat -c%s "$MODEL_FILE" 2>/dev/null || echo "0")
+voices_size=$(stat -f%z "$VOICES_FILE" 2>/dev/null || stat -c%s "$VOICES_FILE" 2>/dev/null || echo "0")
+
+if [ "$model_size" -lt 50000000 ] || [ "$voices_size" -lt 20000000 ]; then
+  print_error "Critical error: Downloaded files appear to be incomplete.
+  
+  Model file size: ${model_size} bytes (expected ~88MB)
+  Voices file size: ${voices_size} bytes (expected ~27MB)
+  
+  Please check your internet connection and run the setup script again."
+  exit 1
+fi
+
+print_success "All model files are ready and verified!"
+echo "   • Model file: ${model_size} bytes"
+echo "   • Voices file: ${voices_size} bytes"
 
 # --- 3b. ORT Optimization Setup ---
 print_header "Step 3b: Setting up ORT Optimization for Apple Silicon"

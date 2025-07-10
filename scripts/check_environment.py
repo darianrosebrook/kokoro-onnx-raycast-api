@@ -79,25 +79,41 @@ def check_required_packages():
         ('onnxruntime', 'onnxruntime'),
         ('kokoro-onnx', 'kokoro_onnx'),
         ('numpy', 'numpy'),
-        ('transformers', 'transformers'),
         ('fastapi', 'fastapi'),
         ('uvicorn', 'uvicorn'),
         ('pydantic', 'pydantic'),
     ]
     
+    # Optional packages (for additional features)
+    optional_packages = [
+        ('transformers', 'transformers'),
+    ]
+    
     package_status = {}
     missing_packages = []
     
+    # Check required packages
     for pip_name, import_name in required_packages:
         try:
             module = __import__(import_name)
             version = getattr(module, '__version__', 'unknown')
-            package_status[pip_name] = {'installed': True, 'version': version}
+            package_status[pip_name] = {'installed': True, 'version': version, 'required': True}
             print(f"✅ {pip_name}: {version}")
         except ImportError:
-            package_status[pip_name] = {'installed': False, 'version': None}
+            package_status[pip_name] = {'installed': False, 'version': None, 'required': True}
             missing_packages.append(pip_name)
             print(f"❌ {pip_name}: Missing")
+    
+    # Check optional packages
+    for pip_name, import_name in optional_packages:
+        try:
+            module = __import__(import_name)
+            version = getattr(module, '__version__', 'unknown')
+            package_status[pip_name] = {'installed': True, 'version': version, 'required': False}
+            print(f"✅ {pip_name}: {version} (optional)")
+        except ImportError:
+            package_status[pip_name] = {'installed': False, 'version': None, 'required': False}
+            print(f"ℹ️  {pip_name}: Missing (optional)")
     
     # Check ONNX Runtime providers if available
     try:
@@ -174,18 +190,21 @@ def check_system_compatibility():
     print()
     return compatibility
 
-def provide_installation_recommendations(analysis, missing_packages):
+def provide_installation_recommendations(analysis, missing_packages, package_status):
     """Provide specific installation recommendations based on the analysis."""
     
     print("💡 Installation Recommendations")
     print("=" * 50)
     
-    if not missing_packages:
+    # Filter to only required missing packages
+    required_missing = [pkg for pkg in missing_packages if package_status.get(pkg, {}).get('required', True)]
+    
+    if not required_missing:
         print("✅ All required packages are installed!")
         return
     
     print("📦 Missing packages need to be installed:")
-    print(f"   Packages: {', '.join(missing_packages)}")
+    print(f"   Packages: {', '.join(required_missing)}")
     print()
     
     if analysis['externally_managed'] and not analysis['virtual_env']:
@@ -263,7 +282,7 @@ def generate_diagnostic_report(analysis, package_status, compatibility, structur
         'overall_status': 'ready' if (
             not analysis['issues'] and 
             not compatibility['issues'] and
-            all(pkg['installed'] for pkg in package_status.values() if isinstance(pkg, dict))
+            all(pkg['installed'] for pkg in package_status.values() if isinstance(pkg, dict) and pkg.get('required', True))
         ) else 'needs_attention'
     }
     
@@ -283,8 +302,8 @@ def main():
         compatibility = check_system_compatibility()
         structure_status, missing_files = check_project_structure()
         
-        # Provide recommendations
-        provide_installation_recommendations(analysis, missing_packages)
+            # Provide recommendations
+    provide_installation_recommendations(analysis, missing_packages, package_status)
         
         # Generate diagnostic report
         report = generate_diagnostic_report(analysis, package_status, compatibility, structure_status)
