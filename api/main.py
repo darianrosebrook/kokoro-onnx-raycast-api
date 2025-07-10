@@ -617,7 +617,8 @@ async def initialize_model():
 
         total_time = startup_progress["completed_at"] - \
             startup_progress["started_at"]
-        print(f"✅ Model initialization completed in {total_time:.2f}s", flush=True)
+        print(f"Model initialization completed in {total_time:.2f}s", flush=True)
+        print(f"✅ Ready to start processing text to speech requests")
 
     except Exception as e:
         update_startup_progress(0, f"Initialization failed: {str(e)}", "error")
