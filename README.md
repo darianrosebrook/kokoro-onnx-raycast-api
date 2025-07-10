@@ -1065,7 +1065,6 @@ The system performs comprehensive initialization including model loading and pro
 
 ```bash
 # Check initialization progress
-tail -f logs/api_server.log
 
 # Use quick benchmark for faster testing
 python scripts/quick_benchmark.py
@@ -1120,9 +1119,7 @@ uvicorn api.main:app --host 0.0.0.0 --port 8001
    ```
 
 2. **Check logs**:
-   ```bash
-   tail -f logs/api_server.log
-   ```
+   # (Removed: tail -f logs/api_server.log, logging is now console-based)
 
 3. **Test basic functionality**:
    ```bash

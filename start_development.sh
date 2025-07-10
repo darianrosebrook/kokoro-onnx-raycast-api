@@ -58,7 +58,6 @@ echo "📊 Status endpoint: http://localhost:8000/status"
 echo "📚 API docs: http://localhost:8000/docs"
 echo ""
 echo "🔄 Hot reload enabled - changes to files in the 'api' directory will restart the server"
-echo "📄 Application logs will be written to: api_server.log"
 echo "Press Ctrl+C to stop the server"
 echo ""
 

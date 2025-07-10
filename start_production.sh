@@ -90,7 +90,6 @@ echo "   CPU cores detected: $cpu_count"
 echo "   ONNX Provider: Auto-selected by application"
 echo "   uvloop: $([ -n "$UVICORN_LOOP" ] && echo "Enabled" || echo "Disabled")"
 echo ""
-echo "📄 Application logs will be written to: api_server.log"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
