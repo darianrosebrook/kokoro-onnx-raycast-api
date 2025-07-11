@@ -23,12 +23,13 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { logger } from "../core/logger";
 import type {
-  IPlaybackManager,
   PlaybackContext,
   PlaybackState,
   AudioFormat,
+  IPlaybackManager,
   TTSProcessorConfig,
   VoiceOption,
+  TTS_CONSTANTS,
 } from "../validation/tts-types";
 
 /**
@@ -230,16 +231,42 @@ export class PlaybackManager implements IPlaybackManager {
       pauseReject: null,
     };
 
-    // PHASE 1 OPTIMIZATION: Create afplay process with stdin pipe
-    logger.info("PHASE 1 OPTIMIZATION: Creating afplay process with stdin pipe", {
+    // PHASE 1 OPTIMIZATION: Configure afplay for raw PCM data streaming
+    const afplayArgs = [
+      "-f", // Use raw audio format
+      "-r",
+      TTS_CONSTANTS.SAMPLE_RATE.toString(), // Sample rate
+      "-c",
+      TTS_CONSTANTS.CHANNELS.toString(), // Channels
+      "-b",
+      TTS_CONSTANTS.BIT_DEPTH.toString(), // Bit depth
+      "-", // Read from stdin
+    ];
+
+    console.log("🔍 DEBUGGING: Starting afplay with PCM format");
+    console.log("🔍 DEBUGGING: afplay args:", afplayArgs.join(" "));
+    console.log("🔍 DEBUGGING: PCM format parameters:");
+    console.log("  Sample rate:", TTS_CONSTANTS.SAMPLE_RATE);
+    console.log("  Channels:", TTS_CONSTANTS.CHANNELS);
+    console.log("  Bit depth:", TTS_CONSTANTS.BIT_DEPTH);
+
+    // Spawn afplay process with PCM format configuration
+    const afplayProcess = spawn("afplay", afplayArgs, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    // Log afplay process creation
+    logger.info("PHASE 1 OPTIMIZATION: Created afplay process for PCM streaming", {
       component: this.name,
       method: "startStreamingPlayback",
       sessionId,
-    });
-
-    const afplayProcess = spawn("afplay", ["-"], {
-      stdio: ["pipe", "ignore", "ignore"],
-      detached: true,
+      pid: afplayProcess.pid,
+      args: afplayArgs,
+      audioFormat: {
+        sampleRate: TTS_CONSTANTS.SAMPLE_RATE,
+        channels: TTS_CONSTANTS.CHANNELS,
+        bitDepth: TTS_CONSTANTS.BIT_DEPTH,
+      },
     });
 
     this.currentSession.process = afplayProcess;
@@ -317,12 +344,19 @@ export class PlaybackManager implements IPlaybackManager {
 
     // Handle abort signal
     const onAbort = () => {
-      console.log("Abort signal received - killing afplay process");
+      console.log("🚨 ABORT SIGNAL RECEIVED - killing afplay process");
+      console.log("🚨 Stack trace at abort:", new Error().stack);
       if (!processEnded && !afplayProcess.killed) {
         afplayProcess.kill("SIGTERM");
       }
     };
     signal.addEventListener("abort", onAbort);
+
+    // Debug the abort signal state
+    console.log("🔍 DEBUGGING: AbortController state:", {
+      aborted: signal.aborted,
+      reason: signal.reason,
+    });
 
     // Add a small delay to ensure process is ready
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -330,6 +364,11 @@ export class PlaybackManager implements IPlaybackManager {
     // PHASE 1 OPTIMIZATION: Return streaming interface with enhanced error handling
     return {
       writeChunk: async (chunk: Uint8Array): Promise<void> => {
+        console.log(`🔍 DEBUGGING: writeChunk called with ${chunk.length} bytes`);
+        console.log(
+          `🔍 DEBUGGING: Process state - ended: ${processEnded}, killed: ${afplayProcess.killed}, stdin: ${!!afplayProcess.stdin}`
+        );
+
         // Enhanced error checking with detailed diagnostics
         if (processEnded) {
           const error = `Streaming process ended (${closeReason})`;
@@ -355,10 +394,12 @@ export class PlaybackManager implements IPlaybackManager {
           throw new Error(error);
         }
 
+        console.log(`🔍 DEBUGGING: About to write ${chunk.length} bytes to afplay stdin`);
+
         return new Promise((resolve, reject) => {
           // Add timeout for write operations
           const writeTimeout = setTimeout(() => {
-            console.error("Write operation timed out - afplay may have stopped responding");
+            console.error("🚨 Write operation timed out - afplay may have stopped responding");
             reject(new Error("Write timeout - afplay process not responding"));
           }, 5000);
 
@@ -366,6 +407,7 @@ export class PlaybackManager implements IPlaybackManager {
             clearTimeout(writeTimeout);
 
             if (error) {
+              console.error("🚨 WRITE FAILED:", error);
               logger.error("PHASE 1 OPTIMIZATION: Failed to write chunk", {
                 component: this.name,
                 method: "writeChunk",
@@ -384,6 +426,7 @@ export class PlaybackManager implements IPlaybackManager {
 
               reject(error);
             } else {
+              console.log(`✅ DEBUGGING: Successfully wrote ${chunk.length} bytes to afplay`);
               logger.debug("PHASE 1 OPTIMIZATION: Chunk written successfully", {
                 component: this.name,
                 method: "writeChunk",

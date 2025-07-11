@@ -328,8 +328,6 @@ export class TTSSpeechProcessor {
         writeChunk: (chunk: Uint8Array) => Promise<void>;
         endStream: () => Promise<void>;
       } | null = null;
-      let isStreamingReady = false;
-      let chunkBuffer: Array<{ data: Uint8Array; index: number }> = [];
 
       let totalChunksReceived = 0;
       const startTime = performance.now();
@@ -343,7 +341,7 @@ export class TTSSpeechProcessor {
           speed: this.speed,
           lang: "en-us",
           stream: this.useStreaming,
-          format: this.format,
+          format: this.useStreaming ? "pcm" : this.format, // Use PCM for streaming, WAV for non-streaming
         };
 
         const streamingContext: StreamingContext = {
@@ -366,34 +364,11 @@ export class TTSSpeechProcessor {
               if (totalChunksReceived === 1 && this.useStreaming) {
                 console.log("🚀 PHASE 1 OPTIMIZATION: First chunk received - starting afplay now");
                 streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
-                isStreamingReady = true;
                 this.onStatusUpdate({
                   message: "Starting streaming playback...",
                   isPlaying: true,
                   isPaused: false,
                 });
-
-                console.log(
-                  "✅ PHASE 1 OPTIMIZATION: afplay is ready - processing buffered chunks"
-                );
-
-                // Process any buffered chunks first
-                for (const bufferedChunk of chunkBuffer) {
-                  console.log(
-                    `🔄 Processing buffered chunk ${bufferedChunk.index} (${bufferedChunk.data.length} bytes)`
-                  );
-                  try {
-                    await streamingPlayback.writeChunk(bufferedChunk.data);
-                    console.log(`✅ Successfully processed buffered chunk ${bufferedChunk.index}`);
-                  } catch (error) {
-                    console.error(
-                      `❌ Failed to process buffered chunk ${bufferedChunk.index}:`,
-                      error
-                    );
-                    throw error;
-                  }
-                }
-                chunkBuffer = []; // Clear buffer after processing
               }
 
               // PHASE 1 OPTIMIZATION: Log TTFA for first chunk
@@ -415,13 +390,8 @@ export class TTSSpeechProcessor {
                 isPaused: false,
               });
 
-              // 🔍 DEBUGGING: Check streaming condition
-              console.log(
-                `🔍 DEBUGGING: Chunk ${totalChunksReceived} - isStreamingReady: ${isStreamingReady}`
-              );
-
-              if (this.useStreaming && isStreamingReady && streamingPlayback) {
-                // PHASE 1 OPTIMIZATION: Stream chunk directly to afplay
+              if (this.useStreaming && streamingPlayback) {
+                // PHASE 1 OPTIMIZATION: Stream properly formatted audio directly to afplay
                 console.log(`Received audio chunk: ${chunk.data.length} bytes`);
 
                 try {
@@ -435,12 +405,6 @@ export class TTSSpeechProcessor {
                   this.abortController?.abort();
                   throw streamError;
                 }
-              } else if (this.useStreaming && !isStreamingReady) {
-                // Buffer chunks until afplay is ready
-                console.log(
-                  `📦 BUFFERING chunk ${totalChunksReceived} (${chunk.data.length} bytes) - afplay not ready yet`
-                );
-                chunkBuffer.push({ data: chunk.data, index: totalChunksReceived });
               } else {
                 // LEGACY: Sequential playback for non-streaming mode
                 const playbackContext = {

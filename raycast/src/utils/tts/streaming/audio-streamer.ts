@@ -239,13 +239,21 @@ export class AudioStreamer implements IAudioStreamer {
     onChunk: (chunk: AudioChunk) => void
   ): Promise<void> {
     console.log("🔍 DEBUGGING: Starting streamFromServerWithImmediatePlayback");
-    console.log("🔍 DEBUGGING: Request:", JSON.stringify(request, null, 2));
+
+    // PHASE 1 OPTIMIZATION: Use PCM format for streaming to avoid WAV header + raw audio mixing
+    const streamingRequest = {
+      ...request,
+      stream: true,
+      format: "pcm", // Use PCM for streaming, WAV for caching
+    };
+
+    console.log("🔍 DEBUGGING: Request:", JSON.stringify(streamingRequest, null, 2));
 
     const url = `${this.config.serverUrl}/v1/audio/speech`;
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "audio/wav" },
-      body: JSON.stringify({ ...request, stream: true }), // Force streaming
+      headers: { "Content-Type": "application/json", Accept: "audio/pcm" },
+      body: JSON.stringify(streamingRequest),
       signal: context.abortController.signal,
     });
 
@@ -270,9 +278,9 @@ export class AudioStreamer implements IAudioStreamer {
     let firstChunk = true;
     const startTime = Date.now();
 
-    console.log("🔍 DEBUGGING: Starting to read chunks...");
+    console.log("🔍 DEBUGGING: Starting to read PCM chunks...");
 
-    // PHASE 1 OPTIMIZATION: Stream chunks immediately for <800ms TTFA
+    // PHASE 1 OPTIMIZATION: Stream PCM data directly to afplay
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
@@ -281,11 +289,11 @@ export class AudioStreamer implements IAudioStreamer {
       }
 
       if (value) {
-        console.log(`🔍 DEBUGGING: Received chunk ${chunkIndex}: ${value.length} bytes`);
+        console.log(`🔍 DEBUGGING: Received PCM chunk ${chunkIndex}: ${value.length} bytes`);
 
         // Debug first chunk specifically
         if (chunkIndex === 0) {
-          console.log("🔍 DEBUGGING: First chunk details:");
+          console.log("🔍 DEBUGGING: First PCM chunk details:");
           console.log("  Size:", value.length);
           console.log(
             "  First 8 bytes:",
@@ -293,56 +301,52 @@ export class AudioStreamer implements IAudioStreamer {
               .map((b) => `0x${b.toString(16).padStart(2, "0")}`)
               .join(" ")
           );
-          console.log("  First 8 bytes as string:", new TextDecoder().decode(value.slice(0, 8)));
 
-          // Check for RIFF header
-          if (value.length >= 4) {
-            const hasRiff =
-              value[0] === 0x52 && value[1] === 0x49 && value[2] === 0x46 && value[3] === 0x46;
-            console.log("  Has RIFF header:", hasRiff);
-          }
+          // Check if this is actually PCM data (should NOT have RIFF header)
+          const hasRiff =
+            value.length >= 4 &&
+            value[0] === 0x52 &&
+            value[1] === 0x49 &&
+            value[2] === 0x46 &&
+            value[3] === 0x46;
+          console.log("  Has RIFF header (should be false):", hasRiff);
         }
 
         chunks.push(value);
 
-        // PHASE 1 OPTIMIZATION: Send ALL chunks to afplay for proper audio playback
+        // PHASE 1 OPTIMIZATION: Send PCM chunks directly to afplay
         const currentTime = Date.now();
         const elapsedTime = currentTime - startTime;
-        const chunkSize = value.length;
 
-        console.log(`🔍 DEBUGGING: Calling onChunk for chunk ${chunkIndex}...`);
-
-        // CRITICAL FIX: Send every chunk to afplay (not just every 5th)
+        // Send PCM chunk directly
         onChunk({
           data: value,
           index: chunkIndex,
           timestamp: currentTime,
-          duration: this.calculateChunkDuration(chunkSize),
+          duration: this.calculateChunkDuration(value.length),
         });
-
-        console.log(`🔍 DEBUGGING: onChunk completed for chunk ${chunkIndex}`);
 
         // Log TTFA for first chunk
         if (firstChunk) {
-          logger.info("PHASE 1 OPTIMIZATION: First chunk received", {
+          logger.info("PHASE 1 OPTIMIZATION: First PCM chunk sent to afplay", {
             component: this.name,
             method: "streamFromServerWithImmediatePlayback",
             requestId: context.requestId,
             ttfa: `${elapsedTime}ms`,
-            chunkSize,
+            chunkSize: value.length,
             targetTTFA: "800ms",
           });
           firstChunk = false;
         }
 
-        // Log every 5th chunk for monitoring (but send ALL chunks)
+        // Log progress every 5th chunk
         if (chunkIndex % 5 === 0) {
-          logger.debug("PHASE 1 OPTIMIZATION: Chunk progress", {
+          logger.debug("PHASE 1 OPTIMIZATION: PCM chunk progress", {
             component: this.name,
             method: "streamFromServerWithImmediatePlayback",
             requestId: context.requestId,
             chunkIndex,
-            chunkSize,
+            chunkSize: value.length,
             elapsedTime: `${elapsedTime}ms`,
           });
         }
@@ -351,10 +355,10 @@ export class AudioStreamer implements IAudioStreamer {
       }
     }
 
-    // Combine all chunks for final processing and caching
-    const combinedAudio = this.combineAudioChunks(chunks);
+    // PHASE 1 OPTIMIZATION: Create WAV file for caching (but not for streaming)
+    const combinedAudio = this.createWAVFromPCMChunks(chunks);
 
-    // Cache the complete audio for future requests
+    // Cache the complete WAV audio for future requests
     if (combinedAudio.length > 0) {
       cacheManager.cacheTTSResponse(request, combinedAudio.buffer);
     }
@@ -366,7 +370,7 @@ export class AudioStreamer implements IAudioStreamer {
     this.stats.streamingDuration = Date.now() - startTime;
     this.stats.efficiency = this.calculateStreamingEfficiency(this.stats.streamingDuration);
 
-    logger.info("PHASE 1 OPTIMIZATION: Streaming completed", {
+    logger.info("PHASE 1 OPTIMIZATION: PCM streaming completed", {
       component: this.name,
       method: "streamFromServerWithImmediatePlayback",
       requestId: context.requestId,
@@ -569,6 +573,65 @@ export class AudioStreamer implements IAudioStreamer {
     });
 
     return combinedAudio;
+  }
+
+  /**
+   * Create a proper WAV file from PCM chunks for caching
+   */
+  private createWAVFromPCMChunks(chunks: Uint8Array[]): Uint8Array {
+    if (chunks.length === 0) return new Uint8Array(0);
+
+    // Combine all PCM chunks
+    const totalPCMSize = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const combinedPCM = new Uint8Array(totalPCMSize);
+    let offset = 0;
+
+    for (const chunk of chunks) {
+      combinedPCM.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // Create WAV header for the combined PCM data
+    const WAV_HEADER_SIZE = 44;
+    const wavFile = new Uint8Array(WAV_HEADER_SIZE + totalPCMSize);
+
+    // RIFF header
+    const header = new DataView(wavFile.buffer);
+    header.setUint32(0, 0x46464952, true); // "RIFF"
+    header.setUint32(4, WAV_HEADER_SIZE + totalPCMSize - 8, true); // File size - 8
+    header.setUint32(8, 0x45564157, true); // "WAVE"
+
+    // Format chunk
+    header.setUint32(12, 0x20746d66, true); // "fmt "
+    header.setUint32(16, 16, true); // Format chunk size
+    header.setUint16(20, 1, true); // PCM format
+    header.setUint16(22, this.audioFormat.channels, true); // Channels
+    header.setUint32(24, this.audioFormat.sampleRate, true); // Sample rate
+    header.setUint32(
+      28,
+      this.audioFormat.sampleRate * this.audioFormat.channels * this.audioFormat.bytesPerSample,
+      true
+    ); // Byte rate
+    header.setUint16(32, this.audioFormat.channels * this.audioFormat.bytesPerSample, true); // Block align
+    header.setUint16(34, this.audioFormat.bitDepth, true); // Bits per sample
+
+    // Data chunk
+    header.setUint32(36, 0x61746164, true); // "data"
+    header.setUint32(40, totalPCMSize, true); // Data size
+
+    // Copy PCM data
+    wavFile.set(combinedPCM, WAV_HEADER_SIZE);
+
+    logger.debug("Created WAV file from PCM chunks", {
+      component: this.name,
+      method: "createWAVFromPCMChunks",
+      pcmChunks: chunks.length,
+      pcmSize: totalPCMSize,
+      wavSize: wavFile.length,
+      audioDuration: (totalPCMSize / this.audioFormat.bytesPerSecond).toFixed(2) + "s",
+    });
+
+    return wavFile;
   }
 
   /**
