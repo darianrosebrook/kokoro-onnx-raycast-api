@@ -328,6 +328,8 @@ export class TTSSpeechProcessor {
         writeChunk: (chunk: Uint8Array) => Promise<void>;
         endStream: () => Promise<void>;
       } | null = null;
+      let isStreamingReady = false;
+      let chunkBuffer: Array<{ data: Uint8Array; index: number }> = [];
 
       let totalChunksReceived = 0;
       const startTime = performance.now();
@@ -364,11 +366,34 @@ export class TTSSpeechProcessor {
               if (totalChunksReceived === 1 && this.useStreaming) {
                 console.log("🚀 PHASE 1 OPTIMIZATION: First chunk received - starting afplay now");
                 streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
+                isStreamingReady = true;
                 this.onStatusUpdate({
                   message: "Starting streaming playback...",
                   isPlaying: true,
                   isPaused: false,
                 });
+
+                console.log(
+                  "✅ PHASE 1 OPTIMIZATION: afplay is ready - processing buffered chunks"
+                );
+
+                // Process any buffered chunks first
+                for (const bufferedChunk of chunkBuffer) {
+                  console.log(
+                    `🔄 Processing buffered chunk ${bufferedChunk.index} (${bufferedChunk.data.length} bytes)`
+                  );
+                  try {
+                    await streamingPlayback.writeChunk(bufferedChunk.data);
+                    console.log(`✅ Successfully processed buffered chunk ${bufferedChunk.index}`);
+                  } catch (error) {
+                    console.error(
+                      `❌ Failed to process buffered chunk ${bufferedChunk.index}:`,
+                      error
+                    );
+                    throw error;
+                  }
+                }
+                chunkBuffer = []; // Clear buffer after processing
               }
 
               // PHASE 1 OPTIMIZATION: Log TTFA for first chunk
@@ -390,118 +415,14 @@ export class TTSSpeechProcessor {
                 isPaused: false,
               });
 
-              if (this.useStreaming && streamingPlayback) {
+              // 🔍 DEBUGGING: Check streaming condition
+              console.log(
+                `🔍 DEBUGGING: Chunk ${totalChunksReceived} - isStreamingReady: ${isStreamingReady}`
+              );
+
+              if (this.useStreaming && isStreamingReady && streamingPlayback) {
                 // PHASE 1 OPTIMIZATION: Stream chunk directly to afplay
-                // But first, validate WAV format for debugging (CRITICAL for stability)
-
                 console.log(`Received audio chunk: ${chunk.data.length} bytes`);
-
-                // CRITICAL DEBUGGING: WAV format validation for first chunk
-                if (totalChunksReceived === 1) {
-                  console.log(`First chunk size: ${chunk.data.length} bytes`);
-                  console.log(
-                    `First chunk first 4 bytes: ${Array.from(chunk.data.slice(0, 4))
-                      .map((b) => "0x" + b.toString(16).padStart(2, "0"))
-                      .join(" ")}`
-                  );
-                  console.log(
-                    `First chunk first 8 bytes as string: "${new TextDecoder().decode(chunk.data.slice(0, 8))}"`
-                  );
-
-                  // CRITICAL: Check if first chunk has minimum WAV header size
-                  if (chunk.data.length < 44) {
-                    console.error(
-                      `⚠️ CRITICAL: First chunk too small (${chunk.data.length} bytes) - WAV header needs at least 44 bytes`
-                    );
-                    console.error("This will cause afplay to fail with exit code 1");
-                  } else {
-                    console.log(
-                      `✅ First chunk has sufficient size (${chunk.data.length} bytes) for WAV header`
-                    );
-                  }
-
-                  // Verify first chunk has WAV header
-                  const hasWavHeader =
-                    chunk.data.length >= 4 &&
-                    chunk.data[0] === 0x52 && // 'R'
-                    chunk.data[1] === 0x49 && // 'I'
-                    chunk.data[2] === 0x46 && // 'F'
-                    chunk.data[3] === 0x46; // 'F'
-
-                  console.log(`WAV header detected: ${hasWavHeader}`);
-
-                  if (hasWavHeader && chunk.data.length >= 44) {
-                    // WAV header validation - CRITICAL for afplay compatibility
-                    const wavHeader = chunk.data.slice(8, 12);
-                    console.log(
-                      `WAV format bytes: ${Array.from(wavHeader)
-                        .map((b) => "0x" + b.toString(16).padStart(2, "0"))
-                        .join(" ")}`
-                    );
-
-                    const isValidWave =
-                      wavHeader[0] === 0x57 && // 'W'
-                      wavHeader[1] === 0x41 && // 'A'
-                      wavHeader[2] === 0x56 && // 'V'
-                      wavHeader[3] === 0x45; // 'E'
-
-                    console.log(
-                      `WAV header check: ${hasWavHeader ? "Valid RIFF" : "Invalid RIFF"}`
-                    );
-                    console.log(`WAV format check: ${isValidWave ? "Valid WAVE" : "Invalid WAVE"}`);
-
-                    if (hasWavHeader && isValidWave) {
-                      // WAV format parameters validation (bytes 20-35)
-                      const formatChunk = chunk.data.slice(12, 36);
-                      console.log(
-                        `Format chunk area (bytes 12-35): ${Array.from(formatChunk)
-                          .map((b) => "0x" + b.toString(16).padStart(2, "0"))
-                          .join(" ")}`
-                      );
-
-                      // Read format parameters (little-endian)
-                      const audioFormat = formatChunk[8] | (formatChunk[9] << 8);
-                      const numChannels = formatChunk[10] | (formatChunk[11] << 8);
-                      const sampleRate =
-                        formatChunk[12] |
-                        (formatChunk[13] << 8) |
-                        (formatChunk[14] << 16) |
-                        (formatChunk[15] << 24);
-                      const bitsPerSample = formatChunk[22] | (formatChunk[23] << 8);
-
-                      console.log(
-                        `WAV format parameters: AudioFormat=${audioFormat}, Channels=${numChannels}, SampleRate=${sampleRate}, BitsPerSample=${bitsPerSample}`
-                      );
-
-                      // Validate afplay compatibility
-                      const isSupportedFormat = audioFormat === 1; // PCM
-                      const isSupportedChannels = numChannels === 1 || numChannels === 2;
-                      const isSupportedSampleRate = sampleRate >= 8000 && sampleRate <= 192000;
-                      const isSupportedBitsPerSample = [8, 16, 24, 32].includes(bitsPerSample);
-
-                      console.log(
-                        `Format compatibility: AudioFormat=${isSupportedFormat ? "Supported" : "Unsupported"}, Channels=${isSupportedChannels ? "Supported" : "Unsupported"}, SampleRate=${isSupportedSampleRate ? "Supported" : "Unsupported"}, BitsPerSample=${isSupportedBitsPerSample ? "Supported" : "Unsupported"}`
-                      );
-
-                      if (
-                        !isSupportedFormat ||
-                        !isSupportedChannels ||
-                        !isSupportedSampleRate ||
-                        !isSupportedBitsPerSample
-                      ) {
-                        console.error("⚠️ CRITICAL: WAV format not compatible with afplay!");
-                        console.error("This may cause 'Streaming process not available' errors");
-                      } else {
-                        console.log("✅ WAV format validated - compatible with afplay");
-                      }
-                    }
-                  } else if (!hasWavHeader) {
-                    console.warn(
-                      "⚠️ CRITICAL: First chunk missing WAV header - afplay may reject this"
-                    );
-                    console.warn("This will likely cause 'Streaming process not available' errors");
-                  }
-                }
 
                 try {
                   await streamingPlayback.writeChunk(chunk.data);
@@ -510,12 +431,16 @@ export class TTSSpeechProcessor {
                   );
                 } catch (streamError) {
                   console.error("PHASE 1 OPTIMIZATION: Failed to stream chunk:", streamError);
-                  console.error(
-                    "This suggests afplay process ended - possibly due to malformed WAV data"
-                  );
-                  console.error("Check WAV format validation above for clues");
+                  console.error("🚨 TRIGGERING ABORT due to streaming error");
+                  this.abortController?.abort();
                   throw streamError;
                 }
+              } else if (this.useStreaming && !isStreamingReady) {
+                // Buffer chunks until afplay is ready
+                console.log(
+                  `📦 BUFFERING chunk ${totalChunksReceived} (${chunk.data.length} bytes) - afplay not ready yet`
+                );
+                chunkBuffer.push({ data: chunk.data, index: totalChunksReceived });
               } else {
                 // LEGACY: Sequential playback for non-streaming mode
                 const playbackContext = {
