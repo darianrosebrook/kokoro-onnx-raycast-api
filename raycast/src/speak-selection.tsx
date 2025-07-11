@@ -15,8 +15,8 @@
 
 import { getSelectedText, showToast, Toast, getPreferenceValues } from "@raycast/api";
 
-import { TTSSpeechProcessor } from "./utils/tts-processor";
-import { getValidatedVoice } from "./utils/voice-manager";
+import { TTSSpeechProcessor } from "./utils/tts/tts-processor";
+import { getValidatedVoice } from "./utils/tts/voice-manager";
 import type { StatusUpdate } from "./types";
 
 /**

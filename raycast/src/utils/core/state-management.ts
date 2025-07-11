@@ -20,7 +20,7 @@ import { useCachedState, useFetch, useCachedPromise } from "@raycast/utils";
 import { showToast, Toast, getPreferenceValues } from "@raycast/api";
 import { useCallback, useMemo } from "react";
 import isEqual from "fast-deep-equal";
-import type { TTSConfig, VoiceOption } from "../types";
+import type { TTSConfig, VoiceOption } from "../validation/tts-types";
 import { cacheManager, type CachedServerHealth } from "./cache";
 
 /**

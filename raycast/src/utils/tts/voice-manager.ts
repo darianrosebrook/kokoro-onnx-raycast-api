@@ -10,7 +10,7 @@
  * License: MIT
  */
 
-import type { VoiceOption } from "../types";
+import type { VoiceOption } from "../validation/tts-types";
 
 /**
  * Cache for voice data to avoid repeated API calls

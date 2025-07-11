@@ -13,7 +13,7 @@
  */
 import { Form, ActionPanel, showToast, Toast, Clipboard, Action } from "@raycast/api";
 import { useState, useEffect, useRef } from "react";
-import { TTSSpeechProcessor } from "./utils/tts-processor";
+import { TTSSpeechProcessor } from "./utils/tts/tts-processor";
 import type { VoiceOption, StatusUpdate } from "./types";
 import {
   useTTSPreferences,
@@ -22,9 +22,9 @@ import {
   useTTSRequestState,
   useErrorHandler,
   usePerformanceMonitor,
-} from "./utils/state-management";
+} from "./utils/core/state-management";
 import { ttsBenchmark } from "./utils/performance-benchmark";
-import { generateVoiceOptions as generateDynamicVoiceOptions } from "./utils/voice-manager";
+import { generateVoiceOptions as generateDynamicVoiceOptions } from "./utils/tts/voice-manager";
 import {
   VOICES,
   getAmericanEnglishVoices,
@@ -36,7 +36,7 @@ import {
   getHindiVoices,
   getItalianVoices,
   getBrazilianPortugueseVoices,
-} from "./voices";
+} from "./utils/tts/voices";
 
 /**
  * Generate voice options dynamically from server, with fallback to hardcoded voices
@@ -406,7 +406,7 @@ export default function SpeakTextSimple() {
     const { message, style = Toast.Style.Animated, primaryAction, secondaryAction } = status;
 
     const options: Toast.Options = {
-      style,
+      style: style as Toast.Style,
       title: message,
       primaryAction,
       secondaryAction,

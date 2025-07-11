@@ -1,0 +1,270 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import { TTSSpeechProcessor } from "./tts-processor";
+import { TextProcessor } from "./text-processor";
+import { AudioStreamer } from "./streaming/audio-streamer";
+import { PlaybackManager } from "./playback-manager";
+import { RetryManager } from "../api/retry-manager";
+import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager";
+import { PerformanceMonitor } from "../performance/performance-monitor";
+import { StatusUpdate } from "../../types";
+import { TextSegment } from "../validation/tts-types";
+
+// Mock all dependencies
+vi.mock("./text-processor");
+vi.mock("./streaming/audio-streamer");
+vi.mock("./playback-manager");
+vi.mock("../api/retry-manager");
+vi.mock("./streaming/adaptive-buffer-manager");
+vi.mock("../performance/performance-monitor");
+vi.mock("../core/cache");
+
+const mockTextProcessor = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  preprocessText: vi.fn((text) => text),
+  segmentText: vi.fn(),
+};
+
+const mockAudioStreamer = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  streamAudio: vi.fn(),
+  getAudioFormat: vi.fn().mockReturnValue("wav"),
+};
+
+const mockPlaybackManager = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  playAudio: vi.fn().mockResolvedValue(undefined),
+  pause: vi.fn(),
+  resume: vi.fn(),
+  stop: vi.fn(),
+  isActive: vi.fn().mockReturnValue(false),
+  isPaused: vi.fn().mockReturnValue(false),
+  isStopped: vi.fn().mockReturnValue(true),
+};
+
+const mockRetryManager = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  executeWithRetry: vi.fn((fn) => fn()),
+};
+
+const mockAdaptiveBufferManager = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  adjustBuffer: vi.fn(),
+  getBufferSize: vi.fn().mockReturnValue(5),
+};
+
+const mockPerformanceMonitor = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  startTracking: vi.fn(),
+  endTracking: vi.fn(),
+  logPerformanceReport: vi.fn(),
+  log: vi.fn(),
+};
+
+vi.mocked(TextProcessor).mockImplementation(() => mockTextProcessor as any);
+vi.mocked(AudioStreamer).mockImplementation(() => mockAudioStreamer as any);
+vi.mocked(PlaybackManager).mockImplementation(() => mockPlaybackManager as any);
+vi.mocked(RetryManager).mockImplementation(() => mockRetryManager as any);
+vi.mocked(AdaptiveBufferManager).mockImplementation(() => mockAdaptiveBufferManager as any);
+vi.mocked(PerformanceMonitor).mockImplementation(() => mockPerformanceMonitor as any);
+
+describe("TTSSpeechProcessor", () => {
+  let processor: TTSSpeechProcessor;
+  let onStatusUpdate: (status: StatusUpdate) => void;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    onStatusUpdate = vi.fn();
+
+    // Re-assign isActive and isPaused to be mutable for tests
+    let isPlaying = false;
+    let isPaused = false;
+    mockPlaybackManager.isActive.mockImplementation(() => isPlaying);
+    mockPlaybackManager.isPaused.mockImplementation(() => isPaused);
+    mockPlaybackManager.pause.mockImplementation(() => {
+      isPaused = true;
+    });
+    mockPlaybackManager.resume.mockImplementation(() => {
+      isPaused = false;
+    });
+    mockPlaybackManager.playAudio.mockImplementation(async () => {
+      isPlaying = true;
+    });
+    mockPlaybackManager.stop.mockImplementation(async () => {
+      isPlaying = false;
+      isPaused = false;
+    });
+
+    processor = new TTSSpeechProcessor(
+      {
+        onStatusUpdate,
+        developmentMode: true,
+      },
+      {
+        textProcessor: mockTextProcessor as any,
+        audioStreamer: mockAudioStreamer as any,
+        playbackManager: mockPlaybackManager as any,
+        retryManager: mockRetryManager as any,
+        adaptiveBufferManager: mockAdaptiveBufferManager as any,
+        performanceMonitor: mockPerformanceMonitor as any,
+      }
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("should initialize all components on creation", async () => {
+    // This test is less relevant now with dependency injection,
+    // but we can ensure the constructor doesn't crash.
+    expect(processor).toBeDefined();
+  });
+
+  it("should process text, stream audio, and play it successfully", async () => {
+    const text = "Hello world.";
+    const segments: TextSegment[] = [
+      {
+        text: "Hello world.",
+        startOffset: 0,
+        endOffset: 11,
+        processed: true,
+        index: 0,
+        type: "sentence",
+      },
+    ];
+    const audioData = new Uint8Array([1, 2, 3]);
+
+    mockTextProcessor.segmentText.mockReturnValue(segments);
+    mockAudioStreamer.streamAudio.mockResolvedValue({ success: true, data: audioData });
+
+    await processor.speak(text);
+
+    expect(onStatusUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Processing text..." })
+    );
+    expect(mockTextProcessor.preprocessText).toHaveBeenCalledWith(text);
+    expect(mockTextProcessor.segmentText).toHaveBeenCalled();
+    expect(mockRetryManager.executeWithRetry).toHaveBeenCalledTimes(1);
+    expect(mockAudioStreamer.streamAudio).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "Hello world." }),
+      expect.any(Object)
+    );
+    expect(mockPlaybackManager.playAudio).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(Object)
+    );
+    expect(onStatusUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Speech completed" })
+    );
+  });
+
+  it("should handle text processing failure gracefully", async () => {
+    const text = "Invalid text.";
+    mockTextProcessor.segmentText.mockReturnValue([]); // Simulate validation failure
+
+    await processor.speak(text);
+
+    expect(onStatusUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Processing text..." })
+    );
+    expect(mockTextProcessor.preprocessText).toHaveBeenCalledWith(text);
+    // The loop in speak() will not run, and it will finish gracefully.
+    // The final status update should be "Speech completed" because no error is thrown.
+    expect(onStatusUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Speech completed" })
+    );
+    expect(mockAudioStreamer.streamAudio).not.toHaveBeenCalled();
+    expect(mockPlaybackManager.playAudio).not.toHaveBeenCalled();
+  });
+
+  it("should use retry logic on streaming failure and recover", async () => {
+    const text = "Streaming test.";
+    const segments: TextSegment[] = [
+      {
+        text: "Streaming test.",
+        startOffset: 0,
+        endOffset: 11,
+        processed: true,
+        index: 0,
+        type: "sentence",
+      },
+    ];
+    const audioData = new Uint8Array([1, 2, 3]);
+
+    mockTextProcessor.segmentText.mockReturnValue(segments);
+    // Fail once, then succeed
+    mockAudioStreamer.streamAudio
+      .mockRejectedValueOnce(new Error("Network Error"))
+      .mockResolvedValueOnce({ success: true, data: audioData });
+
+    mockRetryManager.executeWithRetry.mockImplementation(async (fn) => {
+      try {
+        return await fn();
+      } catch (e) {
+        // Simulate a retry by calling the function again
+        return await fn();
+      }
+    });
+
+    await processor.speak(text);
+
+    expect(mockRetryManager.executeWithRetry).toHaveBeenCalledTimes(1);
+    expect(mockAudioStreamer.streamAudio).toHaveBeenCalledTimes(2);
+    expect(mockPlaybackManager.playAudio).toHaveBeenCalled();
+    expect(onStatusUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Speech completed" })
+    );
+  });
+
+  it("should handle fatal streaming error after retries", async () => {
+    const text = "Fatal error test.";
+    const segments: TextSegment[] = [
+      {
+        text: "Fatal error test.",
+        startOffset: 0,
+        endOffset: 11,
+        processed: true,
+        index: 0,
+        type: "sentence",
+      },
+    ];
+    const error = new Error("Fatal streaming error");
+
+    mockTextProcessor.segmentText.mockReturnValue(segments);
+    mockAudioStreamer.streamAudio.mockResolvedValue({ success: false, error });
+    mockRetryManager.executeWithRetry.mockImplementation(async (fn) => fn());
+
+    await expect(processor.speak(text)).rejects.toThrow(error);
+
+    expect(mockTextProcessor.preprocessText).toHaveBeenCalledWith(text);
+    expect(mockRetryManager.executeWithRetry).toHaveBeenCalledTimes(1);
+    // In case of error, the final status update is not called, but an error is thrown
+    expect(onStatusUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Speech completed" })
+    );
+  });
+
+  it("should correctly delegate pause, resume, and stop commands", async () => {
+    processor.pause();
+    expect(mockPlaybackManager.pause).toHaveBeenCalledTimes(1);
+
+    processor.resume();
+    expect(mockPlaybackManager.resume).toHaveBeenCalledTimes(1);
+
+    await processor.stop();
+    expect(mockPlaybackManager.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("should correctly report playing and paused states", () => {
+    expect(processor.playing).toBe(false);
+    expect(processor.paused).toBe(false);
+
+    // Simulate playing state
+    mockPlaybackManager.isActive.mockReturnValue(true);
+    expect(processor.playing).toBe(true);
+
+    // Simulate paused state
+    mockPlaybackManager.isPaused.mockReturnValue(true);
+    expect(processor.paused).toBe(true);
+  });
+});

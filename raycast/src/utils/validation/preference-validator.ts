@@ -17,8 +17,8 @@
  */
 
 import { showToast, Toast } from "@raycast/api";
-import type { TTSConfig, VoiceOption } from "../types";
-import { VOICES } from "../voices";
+import type { TTSConfig, VoiceOption } from "./tts-types";
+import { VOICES } from "../tts/voices";
 
 /**
  * Validation result with error information

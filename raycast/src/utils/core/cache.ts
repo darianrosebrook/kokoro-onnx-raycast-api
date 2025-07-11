@@ -18,7 +18,7 @@
 
 import { LRUCache } from "lru-cache";
 import { createHash } from "crypto";
-import type { TTSRequest, TTSConfig, VoiceOption } from "../types";
+import type { TTSRequest, TTSConfig, VoiceOption } from "../validation/tts-types";
 
 /**
  * Configuration for different cache types
@@ -85,7 +85,7 @@ interface CachedTTSResponse {
 /**
  * Cached server health data
  */
-interface CachedServerHealth {
+export interface CachedServerHealth {
   status: "healthy" | "unhealthy" | "unknown";
   latency: number;
   timestamp: number;
