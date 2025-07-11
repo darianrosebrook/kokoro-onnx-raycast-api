@@ -18,7 +18,7 @@
  */
 
 import { logger } from "../core/logger";
-import { ValidationUtils } from "../validation/validation";
+// import { ValidationUtils } from "../validation/validation";
 import type {
   ITextProcessor,
   TextSegment,
@@ -170,7 +170,7 @@ export class TextProcessor implements ITextProcessor {
       return "";
     }
 
-    const timerId = logger.startTiming("text-preprocessing", {
+    logger.startTiming("text-preprocessing", {
       component: this.name,
       method: "preprocessText",
       originalLength: text.length,
@@ -202,10 +202,10 @@ export class TextProcessor implements ITextProcessor {
       }
     }
 
-    const processingTime = logger.endTiming(timerId, {
-      processedLength: processedText.length,
-      preprocessorsApplied: this.preprocessors.filter((p) => p.enabled).length,
-    });
+    // const processingTime = logger.endTiming(timerId, {
+    //   processedLength: processedText.length,
+    //   preprocessorsApplied: this.preprocessors.filter((p) => p.enabled).length,
+    // });
 
     return processedText;
   }
@@ -218,7 +218,7 @@ export class TextProcessor implements ITextProcessor {
       return [];
     }
 
-    const timerId = logger.startTiming("text-segmentation", {
+    logger.startTiming("text-segmentation", {
       component: this.name,
       method: "segmentText",
       originalLength: text.length,
@@ -234,7 +234,7 @@ export class TextProcessor implements ITextProcessor {
       averageSegmentLength:
         segments.reduce((sum, seg) => sum + seg.text.length, 0) / segments.length,
       maxSegmentLength: Math.max(...segments.map((seg) => seg.text.length)),
-      processingTime: logger.endTiming(timerId, {
+      processingTime: logger.endTiming("text-segmentation", {
         segmentCount: segments.length,
         averageLength: this.stats.averageSegmentLength,
       }),
@@ -336,7 +336,7 @@ export class TextProcessor implements ITextProcessor {
   private segmentBySentences(text: string): string[] {
     // Enhanced sentence detection with better punctuation handling
     const sentences = text.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g) || [];
-    return sentences.map((s) => s.trim()).filter((s) => s.length > 0);
+    return sentences.map((s: string) => s.trim()).filter((s: string) => s.length > 0);
   }
 
   /**

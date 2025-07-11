@@ -20,26 +20,29 @@ import { useCachedState, useFetch, useCachedPromise } from "@raycast/utils";
 import { showToast, Toast, getPreferenceValues } from "@raycast/api";
 import { useCallback, useMemo } from "react";
 import isEqual from "fast-deep-equal";
-import type { TTSConfig, VoiceOption } from "../validation/tts-types";
+import type { TTSProcessorConfig, VoiceOption } from "../validation/tts-types";
 import { cacheManager, type CachedServerHealth } from "./cache";
 
 /**
  * Default TTS configuration with safe defaults
  */
-const DEFAULT_TTS_CONFIG: TTSConfig = {
+const DEFAULT_TTS_CONFIG: TTSProcessorConfig = {
   voice: "af_heart",
   speed: 1.0,
   serverUrl: "http://localhost:8000",
   useStreaming: true,
   sentencePauses: false,
   maxSentenceLength: 0,
+  format: "wav",
+  developmentMode: false,
+  onStatusUpdate: () => {},
 };
 
 /**
  * Enhanced preference validation with safe defaults and bounds checking
  */
-const validatePreferences = (prefs: Partial<TTSConfig>): TTSConfig => {
-  const validated: TTSConfig = {
+const validatePreferences = (prefs: Partial<TTSProcessorConfig>): TTSProcessorConfig => {
+  const validated: TTSProcessorConfig = {
     voice: prefs.voice ?? DEFAULT_TTS_CONFIG.voice,
     speed: Math.max(
       0.1,
@@ -52,6 +55,9 @@ const validatePreferences = (prefs: Partial<TTSConfig>): TTSConfig => {
       0,
       parseInt(String(prefs.maxSentenceLength)) || DEFAULT_TTS_CONFIG.maxSentenceLength
     ),
+    format: prefs.format ?? DEFAULT_TTS_CONFIG.format,
+    developmentMode: prefs.developmentMode ?? DEFAULT_TTS_CONFIG.developmentMode,
+    onStatusUpdate: prefs.onStatusUpdate ?? DEFAULT_TTS_CONFIG.onStatusUpdate,
   };
 
   return validated;
@@ -64,7 +70,7 @@ export const useTTSPreferences = () => {
   // Get initial preferences from Raycast
   const initialPrefs = useMemo(() => {
     try {
-      const prefs = getPreferenceValues<Partial<TTSConfig>>();
+      const prefs = getPreferenceValues<Partial<TTSProcessorConfig>>();
       return validatePreferences(prefs);
     } catch (error) {
       console.warn("Failed to load preferences, using defaults:", error);
@@ -73,14 +79,14 @@ export const useTTSPreferences = () => {
   }, []);
 
   // Use cached state for persistent preferences
-  const [preferences, setPreferences] = useCachedState<TTSConfig>(
+  const [preferences, setPreferences] = useCachedState<TTSProcessorConfig>(
     "tts-preferences-v2",
     initialPrefs
   );
 
   // Validated setter that ensures preferences are always valid
   const updatePreferences = useCallback(
-    (newPrefs: Partial<TTSConfig>) => {
+    (newPrefs: Partial<TTSProcessorConfig>) => {
       const currentPrefs = preferences;
       const mergedPrefs = { ...currentPrefs, ...newPrefs };
       const validatedPrefs = validatePreferences(mergedPrefs);

@@ -17,7 +17,7 @@
  * @since 2025-01-20
  */
 
-import { createLogger, format, transports, Logger } from "winston";
+import { createLogger, format, transports, Logger, transport } from "winston";
 
 /**
  * Log levels for different types of messages
@@ -67,7 +67,7 @@ interface LoggerConfig {
  * Create a formatted logger instance
  */
 function createFormattedLogger(config: LoggerConfig): Logger {
-  const loggerTransports: any[] = [];
+  const loggerTransports: transport[] = [];
 
   // Console transport for development
   if (config.enableConsole) {
@@ -135,7 +135,7 @@ export class TTSLogger {
    * Log an error with full context and stack trace
    */
   error(message: string, context?: LogContext, error?: Error): void {
-    const logData: any = {
+    const logData: { message: string; [key: string]: unknown } = {
       message,
       ...context,
     };
@@ -178,7 +178,7 @@ export class TTSLogger {
    * Start performance timing for an operation
    */
   startTiming(operation: string, context?: LogContext): string {
-    const timerId = `${operation}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const timerId = `${operation}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     this.performanceTimers.set(timerId, {
       operation,

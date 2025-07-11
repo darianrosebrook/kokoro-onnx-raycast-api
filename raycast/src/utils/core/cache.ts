@@ -18,7 +18,7 @@
 
 import { LRUCache } from "lru-cache";
 import { createHash } from "crypto";
-import type { TTSRequest, TTSConfig, VoiceOption } from "../validation/tts-types";
+import type { TTSRequestParams, VoiceOption, TTSProcessorConfig } from "../validation/tts-types";
 
 /**
  * Configuration for different cache types
@@ -85,7 +85,7 @@ interface CachedTTSResponse {
 /**
  * Cached server health data
  */
-export interface CachedServerHealth {
+interface CachedServerHealth {
   status: "healthy" | "unhealthy" | "unknown";
   latency: number;
   timestamp: number;
@@ -137,7 +137,7 @@ class TTSCacheManager {
    * Create a cache key for TTS requests
    * Uses MD5 hash for consistent, collision-resistant keys
    */
-  private createTTSCacheKey(request: TTSRequest): string {
+  private createTTSCacheKey(request: TTSRequestParams): string {
     const keyData = {
       text: request.text,
       voice: request.voice ?? "af_heart",
@@ -153,7 +153,7 @@ class TTSCacheManager {
   /**
    * Cache TTS response for future use
    */
-  cacheTTSResponse(request: TTSRequest, audioData: ArrayBuffer): void {
+  cacheTTSResponse(request: TTSRequestParams, audioData: ArrayBuffer): void {
     const key = this.createTTSCacheKey(request);
     const cachedData: CachedTTSResponse = {
       audioData,
@@ -170,7 +170,7 @@ class TTSCacheManager {
   /**
    * Retrieve cached TTS response
    */
-  getCachedTTSResponse(request: TTSRequest): CachedTTSResponse | null {
+  getCachedTTSResponse(request: TTSRequestParams): CachedTTSResponse | null {
     const key = this.createTTSCacheKey(request);
     return this.ttsCache.get(key) ?? null;
   }
@@ -178,7 +178,7 @@ class TTSCacheManager {
   /**
    * Check if TTS response is cached
    */
-  hasCachedTTSResponse(request: TTSRequest): boolean {
+  hasCachedTTSResponse(request: TTSRequestParams): boolean {
     const key = this.createTTSCacheKey(request);
     return this.ttsCache.has(key);
   }
@@ -216,15 +216,15 @@ class TTSCacheManager {
   /**
    * Cache user preferences
    */
-  cachePreferences(userId: string, preferences: Partial<TTSConfig>): void {
+  cachePreferences(userId: string, preferences: Partial<TTSProcessorConfig>): void {
     this.preferenceCache.set(userId, preferences);
   }
 
   /**
    * Get cached preferences
    */
-  getCachedPreferences(userId: string): Partial<TTSConfig> | null {
-    return (this.preferenceCache.get(userId) as Partial<TTSConfig>) ?? null;
+  getCachedPreferences(userId: string): Partial<TTSProcessorConfig> | null {
+    return (this.preferenceCache.get(userId) as Partial<TTSProcessorConfig>) ?? null;
   }
 
   /**

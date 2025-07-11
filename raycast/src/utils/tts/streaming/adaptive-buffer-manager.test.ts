@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AdaptiveBufferManager } from "./adaptive-buffer-manager";
-import type { PerformanceMetrics, NetworkConditions } from "../../validation/tts-types";
+import type { BufferConfig, PerformanceMetrics } from "../../validation/tts-types";
 
 vi.mock("../../core/logger", () => ({
   logger: {
@@ -14,7 +14,7 @@ vi.mock("../../core/logger", () => ({
 
 describe("AdaptiveBufferManager", () => {
   let bufferManager: AdaptiveBufferManager;
-  let initialConfig: any;
+  let initialConfig: BufferConfig;
 
   beforeEach(() => {
     vi.useFakeTimers();

@@ -19,7 +19,6 @@
 
 import { logger } from "../core/logger";
 import type {
-  IRetryManager,
   RetryConfig,
   RetryStrategy,
   RetryResult,
@@ -91,7 +90,7 @@ export class RetryManager {
       maxAttempts: 3,
       baseDelayMs: 1000, // 1 second
       maxDelayMs: 30000, // 30 seconds
-      retryCondition: (error: Error) => true,
+      retryCondition: (_error: Error) => true,
       retryableErrors: [],
       nonRetryableErrors: [],
       enableCircuitBreaker: true,
@@ -288,7 +287,7 @@ export class RetryManager {
       maxAttempts: strategy.maxRetries ?? this.config.maxAttempts,
       baseDelayMs: strategy.baseDelay ?? this.config.baseDelayMs,
       maxDelayMs: strategy.maxDelay ?? this.config.maxDelayMs,
-      retryCondition: (error: Error) => true,
+      retryCondition: (_error: Error) => true,
       retryableErrors: strategy.retryableErrors ?? [],
       nonRetryableErrors: strategy.nonRetryableErrors ?? [],
     };

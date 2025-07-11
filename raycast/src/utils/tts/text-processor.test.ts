@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TextProcessor } from "./text-processor";
-import { TTSLogger } from "../core/logger";
-import { ValidationUtils } from "../validation/validation";
+// import { TTSLogger } from "../core/logger";
+// import { ValidationUtils } from "../validation/validation";
 import type { TextProcessingConfig } from "../validation/tts-types";
 
 // Mock logger to prevent console output and allow for spying

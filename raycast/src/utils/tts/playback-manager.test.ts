@@ -3,7 +3,7 @@ import { PlaybackManager } from "./playback-manager";
 import type { PlaybackContext } from "../validation/tts-types";
 import { EventEmitter } from "events";
 import { Writable } from "stream";
-import { spawn } from "child_process";
+import { ChildProcess, spawn } from "child_process";
 
 // Mock child_process
 vi.mock("child_process");
@@ -46,7 +46,7 @@ describe("PlaybackManager", () => {
     playbackManager.initialize({});
 
     mockProcess = new MockChildProcess();
-    vi.mocked(spawn).mockReturnValue(mockProcess as any);
+    vi.mocked(spawn).mockReturnValue(mockProcess as unknown as ChildProcess);
 
     playbackContext = {
       audioData: new Uint8Array([1, 2, 3]),

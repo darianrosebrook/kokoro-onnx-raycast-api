@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { PerformanceMonitor } from "./performance-monitor";
-import { TTSEvent } from "../validation/tts-types";
+import { TTSEvent, TTSProcessorConfig } from "../validation/tts-types";
 
 // Mock logger
 vi.mock("../core/logger", () => ({
@@ -21,14 +21,20 @@ vi.mock("../validation/validation", () => ({
 
 describe("PerformanceMonitor", () => {
   let monitor: PerformanceMonitor;
-  let mockConfig: any;
+  let mockConfig: TTSProcessorConfig;
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockConfig = {
       developmentMode: true,
-      enableRealTimeMonitoring: true,
-      enableAdaptiveOptimization: true,
+      format: "wav",
+      onStatusUpdate: vi.fn(),
+      voice: "af_heart",
+      speed: 1.0,
+      serverUrl: "https://api.tts.com",
+      useStreaming: true,
+      sentencePauses: true,
+      maxSentenceLength: 100,
     };
     monitor = new PerformanceMonitor(mockConfig);
   });
@@ -48,8 +54,7 @@ describe("PerformanceMonitor", () => {
     it("should construct with custom configuration", () => {
       const customConfig = {
         developmentMode: true,
-        enableRealTimeMonitoring: false,
-        enableAdaptiveOptimization: false,
+        adaptiveBuffering: false,
       };
       const customMonitor = new PerformanceMonitor(customConfig);
       expect(customMonitor.isInitialized()).toBe(false);

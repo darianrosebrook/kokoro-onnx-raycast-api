@@ -17,6 +17,7 @@
  */
 
 import type { Toast } from "@raycast/api";
+import type { ChildProcess } from "child_process";
 
 export type VoiceOption =
   // American English
@@ -217,7 +218,7 @@ export interface PlaybackState {
   isStopped: boolean;
   currentSegment: number;
   totalSegments: number;
-  currentProcess: any; // ChildProcess type
+  currentProcess: ChildProcess; // ChildProcess type
   pausePromise: Promise<void> | null;
   pauseResolve: (() => void) | null;
 }
@@ -254,7 +255,7 @@ export interface RetryResult<T> {
   success: boolean;
   data: T | null;
   error: Error | null;
-  attempts: any[];
+  attempts: unknown[];
   metrics: RetryMetrics;
   circuitBreakerOpen: boolean;
 }
@@ -442,7 +443,7 @@ export interface IRetryManager {
   ): Promise<RetryResult<T>>;
   getRetryMetrics(): RetryMetrics;
   resetMetrics(): void;
-  getCircuitBreakerState(): any;
+  getCircuitBreakerState(): unknown;
   resetCircuitBreaker(): void;
   updateConfig(config: Partial<RetryConfig>): void;
   getConfig(): RetryConfig;
@@ -479,10 +480,10 @@ export interface IAdaptiveBufferManager extends TTSModule {
   predictOptimalBuffer(networkConditions: NetworkConditions): number;
   estimateBandwidth(): number;
   getNetworkConditions(): NetworkConditions;
-  updateStrategy(strategy: any): void;
-  getStrategy(): any;
+  updateStrategy(strategy: unknown): void;
+  getStrategy(): unknown;
   resetToDefaults(): void;
-  getAdaptationStats(): any;
+  getAdaptationStats(): unknown;
   logBufferStats(): void;
 }
 
@@ -506,6 +507,13 @@ export enum TTSEvent {
   CACHE_MISS = "cache_miss",
   RETRY_ATTEMPT = "retry_attempt",
   PERFORMANCE_REPORT = "performance_report",
+  STREAMING_STARTED = "streaming_started",
+  STREAMING_COMPLETED = "streaming_completed",
+  STREAMING_ERROR = "streaming_error",
+  STREAMING_PAUSED = "streaming_paused",
+  STREAMING_RESUMED = "streaming_resumed",
+  STREAMING_STOPPED = "streaming_stopped",
+  STREAMING_BUFFER_ADJUSTMENT = "streaming_buffer_adjustment",
 }
 
 /**
@@ -515,7 +523,7 @@ export interface TTSEventData {
   event: TTSEvent;
   timestamp: number;
   requestId?: string;
-  data?: any;
+  data?: unknown;
   error?: Error;
 }
 
@@ -576,9 +584,9 @@ export function isTTSRequest(obj: unknown): obj is TTSRequestParams {
     "text" in obj &&
     "voice" in obj &&
     "speed" in obj &&
-    typeof (obj as any).text === "string" &&
-    typeof (obj as any).voice === "string" &&
-    typeof (obj as any).speed === "number"
+    typeof (obj as TTSRequestParams).text === "string" &&
+    typeof (obj as TTSRequestParams).voice === "string" &&
+    typeof (obj as TTSRequestParams).speed === "number"
   );
 }
 

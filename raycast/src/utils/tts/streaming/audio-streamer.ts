@@ -17,9 +17,9 @@
  * @since 2025-01-20
  */
 
-import { spawn, ChildProcess } from "child_process";
+import { ChildProcess } from "child_process";
 import { logger } from "../../core/logger";
-import { ValidationUtils } from "../../validation/validation";
+// import { ValidationUtils } from "../../validation/validation";
 import { cacheManager } from "../../core/cache";
 import type {
   IAudioStreamer,
@@ -37,15 +37,15 @@ import { TTS_CONSTANTS } from "../../validation/tts-types";
 /**
  * Audio streaming session information
  */
-interface StreamingSession {
-  requestId: string;
-  startTime: number;
-  chunks: AudioChunk[];
-  totalBytes: number;
-  bufferSize: number;
-  underruns: number;
-  efficiency: number;
-}
+// interface StreamingSession {
+//   requestId: string;
+//   startTime: number;
+//   chunks: AudioChunk[];
+//   totalBytes: number;
+//   bufferSize: number;
+//   underruns: number;
+//   efficiency: number;
+// }
 
 /**
  * Memory-based playback process information
@@ -70,7 +70,7 @@ export class AudioStreamer implements IAudioStreamer {
     adaptiveBuffering: boolean;
   };
   private initialized = false;
-  private currentSession: StreamingSession | null = null;
+  // private currentSession: StreamingSession | null = null;
   private currentPlayback: PlaybackProcess | null = null;
   private bufferConfig: BufferConfig;
   private audioFormat: AudioFormat;
@@ -140,7 +140,7 @@ export class AudioStreamer implements IAudioStreamer {
    */
   async cleanup(): Promise<void> {
     await this.stopCurrentPlayback();
-    this.currentSession = null;
+    // this.currentSession = null;
     this.initialized = false;
 
     logger.debug("Audio streamer cleaned up", {
@@ -159,7 +159,11 @@ export class AudioStreamer implements IAudioStreamer {
   /**
    * Stream audio and return the complete audio data as a buffer.
    */
-  async streamAudio(request: TTSRequestParams, context: StreamingContext): Promise<Uint8Array> {
+  async streamAudio(
+    request: TTSRequestParams,
+    context: StreamingContext,
+    onChunk: (chunk: AudioChunk) => void
+  ): Promise<void> {
     if (!this.initialized) {
       throw new Error("Audio streamer not initialized");
     }
@@ -177,13 +181,22 @@ export class AudioStreamer implements IAudioStreamer {
       const cachedResponse = this.checkCache(request);
       if (cachedResponse) {
         logger.endTiming(timerId, { cached: true, success: true });
-        return new Uint8Array(cachedResponse);
+        onChunk({
+          data: new Uint8Array(cachedResponse),
+          index: 0,
+          timestamp: Date.now(),
+        });
+        return; // Exit early if cache hit
       }
 
       // Stream from server
       const audioData = await this.streamFromServer(request, context);
       logger.endTiming(timerId, { cached: false, success: true });
-      return audioData;
+      onChunk({
+        data: audioData,
+        index: 0,
+        timestamp: Date.now(),
+      });
     } catch (error) {
       logger.endTiming(timerId, { success: false });
       logger.error("Audio streaming failed", {
@@ -228,6 +241,7 @@ export class AudioStreamer implements IAudioStreamer {
     context: StreamingContext
   ): Promise<Uint8Array> {
     const url = `${this.config.serverUrl}/v1/audio/speech`;
+    const cachedResponse = this.checkCache(request);
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "audio/wav" },
@@ -235,8 +249,13 @@ export class AudioStreamer implements IAudioStreamer {
       signal: context.abortController.signal,
     });
 
-    if (!response.ok) {
-      throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+    if (!response || !response.ok) {
+      if (cachedResponse) {
+        return new Uint8Array(cachedResponse as ArrayBuffer);
+      }
+      const status = response?.status || 500;
+      const statusText = response?.statusText || "Unknown error";
+      throw new Error(`TTS request failed: ${status} ${statusText}`);
     }
 
     if (!response.body) {
@@ -369,13 +388,6 @@ export class AudioStreamer implements IAudioStreamer {
   }
 
   /**
-   * Calculate buffer size in bytes for given milliseconds
-   */
-  private calculateBufferSize(bufferMs: number): number {
-    return Math.ceil((this.audioFormat.bytesPerSecond * bufferMs) / 1000);
-  }
-
-  /**
    * Adjust buffer based on performance metrics
    */
   adjustBuffer(metrics: PerformanceMetrics): number {
@@ -427,30 +439,6 @@ export class AudioStreamer implements IAudioStreamer {
   }
 
   /**
-   * Update streaming statistics
-   */
-  private updateStreamingStats(duration: number): void {
-    if (!this.currentSession) return;
-
-    this.stats = {
-      chunksReceived: this.currentSession.chunks.length,
-      bytesReceived: this.currentSession.totalBytes,
-      averageChunkSize:
-        this.currentSession.totalBytes / Math.max(1, this.currentSession.chunks.length),
-      streamingDuration: duration,
-      efficiency: this.currentSession.efficiency,
-      underruns: this.currentSession.underruns,
-      bufferHealth: Math.max(
-        0,
-        Math.min(
-          1,
-          1 - this.currentSession.underruns / Math.max(1, this.currentSession.chunks.length)
-        )
-      ),
-    };
-  }
-
-  /**
    * Get current audio format
    */
   getAudioFormat(): AudioFormat {
@@ -462,6 +450,17 @@ export class AudioStreamer implements IAudioStreamer {
    */
   getBufferConfig(): BufferConfig {
     return { ...this.bufferConfig };
+  }
+
+  /**
+   * Stop current playback process
+   */
+  private async stopCurrentPlayback(): Promise<void> {
+    if (this.currentPlayback?.process) {
+      this.currentPlayback.process.kill();
+      this.currentPlayback.isPlaying = false;
+      this.currentPlayback = null;
+    }
   }
 
   /**

@@ -60,12 +60,18 @@ const mockPerformanceMonitor = {
   log: vi.fn(),
 };
 
-vi.mocked(TextProcessor).mockImplementation(() => mockTextProcessor as any);
-vi.mocked(AudioStreamer).mockImplementation(() => mockAudioStreamer as any);
-vi.mocked(PlaybackManager).mockImplementation(() => mockPlaybackManager as any);
-vi.mocked(RetryManager).mockImplementation(() => mockRetryManager as any);
-vi.mocked(AdaptiveBufferManager).mockImplementation(() => mockAdaptiveBufferManager as any);
-vi.mocked(PerformanceMonitor).mockImplementation(() => mockPerformanceMonitor as any);
+vi.mocked(TextProcessor).mockImplementation(() => mockTextProcessor as unknown as TextProcessor);
+vi.mocked(AudioStreamer).mockImplementation(() => mockAudioStreamer as unknown as AudioStreamer);
+vi.mocked(PlaybackManager).mockImplementation(
+  () => mockPlaybackManager as unknown as PlaybackManager
+);
+vi.mocked(RetryManager).mockImplementation(() => mockRetryManager as unknown as RetryManager);
+vi.mocked(AdaptiveBufferManager).mockImplementation(
+  () => mockAdaptiveBufferManager as unknown as AdaptiveBufferManager
+);
+vi.mocked(PerformanceMonitor).mockImplementation(
+  () => mockPerformanceMonitor as unknown as PerformanceMonitor
+);
 
 describe("TTSSpeechProcessor", () => {
   let processor: TTSSpeechProcessor;
@@ -100,12 +106,12 @@ describe("TTSSpeechProcessor", () => {
         developmentMode: true,
       },
       {
-        textProcessor: mockTextProcessor as any,
-        audioStreamer: mockAudioStreamer as any,
-        playbackManager: mockPlaybackManager as any,
-        retryManager: mockRetryManager as any,
-        adaptiveBufferManager: mockAdaptiveBufferManager as any,
-        performanceMonitor: mockPerformanceMonitor as any,
+        textProcessor: mockTextProcessor as unknown as TextProcessor,
+        audioStreamer: mockAudioStreamer as unknown as AudioStreamer,
+        playbackManager: mockPlaybackManager as unknown as PlaybackManager,
+        retryManager: mockRetryManager as unknown as RetryManager,
+        adaptiveBufferManager: mockAdaptiveBufferManager as unknown as AdaptiveBufferManager,
+        performanceMonitor: mockPerformanceMonitor as unknown as PerformanceMonitor,
       }
     );
   });
@@ -132,10 +138,10 @@ describe("TTSSpeechProcessor", () => {
         type: "sentence",
       },
     ];
-    const audioData = new Uint8Array([1, 2, 3]);
+    // const audioData = new Uint8Array([1, 2, 3]);
 
     mockTextProcessor.segmentText.mockReturnValue(segments);
-    mockAudioStreamer.streamAudio.mockResolvedValue({ success: true, data: audioData });
+    mockAudioStreamer.streamAudio.mockResolvedValue(undefined);
 
     await processor.speak(text);
 
@@ -147,12 +153,11 @@ describe("TTSSpeechProcessor", () => {
     expect(mockRetryManager.executeWithRetry).toHaveBeenCalledTimes(1);
     expect(mockAudioStreamer.streamAudio).toHaveBeenCalledWith(
       expect.objectContaining({ text: "Hello world." }),
-      expect.any(Object)
-    );
-    expect(mockPlaybackManager.playAudio).toHaveBeenCalledWith(
       expect.any(Object),
-      expect.any(Object)
+      expect.any(Function)
     );
+    // Note: playAudio is not called directly in the current implementation
+    // The audio streaming handles playback internally
     expect(onStatusUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ message: "Speech completed" })
     );
@@ -189,19 +194,20 @@ describe("TTSSpeechProcessor", () => {
         type: "sentence",
       },
     ];
-    const audioData = new Uint8Array([1, 2, 3]);
+    // const audioData = new Uint8Array([1, 2, 3]);
 
     mockTextProcessor.segmentText.mockReturnValue(segments);
     // Fail once, then succeed
     mockAudioStreamer.streamAudio
       .mockRejectedValueOnce(new Error("Network Error"))
-      .mockResolvedValueOnce({ success: true, data: audioData });
+      .mockResolvedValueOnce(undefined);
 
     mockRetryManager.executeWithRetry.mockImplementation(async (fn) => {
       try {
         return await fn();
-      } catch (e) {
+      } catch (e: unknown) {
         // Simulate a retry by calling the function again
+        console.warn(e);
         return await fn();
       }
     });
@@ -210,7 +216,7 @@ describe("TTSSpeechProcessor", () => {
 
     expect(mockRetryManager.executeWithRetry).toHaveBeenCalledTimes(1);
     expect(mockAudioStreamer.streamAudio).toHaveBeenCalledTimes(2);
-    expect(mockPlaybackManager.playAudio).toHaveBeenCalled();
+    // Note: playAudio is not called directly in the current implementation
     expect(onStatusUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ message: "Speech completed" })
     );
@@ -231,7 +237,7 @@ describe("TTSSpeechProcessor", () => {
     const error = new Error("Fatal streaming error");
 
     mockTextProcessor.segmentText.mockReturnValue(segments);
-    mockAudioStreamer.streamAudio.mockResolvedValue({ success: false, error });
+    mockAudioStreamer.streamAudio.mockRejectedValue(error);
     mockRetryManager.executeWithRetry.mockImplementation(async (fn) => fn());
 
     await expect(processor.speak(text)).rejects.toThrow(error);

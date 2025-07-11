@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  ValidationUtils,
-  VoiceOptionSchema,
-  ServerHealthSchema,
-  ErrorContextSchema,
-} from "./validation";
+import { ValidationUtils, VoiceOptionSchema, ErrorContextSchema } from "./validation";
 
 // Mock logger
 vi.mock("../core/logger", () => ({

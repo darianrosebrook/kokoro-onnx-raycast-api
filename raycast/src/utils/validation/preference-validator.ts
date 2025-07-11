@@ -17,7 +17,7 @@
  */
 
 import { showToast, Toast } from "@raycast/api";
-import type { TTSConfig, VoiceOption } from "./tts-types";
+import type { VoiceOption, TTSProcessorConfig } from "./tts-types";
 import { VOICES } from "../tts/voices";
 
 /**
@@ -33,13 +33,16 @@ interface ValidationResult<T> {
 /**
  * Default TTS configuration with safe defaults
  */
-export const DEFAULT_TTS_CONFIG: TTSConfig = {
+export const DEFAULT_TTS_CONFIG: TTSProcessorConfig = {
   voice: "af_heart",
   speed: 1.0,
   serverUrl: "http://localhost:8000",
   useStreaming: true,
   sentencePauses: false,
   maxSentenceLength: 0,
+  format: "wav",
+  developmentMode: false,
+  onStatusUpdate: () => {},
 };
 
 /**
@@ -344,7 +347,9 @@ export const validateMaxSentenceLength = (length: unknown): ValidationResult<num
 /**
  * Validate complete TTS configuration
  */
-export const validateTTSConfig = (config: Partial<TTSConfig>): ValidationResult<TTSConfig> => {
+export const validateTTSConfig = (
+  config: Partial<TTSProcessorConfig>
+): ValidationResult<TTSProcessorConfig> => {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -382,13 +387,16 @@ export const validateTTSConfig = (config: Partial<TTSConfig>): ValidationResult<
     ...maxLengthResult.warnings
   );
 
-  const validatedConfig: TTSConfig = {
+  const validatedConfig: TTSProcessorConfig = {
     voice: voiceResult.value,
     speed: speedResult.value,
     serverUrl: serverUrlResult.value,
     useStreaming: streamingResult.value,
     sentencePauses: pausesResult.value,
     maxSentenceLength: maxLengthResult.value,
+    format: config.format ?? DEFAULT_TTS_CONFIG.format,
+    developmentMode: config.developmentMode ?? DEFAULT_TTS_CONFIG.developmentMode,
+    onStatusUpdate: config.onStatusUpdate ?? DEFAULT_TTS_CONFIG.onStatusUpdate,
   };
 
   return {
@@ -422,9 +430,9 @@ export const showValidationResults = async (result: ValidationResult<unknown>, c
  * Enhanced preference validation with user feedback
  */
 export const validatePreferencesWithFeedback = async (
-  config: Partial<TTSConfig>,
+  config: Partial<TTSProcessorConfig>,
   showFeedback = true
-): Promise<TTSConfig> => {
+): Promise<TTSProcessorConfig> => {
   const result = validateTTSConfig(config);
 
   if (showFeedback) {

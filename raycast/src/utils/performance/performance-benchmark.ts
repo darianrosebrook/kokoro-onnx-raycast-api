@@ -18,8 +18,8 @@
  */
 
 import { showToast, Toast } from "@raycast/api";
-import type { TTSRequest, VoiceOption } from "../types";
-import { cacheManager } from "./cache";
+import type { TTSRequestParams, VoiceOption } from "../validation/tts-types";
+import { cacheManager } from "../core/cache";
 
 /**
  * Performance metrics for a single TTS request
@@ -149,12 +149,12 @@ class TTSBenchmark {
    * Benchmark a TTS request with comprehensive timing
    */
   async benchmarkTTSRequest(
-    request: TTSRequest,
+    request: TTSRequestParams,
     serverUrl: string,
     onProgress?: (stage: string, elapsed: number) => void
   ): Promise<TTSPerformanceMetrics> {
     const timer = new PrecisionTimer();
-    const requestId = `tts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = `tts-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     timer.start();
 
@@ -200,7 +200,7 @@ class TTSBenchmark {
 
       // Measure network latency with connection test
       timer.mark("network-start");
-      const _latencyResponse = await this.measureNetworkLatency(serverUrl);
+      await this.measureNetworkLatency(serverUrl);
       metrics.networkLatency = timer.mark("network-latency");
       onProgress?.("network-connected", timer.getElapsed());
 
@@ -258,7 +258,7 @@ class TTSBenchmark {
       if (streamToPlayStart > 0) {
         // Simulate the time it takes to write audio data and start playback
         const audioData = this.combineChunks(chunks);
-        const processingStart = performance.now();
+        // const processingStart = performance.now();
 
         // Simulate file write time (proportional to file size)
         const writeDelay = Math.min(50, audioData.length / 10000); // Max 50ms
@@ -344,7 +344,7 @@ class TTSBenchmark {
   private async measureNetworkLatency(serverUrl: string): Promise<number> {
     const start = performance.now();
     try {
-      const _response = await fetch(`${serverUrl}/health`, {
+      await fetch(`${serverUrl}/health`, {
         method: "GET",
         headers: { Accept: "application/json" },
       });
@@ -369,7 +369,7 @@ class TTSBenchmark {
     console.log(`Server: ${serverUrl}`);
     console.log(`${"=".repeat(60)}`);
 
-    const request: TTSRequest = {
+    const request: TTSRequestParams = {
       text,
       voice,
       speed,
@@ -451,7 +451,7 @@ class TTSBenchmark {
 
     // Test streaming
     console.log(`\n📡 Testing STREAMING mode...`);
-    const streamingRequest: TTSRequest = {
+    const streamingRequest: TTSRequestParams = {
       text,
       voice,
       speed,
@@ -463,7 +463,7 @@ class TTSBenchmark {
 
     // Test non-streaming
     console.log(`\n📦 Testing NON-STREAMING mode...`);
-    const nonStreamingRequest: TTSRequest = {
+    const nonStreamingRequest: TTSRequestParams = {
       text,
       voice,
       speed,
@@ -548,7 +548,7 @@ class TTSBenchmark {
       );
       console.log(`   Voice: ${testCase.voice}, Speed: ${testCase.speed}`);
 
-      const request: TTSRequest = {
+      const request: TTSRequestParams = {
         text: testCase.text,
         voice: testCase.voice,
         speed: testCase.speed,
@@ -629,7 +629,7 @@ class TTSBenchmark {
       const testCase = testCases[i];
       console.log(`\n🧪 Test ${i + 1}/${testCases.length}: "${testCase.text.substring(0, 30)}..."`);
 
-      const request: TTSRequest = {
+      const request: TTSRequestParams = {
         text: testCase.text,
         voice: testCase.voice,
         speed: testCase.speed,

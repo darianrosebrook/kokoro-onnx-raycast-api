@@ -1,12 +1,12 @@
-import { Toast } from "@raycast/api";
+import { Toast as _Toast } from "@raycast/api";
 import type {
-  TTSRequest,
+  TTSRequestParams,
   VoiceOption,
-  TTSConfig,
+  TTSProcessorConfig,
   StatusUpdate,
 } from "./utils/validation/tts-types";
 
-export type { TTSRequest, VoiceOption, TTSConfig, StatusUpdate };
+export type { TTSRequestParams, VoiceOption, TTSProcessorConfig, StatusUpdate };
 
 /**
  * Word tracking for highlighting during playback, currently not implemented.

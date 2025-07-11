@@ -18,7 +18,6 @@
  */
 
 import { z } from "zod";
-import type { VoiceOption } from "./tts-types";
 import { logger } from "../core/logger";
 
 /**

@@ -25,6 +25,7 @@ import type {
   PlaybackState,
   AudioFormat,
   TTSProcessorConfig,
+  VoiceOption,
 } from "../validation/tts-types";
 
 /**
@@ -114,7 +115,7 @@ export class PlaybackManager implements IPlaybackManager {
       throw new Error("Playback manager not initialized");
     }
 
-    const sessionId = `playback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const sessionId = `playback-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     const timerId = logger.startTiming("audio-playback", {
       component: this.name,
@@ -480,7 +481,7 @@ export class PlaybackManager implements IPlaybackManager {
       audioData: silenceData,
       format,
       metadata: {
-        voice: "silence" as any,
+        voice: "silence" as VoiceOption,
         speed: 1.0,
         size: silenceData.length,
       },

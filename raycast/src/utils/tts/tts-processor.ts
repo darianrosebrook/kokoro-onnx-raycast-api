@@ -74,25 +74,15 @@
  * ```
  */
 import { showToast, Toast } from "@raycast/api";
-import type { VoiceOption, TTSConfig, TTSRequest } from "../../types";
-import { exec, ChildProcess, spawn } from "child_process";
-import { writeFile, unlink, stat } from "fs/promises";
-import { join } from "path";
-import { tmpdir } from "os";
-import { StatusUpdate } from "../../types";
-import { cacheManager } from "../core/cache";
+import type { VoiceOption, TTSProcessorConfig, TTSRequestParams } from "../../types";
+import type { StatusUpdate } from "../../types";
 import { TextProcessor } from "./text-processor";
 import { AudioStreamer } from "./streaming/audio-streamer";
 import { PlaybackManager } from "./playback-manager";
 import { PerformanceMonitor } from "../performance/performance-monitor";
 import { RetryManager } from "../api/retry-manager";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager";
-import {
-  PlaybackContext,
-  StreamingContext,
-  TextSegment,
-  TTSRequestParams,
-} from "../validation/tts-types";
+import { StreamingContext, TextSegment } from "../validation/tts-types";
 
 // const execAsync = promisify(exec);
 
@@ -107,7 +97,7 @@ import {
  *   - Server-side processing overhead
  * - This prevents cryptic server errors and ensures reliable processing
  */
-const SERVER_MAX_TEXT_LENGTH = 1800;
+// const SERVER_MAX_TEXT_LENGTH = 1800;
 
 /**
  * Configuration interface for TTS processor preferences.
@@ -189,7 +179,7 @@ export class TTSSpeechProcessor {
 
   // Process and resource management
   private textParagraphs: TextSegment[] = [];
-  private currentParagraphIndex = 0;
+  // private currentParagraphIndex = 0;
 
   // Streaming and async coordination
   private onStatusUpdate: (status: StatusUpdate) => void;
@@ -233,7 +223,7 @@ export class TTSSpeechProcessor {
     this.developmentMode = prefs.developmentMode ?? true;
 
     // Initialize modular components
-    const processorConfig: TTSConfig & {
+    const processorConfig: TTSProcessorConfig & {
       onStatusUpdate: (status: StatusUpdate) => void;
       developmentMode: boolean;
       format: "wav" | "pcm";
@@ -342,22 +332,18 @@ export class TTSSpeechProcessor {
           startTime: performance.now(),
         };
 
-        const audioResult = await this.retryManager.executeWithRetry(
-          () => this.audioStreamer.streamAudio(requestParams, streamingContext),
+        await this.retryManager.executeWithRetry(
+          () =>
+            this.audioStreamer.streamAudio(requestParams, streamingContext, (_chunk) => {
+              this.onStatusUpdate({
+                message: "Streaming audio...",
+                style: Toast.Style.Success,
+                isPlaying: true,
+                isPaused: false,
+              });
+            }),
           "tts-audio-streaming"
         );
-
-        if (audioResult.success && audioResult.data) {
-          const playbackContext: PlaybackContext = {
-            audioData: audioResult.data,
-            format: this.audioStreamer.getAudioFormat(),
-            metadata: { voice: this.voice, speed: this.speed, size: audioResult.data.length },
-            playbackOptions: { useHardwareAcceleration: true, backgroundPlayback: true },
-          };
-          await this.playbackManager.playAudio(playbackContext, signal);
-        } else if (!audioResult.success) {
-          throw audioResult.error || new Error("Audio streaming failed after retries.");
-        }
       }
 
       if (!signal.aborted) {
@@ -474,7 +460,7 @@ export class TTSSpeechProcessor {
    * **Use Case**: Allows external components to inspect current settings
    * for debugging or UI display purposes.
    */
-  get config(): TTSConfig {
+  get config(): TTSProcessorConfig {
     return {
       voice: this.voice,
       speed: this.speed,
@@ -482,6 +468,9 @@ export class TTSSpeechProcessor {
       useStreaming: this.useStreaming,
       sentencePauses: this.sentencePauses,
       maxSentenceLength: this.maxSentenceLength,
+      format: this.format,
+      developmentMode: this.developmentMode,
+      onStatusUpdate: this.onStatusUpdate,
     };
   }
 }

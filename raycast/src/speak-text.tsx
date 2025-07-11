@@ -23,7 +23,7 @@ import {
   useErrorHandler,
   usePerformanceMonitor,
 } from "./utils/core/state-management";
-import { ttsBenchmark } from "./utils/performance-benchmark";
+import { ttsBenchmark } from "./utils/performance/performance-benchmark";
 import { generateVoiceOptions as generateDynamicVoiceOptions } from "./utils/tts/voice-manager";
 import {
   VOICES,
@@ -136,7 +136,7 @@ const generateHardcodedVoiceOptions = (): { value: VoiceOption; title: string }[
 /**
  * Available voice options for the TTS (ordered by quality)
  */
-const VOICE_OPTIONS = generateHardcodedVoiceOptions();
+const _VOICE_OPTIONS = generateHardcodedVoiceOptions();
 
 /**
  * Simple TTS form component using the processor
@@ -166,7 +166,7 @@ export default function SpeakTextSimple() {
   const [isPaused, setIsPaused] = useState(false);
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [voiceOptions, setVoiceOptions] = useState<{ value: VoiceOption; title: string }[]>([]);
-  const [isLoadingVoices, setIsLoadingVoices] = useState(true);
+  const [_isLoadingVoices, setIsLoadingVoices] = useState(true);
   const processorRef = useRef<TTSSpeechProcessor | null>(null);
   const toastRef = useRef<Toast | null>(null);
 

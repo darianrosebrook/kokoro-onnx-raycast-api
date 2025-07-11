@@ -326,7 +326,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
   /**
    * Emit performance event
    */
-  emitEvent(event: TTSEvent, data?: any, error?: Error): void {
+  emitEvent(event: TTSEvent, data?: unknown, error?: Error): void {
     const eventData: TTSEventData = {
       event,
       timestamp: performance.now(),
@@ -394,27 +394,27 @@ export class PerformanceMonitor implements IPerformanceMonitor {
    */
   private initializeEventListeners(): void {
     // Set up default event handlers
-    this.addEventListener(TTSEvent.REQUEST_START, (data) => {
+    this.addEventListener(TTSEvent.REQUEST_START, () => {
       this.recordMetric("totalRequests", 1);
     });
 
-    this.addEventListener(TTSEvent.REQUEST_COMPLETE, (data) => {
+    this.addEventListener(TTSEvent.REQUEST_COMPLETE, () => {
       this.recordMetric("successfulRequests", 1);
     });
 
-    this.addEventListener(TTSEvent.REQUEST_ERROR, (data) => {
+    this.addEventListener(TTSEvent.REQUEST_ERROR, () => {
       this.recordMetric("failedRequests", 1);
     });
 
-    this.addEventListener(TTSEvent.CACHE_HIT, (data) => {
+    this.addEventListener(TTSEvent.CACHE_HIT, () => {
       this.recordMetric("cacheHits", 1);
     });
 
-    this.addEventListener(TTSEvent.CACHE_MISS, (data) => {
+    this.addEventListener(TTSEvent.CACHE_MISS, () => {
       this.recordMetric("cacheMisses", 1);
     });
 
-    this.addEventListener(TTSEvent.BUFFER_ADJUSTMENT, (data) => {
+    this.addEventListener(TTSEvent.BUFFER_ADJUSTMENT, () => {
       this.recordMetric("bufferAdjustments", 1);
     });
   }

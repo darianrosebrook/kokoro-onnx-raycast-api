@@ -70,11 +70,17 @@ describe("AudioStreamer", () => {
       };
       vi.mocked(cacheManager.getCachedTTSResponse).mockReturnValue(mockCachedResponse);
 
-      const result = await audioStreamer.streamAudio(request, context);
+      const onChunk = vi.fn();
+      const result = await audioStreamer.streamAudio(request, context, onChunk);
 
       expect(cacheManager.getCachedTTSResponse).toHaveBeenCalledWith(request);
       expect(mockFetch).not.toHaveBeenCalled();
-      expect(result).toEqual(new Uint8Array(mockAudioData));
+      expect(onChunk).toHaveBeenCalledWith({
+        data: new Uint8Array(mockAudioData),
+        index: 0,
+        timestamp: expect.any(Number),
+      });
+      expect(result).toBeUndefined();
     });
 
     it("should fetch from server if not in cache", async () => {
@@ -90,7 +96,7 @@ describe("AudioStreamer", () => {
         body: Readable.toWeb(mockStream),
       });
 
-      await audioStreamer.streamAudio(request, context);
+      await audioStreamer.streamAudio(request, context, vi.fn());
 
       expect(mockFetch).toHaveBeenCalledWith("http://test.com/v1/audio/speech", expect.any(Object));
     });
@@ -105,7 +111,7 @@ describe("AudioStreamer", () => {
         statusText: "Server Error",
       });
 
-      await expect(audioStreamer.streamAudio(request, context)).rejects.toThrow(
+      await expect(audioStreamer.streamAudio(request, context, vi.fn())).rejects.toThrow(
         "TTS request failed: 500 Server Error"
       );
     });
@@ -118,7 +124,7 @@ describe("AudioStreamer", () => {
         body: null,
       });
 
-      await expect(audioStreamer.streamAudio(request, context)).rejects.toThrow(
+      await expect(audioStreamer.streamAudio(request, context, vi.fn())).rejects.toThrow(
         "Streaming not supported by this environment"
       );
     });

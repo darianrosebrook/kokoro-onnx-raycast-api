@@ -113,7 +113,7 @@ describe("RetryManager", () => {
       // Wait for the timeout
       await vi.advanceTimersByTimeAsync(60001);
 
-      // A new request should be allowed and reset the breaker on success
+      // A new request should be allowed and reset the brea[ker on success
       await retryManager.executeWithRetry(successOperation, "half-open-success");
 
       expect(retryManager.getCircuitBreakerState().isOpen).toBe(false);
