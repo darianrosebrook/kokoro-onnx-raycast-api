@@ -11,18 +11,20 @@
  *
  * This code is provided as-is, without any warranty. Use at your own risk.
  */
-import {
-  Form,
-  ActionPanel,
-  showToast,
-  Toast,
-  Clipboard,
-  getPreferenceValues,
-  Action,
-} from "@raycast/api";
+import { Form, ActionPanel, showToast, Toast, Clipboard, Action } from "@raycast/api";
 import { useState, useEffect, useRef } from "react";
 import { TTSSpeechProcessor } from "./utils/tts-processor";
-import type { VoiceOption, TTSConfig, StatusUpdate } from "./types";
+import type { VoiceOption, StatusUpdate } from "./types";
+import {
+  useTTSPreferences,
+  useServerHealth,
+  useVoiceConfig,
+  useTTSRequestState,
+  useErrorHandler,
+  usePerformanceMonitor,
+} from "./utils/state-management";
+import { ttsBenchmark } from "./utils/performance-benchmark";
+import { generateVoiceOptions as generateDynamicVoiceOptions } from "./utils/voice-manager";
 import {
   VOICES,
   getAmericanEnglishVoices,
@@ -37,9 +39,26 @@ import {
 } from "./voices";
 
 /**
- * Generate voice options from the VOICES catalog, organized by language
+ * Generate voice options dynamically from server, with fallback to hardcoded voices
  */
-const generateVoiceOptions = (): { value: VoiceOption; title: string }[] => {
+const generateVoiceOptions = async (
+  serverUrl: string
+): Promise<{ value: VoiceOption; title: string }[]> => {
+  try {
+    // Try to get voices from server first
+    return await generateDynamicVoiceOptions(serverUrl);
+  } catch (error) {
+    console.warn("Falling back to hardcoded voices:", error);
+
+    // Fallback to hardcoded voices
+    return generateHardcodedVoiceOptions();
+  }
+};
+
+/**
+ * Generate voice options from hardcoded VOICES catalog (fallback)
+ */
+const generateHardcodedVoiceOptions = (): { value: VoiceOption; title: string }[] => {
   const voiceOptions: { value: VoiceOption; title: string }[] = [];
 
   // Helper function to format voice name for display
@@ -101,15 +120,15 @@ const generateVoiceOptions = (): { value: VoiceOption; title: string }[] => {
   };
 
   // Add languages in order of preference/quality
-  addLanguageGroup(getAmericanEnglishVoices(), "");
-  addLanguageGroup(getBritishEnglishVoices(), "");
-  addLanguageGroup(getFrenchVoices(), "");
-  addLanguageGroup(getJapaneseVoices(), "");
-  addLanguageGroup(getHindiVoices(), "");
-  addLanguageGroup(getItalianVoices(), "");
-  addLanguageGroup(getMandarinChineseVoices(), "");
-  addLanguageGroup(getSpanishVoices(), "");
-  addLanguageGroup(getBrazilianPortugueseVoices(), "");
+  addLanguageGroup(getAmericanEnglishVoices(), "🇺🇸");
+  addLanguageGroup(getBritishEnglishVoices(), "🇬🇧");
+  addLanguageGroup(getFrenchVoices(), "🇫🇷");
+  addLanguageGroup(getJapaneseVoices(), "🇯🇵");
+  addLanguageGroup(getHindiVoices(), "🇮🇳");
+  addLanguageGroup(getItalianVoices(), "🇮🇹");
+  addLanguageGroup(getMandarinChineseVoices(), "🇨🇳");
+  addLanguageGroup(getSpanishVoices(), "🇪🇸");
+  addLanguageGroup(getBrazilianPortugueseVoices(), "🇧🇷");
 
   return voiceOptions;
 };
@@ -117,32 +136,64 @@ const generateVoiceOptions = (): { value: VoiceOption; title: string }[] => {
 /**
  * Available voice options for the TTS (ordered by quality)
  */
-const VOICE_OPTIONS = generateVoiceOptions();
+const VOICE_OPTIONS = generateHardcodedVoiceOptions();
 
 /**
  * Simple TTS form component using the processor
  */
 export default function SpeakTextSimple() {
+  // Enhanced state management with persistent caching
+  const { preferences, updatePreferences } = useTTSPreferences();
+  const {
+    serverHealth,
+    isHealthy,
+    latency,
+    revalidate: _revalidate,
+  } = useServerHealth(preferences.serverUrl);
+  const {
+    voices: _voices,
+    isLoading: _voicesLoading,
+    hasVoices: _hasVoices,
+  } = useVoiceConfig(preferences.serverUrl);
+  const { requestHistory, addToHistory } = useTTSRequestState();
+  const { handleError } = useErrorHandler();
+  const { getCacheStats: _getCacheStats, clearAllCaches: _clearAllCaches } =
+    usePerformanceMonitor();
+
+  // Local component state
   const [text, setText] = useState("");
-  const [voice, setVoice] = useState<VoiceOption>("af_heart");
-  const [speed, setSpeed] = useState("1.2");
-  const [useStreaming, setUseStreaming] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isBenchmarking, setIsBenchmarking] = useState(false);
+  const [voiceOptions, setVoiceOptions] = useState<{ value: VoiceOption; title: string }[]>([]);
+  const [isLoadingVoices, setIsLoadingVoices] = useState(true);
   const processorRef = useRef<TTSSpeechProcessor | null>(null);
   const toastRef = useRef<Toast | null>(null);
 
-  // Load preferences
+  // Use preferences from enhanced state management
+  const voice = preferences.voice;
+  const speed = preferences.speed.toString();
+  const useStreaming = preferences.useStreaming;
+
+  // Load voice options on component mount and when server URL changes
   useEffect(() => {
-    try {
-      const prefs = getPreferenceValues<Partial<TTSConfig>>();
-      if (prefs.voice) setVoice(prefs.voice);
-      if (prefs.speed) setSpeed(prefs.speed.toString());
-      if (prefs.useStreaming) setUseStreaming(prefs.useStreaming);
-    } catch {
-      // Use defaults
-    }
-  }, []);
+    const loadVoices = async () => {
+      setIsLoadingVoices(true);
+      try {
+        const options = await generateVoiceOptions(preferences.serverUrl);
+        setVoiceOptions(options);
+      } catch (error) {
+        console.error("Failed to load voice options:", error);
+        // Fallback to hardcoded voices
+        const fallbackOptions = generateHardcodedVoiceOptions();
+        setVoiceOptions(fallbackOptions);
+      } finally {
+        setIsLoadingVoices(false);
+      }
+    };
+
+    loadVoices();
+  }, [preferences.serverUrl]);
 
   // Auto-populate with clipboard text
   useEffect(() => {
@@ -183,26 +234,31 @@ export default function SpeakTextSimple() {
       return;
     }
 
-    const speedNum = parseFloat(speed);
-    if (isNaN(speedNum) || speedNum < 0.1 || speedNum > 3.0) {
+    // Check server health before processing
+    if (!isHealthy) {
       await showToast({
         style: Toast.Style.Failure,
-        title: "Invalid speed",
-        message: "Speed must be between 0.1 and 3.0",
+        title: "Server unavailable",
+        message: "TTS server is not responding. Please check your connection.",
       });
       return;
     }
 
     setIsProcessing(true);
     setIsPaused(false);
-    console.log("useStreaming", useStreaming);
-    const prefs = getPreferenceValues();
+
+    // Add to request history
+    addToHistory(trimmedText, voice);
+
+    console.log("useStreaming", useStreaming, "server latency:", latency);
     const newProcessor = new TTSSpeechProcessor({
-      ...prefs,
-      speed,
       voice,
-      onStatusUpdate,
+      speed,
+      serverUrl: preferences.serverUrl,
       useStreaming,
+      sentencePauses: preferences.sentencePauses,
+      maxSentenceLength: preferences.maxSentenceLength.toString(),
+      onStatusUpdate,
     });
     processorRef.current = newProcessor;
     showToast({
@@ -214,11 +270,10 @@ export default function SpeakTextSimple() {
       .speak(trimmedText)
       .catch((error) => {
         if (!newProcessor.paused && !processorRef.current?.playing) {
-          showToast({
-            style: Toast.Style.Failure,
-            title: "Speech failed",
-            message: error instanceof Error ? error.message : "Unknown error",
-          });
+          handleError(
+            error instanceof Error ? error : new Error("Unknown error"),
+            "audio playback"
+          );
         }
       })
       .finally(() => {
@@ -257,6 +312,96 @@ export default function SpeakTextSimple() {
     }
   };
 
+  const handleBenchmark = async () => {
+    if (isBenchmarking || isProcessing) return;
+
+    setIsBenchmarking(true);
+
+    try {
+      const stats = await ttsBenchmark.runBenchmarkSuite(preferences.serverUrl);
+      ttsBenchmark.printReport(stats);
+
+      // Show summary toast
+      await showToast({
+        style: Toast.Style.Success,
+        title: "📊 Benchmark Results",
+        message: `Avg: ${stats.averageTotalTime.toFixed(0)}ms | Cache: ${(stats.cacheSpeedup || 1).toFixed(1)}x faster`,
+      });
+    } catch (error) {
+      handleError(error instanceof Error ? error : new Error("Benchmark failed"), "benchmark");
+    } finally {
+      setIsBenchmarking(false);
+    }
+  };
+
+  const handleSingleBenchmark = async () => {
+    const trimmedText = text.trim();
+    if (!trimmedText) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Text required",
+        message: "Please enter some text to benchmark",
+      });
+      return;
+    }
+
+    if (isBenchmarking || isProcessing) return;
+
+    setIsBenchmarking(true);
+
+    try {
+      const request = {
+        text: trimmedText,
+        voice: voice,
+        speed: preferences.speed,
+        lang: "en-us" as const,
+        stream: useStreaming,
+        format: "wav" as const,
+      };
+
+      console.log("\n🎯 Single Request Benchmark:");
+      console.log(`Text: "${trimmedText.substring(0, 50)}${trimmedText.length > 50 ? "..." : ""}"`);
+      console.log(`Voice: ${voice}, Speed: ${preferences.speed}, Streaming: ${useStreaming}`);
+
+      const metrics = await ttsBenchmark.benchmarkTTSRequest(
+        request,
+        preferences.serverUrl,
+        (stage, elapsed) => {
+          console.log(`📊 ${stage}: ${elapsed.toFixed(2)}ms`);
+        }
+      );
+
+      // Show detailed results
+      const cacheStatus = metrics.cacheHit ? "🎯 Cache Hit" : "🌐 Network Request";
+      const responseTime = metrics.totalResponseTime.toFixed(0);
+      const audioSize = (metrics.audioDataSize / 1024).toFixed(1);
+
+      await showToast({
+        style: Toast.Style.Success,
+        title: `${cacheStatus}: ${responseTime}ms`,
+        message: `TTFB: ${metrics.timeToFirstByte.toFixed(0)}ms | Audio: ${audioSize}KB`,
+      });
+
+      // Log detailed metrics
+      console.log("\n📋 Detailed Metrics:");
+      console.log(`   Request ID: ${metrics.requestId}`);
+      console.log(`   Cache Hit: ${metrics.cacheHit ? "✅" : "❌"}`);
+      console.log(`   Network Latency: ${metrics.networkLatency.toFixed(2)}ms`);
+      console.log(`   Time to First Byte: ${metrics.timeToFirstByte.toFixed(2)}ms`);
+      console.log(`   Time to First Audio: ${metrics.timeToFirstAudioChunk.toFixed(2)}ms`);
+      console.log(`   Total Response Time: ${metrics.totalResponseTime.toFixed(2)}ms`);
+      console.log(`   Audio Processing: ${metrics.audioProcessingTime.toFixed(2)}ms`);
+      console.log(`   Audio Data Size: ${(metrics.audioDataSize / 1024).toFixed(2)}KB`);
+    } catch (error) {
+      handleError(
+        error instanceof Error ? error : new Error("Single benchmark failed"),
+        "benchmark"
+      );
+    } finally {
+      setIsBenchmarking(false);
+    }
+  };
+
   const onStatusUpdate = async (status: StatusUpdate) => {
     const { message, style = Toast.Style.Animated, primaryAction, secondaryAction } = status;
 
@@ -279,12 +424,12 @@ export default function SpeakTextSimple() {
 
   return (
     <Form
-      isLoading={isProcessing && !isPaused}
+      isLoading={(isProcessing && !isPaused) || isBenchmarking}
       actions={
         <ActionPanel>
-          {!isProcessing ? (
+          {!isProcessing && !isBenchmarking ? (
             <Action.SubmitForm title="Speak" onSubmit={handleStart} />
-          ) : (
+          ) : isProcessing ? (
             <>
               <Action
                 title="Stop"
@@ -298,27 +443,39 @@ export default function SpeakTextSimple() {
               )}
               <Action.SubmitForm title="Restart" onSubmit={handleStart} />
             </>
-          )}
+          ) : null}
 
-          <Action
-            title="Paste from Clipboard"
-            icon=""
-            shortcut={{ modifiers: ["cmd"], key: "v" }}
-            onAction={async () => {
-              try {
-                const clipboardText = await Clipboard.readText();
-                if (clipboardText) {
-                  setText(clipboardText);
+          <ActionPanel.Section title="Utilities">
+            <Action
+              title="📊 Run Performance Benchmark"
+              onAction={handleBenchmark}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "b" }}
+            />
+            <Action
+              title="🎯 Benchmark Current Text"
+              onAction={handleSingleBenchmark}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "t" }}
+            />
+            <Action
+              title="Paste from Clipboard"
+              icon=""
+              shortcut={{ modifiers: ["cmd"], key: "v" }}
+              onAction={async () => {
+                try {
+                  const clipboardText = await Clipboard.readText();
+                  if (clipboardText) {
+                    setText(clipboardText);
+                  }
+                } catch {
+                  await showToast({
+                    style: Toast.Style.Failure,
+                    title: "Failed to paste",
+                    message: "Could not read clipboard",
+                  });
                 }
-              } catch {
-                await showToast({
-                  style: Toast.Style.Failure,
-                  title: "Failed to paste",
-                  message: "Could not read clipboard",
-                });
-              }
-            }}
-          />
+              }}
+            />
+          </ActionPanel.Section>
         </ActionPanel>
       }
     >
@@ -334,9 +491,9 @@ export default function SpeakTextSimple() {
         id="voice"
         title="Voice"
         value={voice}
-        onChange={(value) => setVoice(value as VoiceOption)}
+        onChange={(value) => updatePreferences({ voice: value as VoiceOption })}
       >
-        {VOICE_OPTIONS.map((option) => (
+        {voiceOptions.map((option) => (
           <Form.Dropdown.Item key={option.value} value={option.value} title={option.title} />
         ))}
       </Form.Dropdown>
@@ -346,7 +503,7 @@ export default function SpeakTextSimple() {
         title="Speed"
         placeholder="1.0"
         value={speed}
-        onChange={setSpeed}
+        onChange={(value) => updatePreferences({ speed: parseFloat(value) || 1.0 })}
         info="Range: 0.1 - 3.0 (1.0 = normal speed)"
       />
 
@@ -354,8 +511,22 @@ export default function SpeakTextSimple() {
         id="useStreaming"
         label="Use Streaming"
         value={useStreaming}
-        onChange={setUseStreaming}
+        onChange={(value) => updatePreferences({ useStreaming: value })}
       />
+
+      {serverHealth && (
+        <Form.Description
+          title="Server Status"
+          text={`${isHealthy ? "✅ Online" : "❌ Offline"} (${latency}ms)`}
+        />
+      )}
+
+      {requestHistory.length > 0 && (
+        <Form.Description
+          title="Recent Requests"
+          text={`${requestHistory.length} cached requests`}
+        />
+      )}
     </Form>
   );
 }

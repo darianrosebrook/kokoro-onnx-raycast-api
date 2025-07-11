@@ -1112,6 +1112,115 @@ async def get_status():
         }
 
 
+@app.get("/voices")
+async def get_voices():
+    """
+    Get list of available voices from the loaded TTS model.
+
+    This endpoint provides the complete list of voices that are currently
+    available in the loaded Kokoro model. This is essential for clients
+    to know which voices they can request for synthesis.
+
+    **Response Format**:
+    ```json
+    {
+        "voices": string[],
+        "total_voices": number,
+        "model_loaded": boolean,
+        "voice_categories": {
+            "af_*": number,
+            "bm_*": number,
+            "cm_*": number,
+            "cf_*": number,
+            "dm_*": number,
+            "bf_*": number,
+            "df_*": number
+        }
+    }
+    ```
+
+    **Voice Categories**:
+    - **af_***: Adult female voices
+    - **bm_***: Adult male voices  
+    - **cm_***: Child male voices
+    - **cf_***: Child female voices
+    - **dm_***: Deep male voices
+    - **bf_***: Bass female voices
+    - **df_***: Deep female voices
+
+    **Error Handling**:
+    - **503 Service Unavailable**: Model not loaded yet
+    - **500 Internal Server Error**: Error accessing voice data
+
+    **Use Cases**:
+    - Dynamic voice discovery for client applications
+    - Validation of voice parameters before synthesis
+    - Voice selection UI population
+    - Debugging voice availability issues
+    - API documentation and testing
+
+    @returns JSON object with available voices and metadata
+    @raises HTTPException: If model is not loaded or voice data unavailable
+    """
+    if not model_initialization_complete:
+        raise HTTPException(
+            status_code=503,
+            detail="TTS model not loaded. Please wait for initialization to complete."
+        )
+
+    try:
+        # Get the global Kokoro model instance
+        from api.model.loader import kokoro_model
+        
+        if kokoro_model is None:
+            raise HTTPException(
+                status_code=503,
+                detail="TTS model instance not available."
+            )
+
+        # Get available voices from the model
+        voices = kokoro_model.voices
+        
+        if not voices:
+            raise HTTPException(
+                status_code=500,
+                detail="No voices available in the loaded model."
+            )
+
+        # Convert to list if it's not already
+        voice_list = list(voices) if hasattr(voices, '__iter__') and not isinstance(voices, str) else voices
+
+        # Categorize voices by prefix for better organization
+        voice_categories = {}
+        for voice in voice_list:
+            if isinstance(voice, str) and '_' in voice:
+                prefix = voice.split('_')[0] + '_*'
+                voice_categories[prefix] = voice_categories.get(prefix, 0) + 1
+
+        return {
+            "voices": voice_list,
+            "total_voices": len(voice_list),
+            "model_loaded": True,
+            "voice_categories": voice_categories,
+            "recommended_voices": {
+                "high_quality_female": "af_heart",
+                "high_quality_male": "bm_fable", 
+                "natural_female": "af_sky",
+                "natural_male": "bm_atlas"
+            }
+        }
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"❌ Voices endpoint error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve voice information: {str(e)}"
+        )
+
+
 @app.post("/v1/audio/speech")
 async def create_speech(request: Request, tts_request: TTSRequest, config: TTSConfig = Depends(get_tts_config)):
     """

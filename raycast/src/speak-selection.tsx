@@ -16,17 +16,16 @@
 import { getSelectedText, showToast, Toast, getPreferenceValues } from "@raycast/api";
 
 import { TTSSpeechProcessor } from "./utils/tts-processor";
+import { getValidatedVoice } from "./utils/voice-manager";
 import type { StatusUpdate } from "./types";
 
 /**
  * Raycast command to speak currently selected text using the TTS processor
  */
-
 export default async function SpeakSelection() {
   let processor: TTSSpeechProcessor | undefined;
 
   const onStatusUpdate = (status: StatusUpdate) => {
-    console.log("onStatusUpdate", status);
     const toastOptions: Toast.Options = {
       style: status.style,
       title: status.message,
@@ -72,11 +71,23 @@ export default async function SpeakSelection() {
       title: "Processing text for speech...",
     });
 
-    // Create processor and process text
-    // Get user preferences first
+    // Get user preferences with enhanced validation
     const prefs = getPreferenceValues();
-    prefs.onStatusUpdate = onStatusUpdate;
-    processor = new TTSSpeechProcessor(prefs);
+    const serverUrl = prefs.serverUrl || "http://localhost:8000";
+
+    // Validate and get the best available voice
+    const validatedVoice = await getValidatedVoice(prefs.voice || "af_heart", serverUrl);
+
+    // Create processor with validated voice
+    processor = new TTSSpeechProcessor({
+      voice: validatedVoice,
+      speed: prefs.speed || "1.0",
+      serverUrl: serverUrl,
+      useStreaming: prefs.useStreaming ?? true,
+      sentencePauses: prefs.sentencePauses ?? false,
+      maxSentenceLength: prefs.maxSentenceLength || "0",
+      onStatusUpdate,
+    });
 
     console.log("Starting TTS processing...");
     // This will await until playback is completely finished

@@ -19,7 +19,7 @@ export interface VoiceConfig {
 export const VOICES: Record<VoiceOption, VoiceConfig> = {
   af_heart: {
     name: "af_heart",
-    traits: "❤️",
+    traits: "🚺❤️",
     targetQuality: "A",
     trainingDuration: "",
     overallGrade: "",
@@ -27,7 +27,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_alloy: {
     name: "af_alloy",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -35,7 +35,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_aoede: {
     name: "af_aoede",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "H hours",
     overallGrade: "C+",
@@ -43,7 +43,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_bella: {
     name: "af_bella",
-    traits: "",
+    traits: "🚺🔥",
     targetQuality: "A",
     trainingDuration: "HH hours",
     overallGrade: "A-",
@@ -51,7 +51,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_jessica: {
     name: "af_jessica",
-    traits: "",
+    traits: "🚺",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -59,7 +59,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_kore: {
     name: "af_kore",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "H hours",
     overallGrade: "C+",
@@ -67,7 +67,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_nicole: {
     name: "af_nicole",
-    traits: "",
+    traits: "🚺🎧",
     targetQuality: "B",
     trainingDuration: "HH hours",
     overallGrade: "B-",
@@ -75,7 +75,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_nova: {
     name: "af_nova",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -83,7 +83,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_river: {
     name: "af_river",
-    traits: "",
+    traits: "🚺",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -91,7 +91,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_sarah: {
     name: "af_sarah",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "H hours",
     overallGrade: "C+",
@@ -99,15 +99,15 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   af_sky: {
     name: "af_sky",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
-    trainingDuration: "M minutes ",
+    trainingDuration: "M minutes 🤏",
     overallGrade: "C-",
     sha256: "c799548a",
   },
   am_adam: {
     name: "am_adam",
-    traits: "",
+    traits: "🚹",
     targetQuality: "D",
     trainingDuration: "H hours",
     overallGrade: "F+",
@@ -115,7 +115,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   am_echo: {
     name: "am_echo",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -123,7 +123,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   am_eric: {
     name: "am_eric",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -131,7 +131,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   am_fenrir: {
     name: "am_fenrir",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
     trainingDuration: "H hours",
     overallGrade: "C+",
@@ -139,7 +139,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   am_liam: {
     name: "am_liam",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -147,7 +147,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   am_michael: {
     name: "am_michael",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
     trainingDuration: "H hours",
     overallGrade: "C+",
@@ -155,7 +155,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   am_onyx: {
     name: "am_onyx",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -163,7 +163,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   am_puck: {
     name: "am_puck",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
     trainingDuration: "H hours",
     overallGrade: "C+",
@@ -171,16 +171,16 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   am_santa: {
     name: "am_santa",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
-    trainingDuration: "M minutes ",
+    trainingDuration: "M minutes 🤏",
     overallGrade: "D-",
     sha256: "7f2f7582",
   },
   // British English
   bf_alice: {
     name: "bf_alice",
-    traits: "",
+    traits: "🚺",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -188,7 +188,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   bf_emma: {
     name: "bf_emma",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "HH hours",
     overallGrade: "B-",
@@ -196,7 +196,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   bf_isabella: {
     name: "bf_isabella",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -204,7 +204,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   bf_lily: {
     name: "bf_lily",
-    traits: "",
+    traits: "🚺",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -212,7 +212,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   bm_daniel: {
     name: "bm_daniel",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -220,7 +220,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   bm_fable: {
     name: "bm_fable",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -228,7 +228,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   bm_george: {
     name: "bm_george",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -236,7 +236,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   bm_lewis: {
     name: "bm_lewis",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "H hours",
     overallGrade: "D+",
@@ -245,7 +245,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   // Japanese
   jf_alpha: {
     name: "jf_alpha",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "H hours",
     overallGrade: "C+",
@@ -253,7 +253,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   jf_gongitsune: {
     name: "jf_gongitsune",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -261,15 +261,15 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   jf_nezumi: {
     name: "jf_nezumi",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
-    trainingDuration: "M minutes ",
+    trainingDuration: "M minutes 🤏",
     overallGrade: "C-",
     sha256: "d83f007a",
   },
   jf_tebukuro: {
     name: "jf_tebukuro",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -277,16 +277,16 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   jm_kumo: {
     name: "jm_kumo",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
-    trainingDuration: "M minutes ",
+    trainingDuration: "M minutes 🤏",
     overallGrade: "C-",
     sha256: "98340afd",
   },
   // Mandarin Chinese
   zf_xiaobei: {
     name: "zf_xiaobei",
-    traits: "",
+    traits: "🚺",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -294,7 +294,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   zf_xiaoni: {
     name: "zf_xiaoni",
-    traits: "",
+    traits: "🚺",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -302,7 +302,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   zf_xiaoxiao: {
     name: "zf_xiaoxiao",
-    traits: "",
+    traits: "🚺",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -310,7 +310,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   zf_xiaoyi: {
     name: "zf_xiaoyi",
-    traits: "",
+    traits: "🚺",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -318,7 +318,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   zm_yunjian: {
     name: "zm_yunjian",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -326,7 +326,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   zm_yunxi: {
     name: "zm_yunxi",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -334,7 +334,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   zm_yunxia: {
     name: "zm_yunxia",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -342,7 +342,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   zm_yunyang: {
     name: "zm_yunyang",
-    traits: "",
+    traits: "🚹",
     targetQuality: "C",
     trainingDuration: "MM minutes",
     overallGrade: "D",
@@ -351,7 +351,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   // Spanish
   ef_dora: {
     name: "ef_dora",
-    traits: "",
+    traits: "🚺",
     targetQuality: "",
     trainingDuration: "",
     overallGrade: "",
@@ -359,7 +359,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   em_alex: {
     name: "em_alex",
-    traits: "",
+    traits: "🚹",
     targetQuality: "",
     trainingDuration: "",
     overallGrade: "",
@@ -367,7 +367,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   em_santa: {
     name: "em_santa",
-    traits: "",
+    traits: "🚹",
     targetQuality: "",
     trainingDuration: "",
     overallGrade: "",
@@ -376,7 +376,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   // French
   ff_siwis: {
     name: "ff_siwis",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "<11 hours",
     overallGrade: "B-",
@@ -385,7 +385,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   // Hindi
   hf_alpha: {
     name: "hf_alpha",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -393,7 +393,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   hf_beta: {
     name: "hf_beta",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -401,7 +401,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   hm_omega: {
     name: "hm_omega",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -409,7 +409,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   hm_psi: {
     name: "hm_psi",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -418,7 +418,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   // Italian
   if_sara: {
     name: "if_sara",
-    traits: "",
+    traits: "🚺",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -426,7 +426,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   im_nicola: {
     name: "im_nicola",
-    traits: "",
+    traits: "🚹",
     targetQuality: "B",
     trainingDuration: "MM minutes",
     overallGrade: "C",
@@ -435,7 +435,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   // Brazilian Portuguese
   pf_dora: {
     name: "pf_dora",
-    traits: "",
+    traits: "🚺",
     targetQuality: "",
     trainingDuration: "",
     overallGrade: "",
@@ -443,7 +443,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   pm_alex: {
     name: "pm_alex",
-    traits: "",
+    traits: "🚹",
     targetQuality: "",
     trainingDuration: "",
     overallGrade: "",
@@ -451,7 +451,7 @@ export const VOICES: Record<VoiceOption, VoiceConfig> = {
   },
   pm_santa: {
     name: "pm_santa",
-    traits: "",
+    traits: "🚹",
     targetQuality: "",
     trainingDuration: "",
     overallGrade: "",
