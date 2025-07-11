@@ -321,7 +321,8 @@ async def stream_tts_audio(
         'last_chunk_end_time': None,
         'total_audio_duration_ms': 0,
         'timing_gaps': [],
-        'timing_overlaps': []
+        'timing_overlaps': [],
+        'stream_start_time': time.monotonic()  # Track when streaming actually starts
     }
 
     try:
@@ -402,11 +403,14 @@ async def stream_tts_audio(
                 # FIXED: Dynamic audio-duration-based pacing
                 # Calculate actual audio duration from chunk size instead of using fixed delays
                 if len(audio_output_buffer.getvalue()) > 0:  # More chunks pending
-                    # Use 80% of actual audio duration for pacing to allow slight overlap
-                    # This ensures smooth playback while preventing buffer underruns
-                    pacing_delay = (actual_audio_duration_ms / 1000) * 0.8
+                    # FIXED: Use 95% of actual audio duration for more conservative pacing
+                    # This prevents overlaps while still allowing for smooth streaming
+                    pacing_delay = (actual_audio_duration_ms / 1000) * 0.95
                     
-                    logger.debug(f"[{request_id}] Chunk {chunk_timing_state['chunk_count']} pacing delay: {pacing_delay*1000:.1f}ms")
+                    # Additional safety: minimum 10ms delay to prevent burst streaming
+                    pacing_delay = max(pacing_delay, 0.01)
+                    
+                    logger.debug(f"[{request_id}] Chunk {chunk_timing_state['chunk_count']} audio_duration: {actual_audio_duration_ms:.1f}ms, pacing_delay: {pacing_delay*1000:.1f}ms")
                     await asyncio.sleep(pacing_delay)
 
             # Enhanced memory management for buffer
@@ -453,24 +457,42 @@ async def stream_tts_audio(
     finally:
         # Enhanced streaming performance summary with timing analysis
         if chunk_timing_state['chunk_count'] > 0:
-            total_streaming_time = time.monotonic() - last_yield_time if last_yield_time else 0
+            # FIXED: Calculate streaming time from start to end, not from last yield
+            stream_start_time = chunk_timing_state.get('stream_start_time', None)
+            if stream_start_time is None:
+                # Fallback: estimate from first chunk timing
+                total_streaming_time = (chunk_timing_state['total_audio_duration_ms'] / 1000) * 0.95
+            else:
+                total_streaming_time = time.monotonic() - stream_start_time
+            
             avg_gap = sum(chunk_timing_state['timing_gaps']) / len(chunk_timing_state['timing_gaps']) if chunk_timing_state['timing_gaps'] else 0
             avg_overlap = sum(chunk_timing_state['timing_overlaps']) / len(chunk_timing_state['timing_overlaps']) if chunk_timing_state['timing_overlaps'] else 0
+            
+            # FIXED: Correct streaming efficiency calculation
+            # Efficiency = (time stream should take) / (time stream actually took)
+            expected_streaming_time = chunk_timing_state['total_audio_duration_ms'] / 1000
+            streaming_efficiency = (expected_streaming_time / total_streaming_time * 100) if total_streaming_time > 0 else 0
             
             logger.info(f"[{request_id}] 📊 Streaming Performance Summary:")
             logger.info(f"[{request_id}]   - Total chunks: {chunk_timing_state['chunk_count']}")
             logger.info(f"[{request_id}]   - Total audio duration: {chunk_timing_state['total_audio_duration_ms']:.0f}ms")
-            logger.info(f"[{request_id}]   - Streaming efficiency: {((chunk_timing_state['total_audio_duration_ms'] / 1000) / total_streaming_time * 100):.1f}% of real-time" if total_streaming_time > 0 else "N/A")
+            logger.info(f"[{request_id}]   - Actual streaming time: {total_streaming_time*1000:.0f}ms")
+            logger.info(f"[{request_id}]   - Streaming efficiency: {streaming_efficiency:.1f}% (target: 80-100%)")
             logger.info(f"[{request_id}]   - Timing gaps: {len(chunk_timing_state['timing_gaps'])} (avg: {avg_gap:.1f}ms)")
             logger.info(f"[{request_id}]   - Timing overlaps: {len(chunk_timing_state['timing_overlaps'])} (avg: {avg_overlap:.1f}ms)")
             
-            # Warn about potential streaming issues
-            if len(chunk_timing_state['timing_gaps']) > chunk_timing_state['chunk_count'] * 0.3:
-                logger.warning(f"[{request_id}] ⚠️ High number of timing gaps detected - may indicate buffering issues")
+            # Enhanced warnings with specific guidance
+            overlap_percentage = (len(chunk_timing_state['timing_overlaps']) / chunk_timing_state['chunk_count']) * 100
+            if overlap_percentage > 50:
+                logger.warning(f"[{request_id}] ⚠️ High overlap rate ({overlap_percentage:.0f}%) - chunks arriving too fast")
+            if streaming_efficiency > 200:
+                logger.warning(f"[{request_id}] ⚠️ Streaming too fast ({streaming_efficiency:.0f}%) - reduce pacing delay")
+            elif streaming_efficiency < 50:
+                logger.warning(f"[{request_id}] ⚠️ Streaming too slow ({streaming_efficiency:.0f}%) - increase pacing delay")
             if avg_gap > 100:
-                logger.warning(f"[{request_id}] ⚠️ Large average gap ({avg_gap:.1f}ms) - streaming may be too slow")
+                logger.warning(f"[{request_id}] ⚠️ Large average gap ({avg_gap:.1f}ms) - may cause audio stuttering")
             if avg_overlap > 50:
-                logger.warning(f"[{request_id}] ⚠️ Large average overlap ({avg_overlap:.1f}ms) - streaming may be too fast")
+                logger.warning(f"[{request_id}] ⚠️ Large average overlap ({avg_overlap:.1f}ms) - may cause buffer overflow")
         
         logger.info(f"[{request_id}] Cleaning up stream resources.")
         for task in list(tasks.values()):
