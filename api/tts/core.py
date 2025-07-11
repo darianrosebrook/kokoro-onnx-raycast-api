@@ -360,6 +360,15 @@ async def stream_tts_audio(
                 logger.debug(f"[{request_id}] Yielding chunk of {len(chunk)} bytes.")
                 yield chunk
                 last_yield_time = time.monotonic()
+                
+                # Add intelligent chunk pacing for better streaming experience
+                # Target: 50ms chunk duration for smooth playback
+                # Only pace if we have more chunks to send (don't delay the last chunk)
+                if len(audio_output_buffer.getvalue()) > 0:  # More chunks pending
+                    chunk_duration_ms = TTSConfig.CHUNK_DURATION_MS
+                    # Add small random variation to prevent rigid timing
+                    pacing_delay = (chunk_duration_ms / 1000) * 0.8  # 80% of chunk duration
+                    await asyncio.sleep(pacing_delay)
 
             # Enhanced memory management for buffer
             remaining_data = audio_output_buffer.read()
