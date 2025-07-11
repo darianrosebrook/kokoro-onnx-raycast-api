@@ -403,12 +403,12 @@ async def stream_tts_audio(
                 # FIXED: Dynamic audio-duration-based pacing
                 # Calculate actual audio duration from chunk size instead of using fixed delays
                 if len(audio_output_buffer.getvalue()) > 0:  # More chunks pending
-                    # FIXED: Use 95% of actual audio duration for more conservative pacing
-                    # This prevents overlaps while still allowing for smooth streaming
-                    pacing_delay = (actual_audio_duration_ms / 1000) * 0.95
+                    # FIXED: Use 80% of actual audio duration for optimal streaming efficiency
+                    # This allows the stream to catch up and achieve 80-100% efficiency target
+                    pacing_delay = (actual_audio_duration_ms / 1000) * 0.8
                     
-                    # Additional safety: minimum 10ms delay to prevent burst streaming
-                    pacing_delay = max(pacing_delay, 0.01)
+                    # Additional safety: minimum 5ms delay to prevent burst streaming
+                    pacing_delay = max(pacing_delay, 0.005)
                     
                     logger.debug(f"[{request_id}] Chunk {chunk_timing_state['chunk_count']} audio_duration: {actual_audio_duration_ms:.1f}ms, pacing_delay: {pacing_delay*1000:.1f}ms")
                     await asyncio.sleep(pacing_delay)
