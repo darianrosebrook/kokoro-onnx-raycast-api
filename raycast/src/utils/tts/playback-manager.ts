@@ -22,6 +22,7 @@ import { writeFile, unlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { logger } from "../core/logger";
+import { TTS_CONSTANTS } from "../validation/tts-types";
 import type {
   PlaybackContext,
   PlaybackState,
@@ -29,7 +30,6 @@ import type {
   IPlaybackManager,
   TTSProcessorConfig,
   VoiceOption,
-  TTS_CONSTANTS,
 } from "../validation/tts-types";
 
 /**
