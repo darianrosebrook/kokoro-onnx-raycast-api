@@ -401,12 +401,28 @@ export class TTSSpeechProcessor {
                   );
                 } catch (streamError) {
                   console.error("PHASE 1 OPTIMIZATION: Failed to stream chunk:", streamError);
-                  console.error("🚨 TRIGGERING ABORT due to streaming error");
-                  this.abortController?.abort();
-                  throw streamError;
+
+                  // Check if this is a normal termination (SIGTERM) vs actual error
+                  const errorMessage =
+                    streamError instanceof Error ? streamError.message : String(streamError);
+                  const isNormalTermination =
+                    errorMessage.includes("SIGTERM") ||
+                    errorMessage.includes("normal termination") ||
+                    errorMessage.includes("process ended");
+
+                  if (isNormalTermination) {
+                    console.log("✅ Normal termination detected - continuing without fallback");
+                    // Don't abort or fallback for normal termination
+                    return;
+                  } else {
+                    console.error("🚨 TRIGGERING ABORT due to streaming error");
+                    this.abortController?.abort();
+                    throw streamError;
+                  }
                 }
               } else {
                 // LEGACY: Sequential playback for non-streaming mode
+                console.log("🔍 DEBUGGING: Using legacy playback mode (non-streaming)");
                 const playbackContext = {
                   audioData: chunk.data,
                   format: {
@@ -446,7 +462,25 @@ export class TTSSpeechProcessor {
 
       // PHASE 1 OPTIMIZATION: End streaming playback
       if (streamingPlayback) {
-        await streamingPlayback.endStream();
+        try {
+          await streamingPlayback.endStream();
+          console.log("✅ Streaming playback ended gracefully");
+        } catch (endStreamError) {
+          // Check if this is a normal termination
+          const errorMessage =
+            endStreamError instanceof Error ? endStreamError.message : String(endStreamError);
+          const isNormalTermination =
+            errorMessage.includes("SIGTERM") ||
+            errorMessage.includes("normal termination") ||
+            errorMessage.includes("process ended");
+
+          if (isNormalTermination) {
+            console.log("✅ Normal termination during endStream - continuing");
+          } else {
+            console.error("Failed to end streaming playback:", endStreamError);
+            // Don't throw for endStream errors - they're not critical
+          }
+        }
       }
 
       if (!signal.aborted) {
