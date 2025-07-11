@@ -253,6 +253,7 @@ export class PlaybackManager implements IPlaybackManager {
     // Spawn afplay process with PCM format configuration
     const afplayProcess = spawn("afplay", afplayArgs, {
       stdio: ["pipe", "pipe", "pipe"],
+      detached: false, // Keep process attached to prevent premature termination
     });
 
     // Log afplay process creation
@@ -271,8 +272,9 @@ export class PlaybackManager implements IPlaybackManager {
 
     this.currentSession.process = afplayProcess;
     this.currentSession.isPlaying = true;
+    this.currentSession.isPaused = false;
+    this.currentSession.isStopped = false;
 
-    // CRITICAL DEBUGGING: Monitor process state
     console.log(`Starting afplay process with PID: ${afplayProcess.pid}`);
     console.log(`afplay process stdin available: ${!!afplayProcess.stdin}`);
     console.log(`afplay process killed status: ${afplayProcess.killed}`);
@@ -280,11 +282,13 @@ export class PlaybackManager implements IPlaybackManager {
     // Handle process events with detailed logging
     let processEnded = false;
     let closeReason = "unknown";
+    let isNormalTermination = false;
 
     const processEndPromise = new Promise<void>((resolve, reject) => {
       afplayProcess.on("close", (code, signal) => {
         processEnded = true;
         closeReason = `code=${code}, signal=${signal}`;
+        isNormalTermination = code === 0 || signal === "SIGTERM";
 
         logger.info("PHASE 1 OPTIMIZATION: afplay process closed", {
           component: this.name,
@@ -292,11 +296,13 @@ export class PlaybackManager implements IPlaybackManager {
           sessionId,
           exitCode: code,
           exitSignal: signal,
+          isNormalTermination,
         });
 
         console.log(`afplay process closed: code=${code}, signal=${signal}`);
 
-        if (code === 0) {
+        if (isNormalTermination) {
+          console.log("✅ afplay process terminated normally");
           resolve();
         } else {
           const error = new Error(`afplay process exited with code ${code}, signal ${signal}`);
@@ -342,12 +348,23 @@ export class PlaybackManager implements IPlaybackManager {
       }
     });
 
-    // Handle abort signal
+    // Handle abort signal with better coordination
     const onAbort = () => {
-      console.log("🚨 ABORT SIGNAL RECEIVED - killing afplay process");
+      console.log("🚨 ABORT SIGNAL RECEIVED - coordinating afplay shutdown");
       console.log("🚨 Stack trace at abort:", new Error().stack);
+
       if (!processEnded && !afplayProcess.killed) {
+        // Give afplay a chance to finish gracefully
+        console.log("🚨 Sending SIGTERM to afplay for graceful shutdown");
         afplayProcess.kill("SIGTERM");
+
+        // Wait a bit for graceful shutdown, then force kill if needed
+        setTimeout(() => {
+          if (!processEnded && !afplayProcess.killed) {
+            console.log("🚨 Force killing afplay with SIGKILL");
+            afplayProcess.kill("SIGKILL");
+          }
+        }, 1000);
       }
     };
     signal.addEventListener("abort", onAbort);
@@ -378,6 +395,15 @@ export class PlaybackManager implements IPlaybackManager {
           console.error(`  - Process killed: ${afplayProcess.killed}`);
           console.error(`  - Process PID: ${afplayProcess.pid}`);
           console.error(`  - Stdin available: ${!!afplayProcess.stdin}`);
+          console.error(`  - Close reason: ${closeReason}`);
+          console.error(`  - Normal termination: ${isNormalTermination}`);
+
+          // Don't throw error if it was a normal termination
+          if (isNormalTermination) {
+            console.log("✅ Ignoring write attempt after normal termination");
+            return;
+          }
+
           throw new Error(error);
         }
 
@@ -443,6 +469,7 @@ export class PlaybackManager implements IPlaybackManager {
         console.log("Ending stream - closing afplay stdin");
 
         if (!processEnded && !afplayProcess.killed && afplayProcess.stdin) {
+          console.log("🔍 DEBUGGING: Closing afplay stdin gracefully");
           afplayProcess.stdin.end();
         }
 
@@ -459,8 +486,15 @@ export class PlaybackManager implements IPlaybackManager {
 
         try {
           await Promise.race([processEndPromise, timeoutPromise]);
+          console.log("✅ afplay process ended gracefully");
         } catch (error) {
           console.error("Error while ending stream:", error);
+          // Don't throw if it was a normal termination
+          if (isNormalTermination) {
+            console.log("✅ Stream ended normally despite timeout");
+          } else {
+            throw error;
+          }
         }
 
         // Clean up
@@ -471,9 +505,11 @@ export class PlaybackManager implements IPlaybackManager {
           method: "endStream",
           sessionId,
           closeReason,
+          isNormalTermination,
         });
 
         console.log(`Stream ended. Final close reason: ${closeReason}`);
+        console.log(`Normal termination: ${isNormalTermination}`);
       },
     };
   }
