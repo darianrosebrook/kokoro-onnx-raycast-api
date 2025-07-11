@@ -165,7 +165,8 @@ export default function SpeakTextSimple() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isBenchmarking, setIsBenchmarking] = useState(false);
-  const [voiceOptions, setVoiceOptions] = useState<{ value: VoiceOption; title: string }[]>([]);
+  const [voiceOptions, setVoiceOptions] =
+    useState<{ value: VoiceOption; title: string }[]>(_VOICE_OPTIONS);
   const [_isLoadingVoices, setIsLoadingVoices] = useState(true);
   const processorRef = useRef<TTSSpeechProcessor | null>(null);
   const toastRef = useRef<Toast | null>(null);
@@ -214,9 +215,14 @@ export default function SpeakTextSimple() {
   // Cleanup processor on unmount
   useEffect(() => {
     return () => {
-      processorRef.current?.stop();
+      // Only stop if the processor is still actively processing
+      // Don't interrupt natural playback completion
+      if (processorRef.current && isProcessing && !processorRef.current.paused) {
+        console.log("Component unmounting, stopping active TTS processor");
+        processorRef.current.stop();
+      }
     };
-  }, []);
+  }, [isProcessing]);
 
   const handleStart = async () => {
     if (isProcessing) {
@@ -280,7 +286,12 @@ export default function SpeakTextSimple() {
         if (processorRef.current === newProcessor) {
           setIsProcessing(false);
           setIsPaused(false);
-          processorRef.current = null;
+          // Clear processor reference after a delay to allow natural cleanup
+          setTimeout(() => {
+            if (processorRef.current === newProcessor) {
+              processorRef.current = null;
+            }
+          }, 100);
           toastRef.current?.hide();
           toastRef.current = null;
         }

@@ -18,6 +18,9 @@
  */
 
 import { spawn, ChildProcess } from "child_process";
+import { writeFile, unlink } from "fs/promises";
+import { join } from "path";
+import { tmpdir } from "os";
 import { logger } from "../core/logger";
 import type {
   IPlaybackManager,
@@ -235,12 +238,15 @@ export class PlaybackManager implements IPlaybackManager {
       return;
     }
 
+    // Clean stop operation
+
     this.currentSession.isStopped = true;
     this.currentSession.isPlaying = false;
     this.currentSession.isPaused = false;
 
     // Kill the playback process
     if (this.currentSession.process && !this.currentSession.process.killed) {
+      // Terminating afplay process
       this.currentSession.process.kill();
       this.currentSession.process = null;
     }
@@ -296,13 +302,28 @@ export class PlaybackManager implements IPlaybackManager {
     if (!this.currentSession) {
       throw new Error("No active playback session");
     }
-
+    logger.debug("Starting playback", {
+      component: this.name,
+      method: "startPlayback",
+      sessionId: this.currentSession?.id,
+    });
     const { context } = this.currentSession;
 
     // Validate audio data
     if (!context.audioData?.length) {
+      logger.warn("Empty audio data provided to PlaybackManager", {
+        component: this.name,
+        method: "startPlayback",
+        sessionId: this.currentSession?.id,
+      });
       throw new Error("Empty audio data provided");
     }
+    logger.debug("Audio data size:", {
+      audioSize: context.audioData.length,
+      component: this.name,
+      method: "startPlayback",
+      sessionId: this.currentSession?.id,
+    });
 
     // Check if we should wait for pause
     if (this.currentSession.pausePromise) {
@@ -317,10 +338,184 @@ export class PlaybackManager implements IPlaybackManager {
     this.currentSession.isPlaying = true;
 
     try {
-      // Create afplay process with stdin piping
-      const playProcess = spawn("afplay", ["-"], {
-        stdio: ["pipe", "ignore", "ignore"],
-        detached: this.config.backgroundPlayback,
+      // Create temporary file for afplay (since afplay doesn't support stdin)
+      const tempFile = join(
+        tmpdir(),
+        `tts-audio-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.wav`
+      );
+
+      logger.debug("Creating temporary audio file", {
+        component: this.name,
+        method: "startPlayback",
+        sessionId: this.currentSession?.id,
+        tempFile,
+        audioSize: context.audioData.length,
+      });
+
+      // Write audio data to temporary file
+      await writeFile(tempFile, context.audioData);
+
+      // Ensure file is fully written and flushed
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Verify the temporary file was written correctly
+      const { stat } = await import("fs/promises");
+      const fileStats = await stat(tempFile);
+      console.log(`Temporary file written: ${tempFile}`);
+      console.log(`File size on disk: ${fileStats.size} bytes`);
+      console.log(`Expected size: ${context.audioData.length} bytes`);
+      console.log(`File size match: ${fileStats.size === context.audioData.length}`);
+
+      // Debug: Check WAV header and calculate expected duration
+      // WAV header is 44 bytes, audio data starts at byte 44
+      const audioDataSize = context.audioData.length - 44;
+      const bytesPerSample = context.format.bitDepth / 8;
+      const expectedDurationMs =
+        (audioDataSize / (context.format.sampleRate * context.format.channels * bytesPerSample)) *
+        1000;
+
+      console.log(
+        `Audio debug: ${context.audioData.length} bytes, expected duration: ${expectedDurationMs.toFixed(1)}ms`
+      );
+
+      // Check WAV header properly
+      const riffHeader = context.audioData.slice(0, 4);
+      const waveHeader = context.audioData.slice(8, 12);
+
+      console.log(
+        `WAV header bytes: ${Array.from(riffHeader)
+          .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+          .join(" ")}`
+      );
+      console.log(
+        `WAV format bytes: ${Array.from(waveHeader)
+          .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+          .join(" ")}`
+      );
+
+      const isValidRiff =
+        riffHeader[0] === 0x52 &&
+        riffHeader[1] === 0x49 &&
+        riffHeader[2] === 0x46 &&
+        riffHeader[3] === 0x46;
+      const isValidWave =
+        waveHeader[0] === 0x57 &&
+        waveHeader[1] === 0x41 &&
+        waveHeader[2] === 0x56 &&
+        waveHeader[3] === 0x45;
+
+      console.log(`WAV header check: ${isValidRiff ? "Valid RIFF" : "Invalid RIFF"}`);
+      console.log(`WAV format check: ${isValidWave ? "Valid WAVE" : "Invalid WAVE"}`);
+
+      // Check WAV format parameters (WAV uses little-endian)
+      // WAV format chunk starts at byte 12, format data starts at byte 20
+      const formatChunk = context.audioData.slice(12, 36);
+
+      // Debug: Show the entire format chunk area
+      console.log(
+        `Format chunk area (bytes 12-35): ${Array.from(formatChunk)
+          .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+          .join(" ")}`
+      );
+
+      // Read format parameters from correct offsets (WAV format chunk structure):
+      // Bytes 0-3: "fmt " (format chunk identifier)
+      // Bytes 4-7: chunk size (16 bytes, little-endian)
+      // Bytes 8-9: audio format (1 = PCM, little-endian)
+      // Bytes 10-11: channels (1 = mono, little-endian)
+      // Bytes 12-15: sample rate (24000, little-endian)
+      // Bytes 16-19: byte rate
+      // Bytes 20-21: block align
+      // Bytes 22-23: bits per sample (16, little-endian)
+      const audioFormat = formatChunk[8] | (formatChunk[9] << 8);
+      const numChannels = formatChunk[10] | (formatChunk[11] << 8);
+      const sampleRate =
+        formatChunk[12] |
+        (formatChunk[13] << 8) |
+        (formatChunk[14] << 16) |
+        (formatChunk[15] << 24);
+      const bitsPerSample = formatChunk[22] | (formatChunk[23] << 8);
+
+      // Debug: Show raw bytes for verification
+      console.log(
+        `Format chunk bytes 8-9 (audio format): ${Array.from(formatChunk.slice(8, 10))
+          .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+          .join(" ")}`
+      );
+      console.log(
+        `Format chunk bytes 10-11 (channels): ${Array.from(formatChunk.slice(10, 12))
+          .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+          .join(" ")}`
+      );
+      console.log(
+        `Format chunk bytes 12-15 (sample rate): ${Array.from(formatChunk.slice(12, 16))
+          .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+          .join(" ")}`
+      );
+      console.log(
+        `Format chunk bytes 22-23 (bits per sample): ${Array.from(formatChunk.slice(22, 24))
+          .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+          .join(" ")}`
+      );
+
+      console.log(
+        `WAV format parameters: AudioFormat=${audioFormat}, Channels=${numChannels}, SampleRate=${sampleRate}, BitsPerSample=${bitsPerSample}`
+      );
+
+      // Check if format is supported by afplay
+      const isSupportedFormat = audioFormat === 1; // PCM
+      const isSupportedChannels = numChannels === 1 || numChannels === 2; // Mono or Stereo
+      const isSupportedSampleRate = sampleRate >= 8000 && sampleRate <= 192000;
+      const isSupportedBitsPerSample =
+        bitsPerSample === 8 || bitsPerSample === 16 || bitsPerSample === 24 || bitsPerSample === 32;
+
+      console.log(
+        `Format compatibility: AudioFormat=${isSupportedFormat ? "Supported" : "Unsupported"}, Channels=${isSupportedChannels ? "Supported" : "Unsupported"}, SampleRate=${isSupportedSampleRate ? "Supported" : "Unsupported"}, BitsPerSample=${isSupportedBitsPerSample ? "Supported" : "Unsupported"}`
+      );
+
+      // Check WAV data chunk (should be at byte 36 for standard WAV)
+      const dataChunkStart = 36;
+      const dataChunkHeader = context.audioData.slice(dataChunkStart, dataChunkStart + 8);
+
+      if (dataChunkHeader.length >= 8) {
+        const dataChunkId = String.fromCharCode(...dataChunkHeader.slice(0, 4));
+        const dataChunkSize =
+          dataChunkHeader[4] |
+          (dataChunkHeader[5] << 8) |
+          (dataChunkHeader[6] << 16) |
+          (dataChunkHeader[7] << 24);
+
+        console.log(`Data chunk ID: "${dataChunkId}" (should be "data")`);
+        console.log(`Data chunk size: ${dataChunkSize} bytes`);
+        console.log(
+          `Actual remaining data: ${context.audioData.length - dataChunkStart - 8} bytes`
+        );
+        console.log(
+          `Expected vs actual data size match: ${dataChunkSize === context.audioData.length - dataChunkStart - 8}`
+        );
+      }
+
+      // Test the file with afinfo before playing
+      const { spawn: spawnSync } = await import("child_process");
+      const afinfoProcess = spawnSync("afinfo", [tempFile], { stdio: "pipe" });
+
+      afinfoProcess.stdout.on("data", (data) => {
+        console.log(`afinfo output: ${data.toString()}`);
+      });
+
+      afinfoProcess.stderr.on("data", (data) => {
+        console.log(`afinfo error: ${data.toString()}`);
+      });
+
+      // Create afplay process with temporary file
+      console.log(`Starting afplay with file: ${tempFile}`);
+      const playProcess = spawn("afplay", [tempFile], {
+        stdio: ["ignore", "ignore", "pipe"], // capture stderr only
+        detached: false, // Don't detach - we want to wait for completion
+      });
+
+      playProcess.stderr.on("data", (data) => {
+        console.error("afplay stderr:", data.toString());
       });
 
       this.currentSession.process = playProcess;
@@ -332,14 +527,33 @@ export class PlaybackManager implements IPlaybackManager {
           method: "startPlayback",
           sessionId: this.currentSession?.id,
           error: error.message,
+          tempFile,
         });
+        console.error("afplay process error:", error.message);
       });
 
-      playProcess.on("close", (code) => {
+      playProcess.on("spawn", () => {
+        console.log(`afplay process spawned successfully (PID: ${playProcess.pid})`);
+      });
+
+      playProcess.on("exit", (code, signal) => {
+        console.log(`afplay process exited with code: ${code}, signal: ${signal}`);
+      });
+
+      playProcess.on("close", async (code) => {
         if (this.currentSession) {
           this.currentSession.isPlaying = false;
           this.currentSession.process = null;
         }
+
+        logger.info("afplay process closed", {
+          component: this.name,
+          method: "startPlayback",
+          sessionId: this.currentSession?.id,
+          code,
+          audioSize: context.audioData.length,
+          tempFile,
+        });
 
         if (code !== 0 && code !== null) {
           logger.warn("afplay process closed with non-zero code", {
@@ -347,26 +561,61 @@ export class PlaybackManager implements IPlaybackManager {
             method: "startPlayback",
             sessionId: this.currentSession?.id,
             code,
+            tempFile,
           });
+          console.error(`afplay process closed with code: ${code}`);
+        } else {
+          console.log(`afplay process completed successfully (code: ${code})`);
         }
+
+        // Delay cleanup to ensure afplay has finished
+        setTimeout(async () => {
+          try {
+            await unlink(tempFile);
+            logger.debug("Temporary audio file cleaned up", {
+              component: this.name,
+              method: "startPlayback",
+              tempFile,
+            });
+          } catch (cleanupError) {
+            logger.warn("Failed to clean up temporary audio file", {
+              component: this.name,
+              method: "startPlayback",
+              tempFile,
+              error: cleanupError instanceof Error ? cleanupError.message : "Unknown error",
+            });
+          }
+        }, 100);
       });
 
       // Handle abort signal
-      const onAbort = () => {
+      const onAbort = async () => {
         if (playProcess && !playProcess.killed) {
           playProcess.kill();
+        }
+        // Clean up temp file on abort
+        try {
+          await unlink(tempFile);
+        } catch (error) {
+          // Ignore cleanup errors on abort
         }
       };
       signal.addEventListener("abort", onAbort, { once: true });
 
-      // Write audio data to stdin
-      playProcess.stdin.write(context.audioData);
-      playProcess.stdin.end();
+      // Check if already aborted
+      if (signal.aborted) {
+        console.log("Signal already aborted, not starting afplay");
+        return;
+      }
 
       // Wait for playback completion
+      const playbackStartTime = performance.now();
       await new Promise<void>((resolve, reject) => {
         playProcess.on("close", (code) => {
           signal.removeEventListener("abort", onAbort);
+
+          const actualPlaybackTime = performance.now() - playbackStartTime;
+          console.log(`Actual playback time: ${actualPlaybackTime.toFixed(1)}ms`);
 
           if (this.currentSession?.isStopped || signal.aborted) {
             resolve();

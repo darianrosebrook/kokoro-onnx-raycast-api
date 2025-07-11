@@ -379,8 +379,12 @@ export class TextProcessor implements ITextProcessor {
     type: "paragraph" | "sentence" | "chunk"
   ): TextSegment[] {
     let offset = 0;
+    const MIN_SEGMENT_LENGTH = 3; // Minimum characters for meaningful audio
 
-    return textArray.map((text, index) => {
+    // Filter out very short segments that won't produce audio
+    const validSegments = textArray.filter((text) => text.trim().length >= MIN_SEGMENT_LENGTH);
+
+    return validSegments.map((text, index) => {
       const segment: TextSegment = {
         text,
         index,

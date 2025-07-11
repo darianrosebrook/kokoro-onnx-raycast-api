@@ -192,6 +192,21 @@ export class AudioStreamer implements IAudioStreamer {
       // Stream from server
       const audioData = await this.streamFromServer(request, context);
       logger.endTiming(timerId, { cached: false, success: true });
+
+      // Log audio data details for debugging
+      logger.info("Audio streaming completed", {
+        component: this.name,
+        method: "streamAudio",
+        requestId: context.requestId,
+        audioSize: audioData.length,
+        textLength: request.text.length,
+        voice: request.voice,
+      });
+
+      console.log(
+        `Audio streaming completed: ${audioData.length} bytes for text "${request.text.substring(0, 50)}..."`
+      );
+
       onChunk({
         data: audioData,
         index: 0,
@@ -273,9 +288,24 @@ export class AudioStreamer implements IAudioStreamer {
     }
 
     const combinedAudio = this.combineAudioChunks(chunks);
+
+    // Log combined audio details
+    logger.info("Audio chunks combined", {
+      component: this.name,
+      method: "streamFromServer",
+      chunkCount: chunks.length,
+      combinedSize: combinedAudio.length,
+      textLength: request.text.length,
+    });
+
+    console.log(`Combined ${chunks.length} audio chunks into ${combinedAudio.length} bytes`);
+
     if (combinedAudio.length > 0) {
       cacheManager.cacheTTSResponse(request, combinedAudio.buffer);
+    } else {
+      console.warn("Warning: Combined audio data is empty!");
     }
+
     return combinedAudio;
   }
 
@@ -289,6 +319,15 @@ export class AudioStreamer implements IAudioStreamer {
     const WAV_HEADER_SIZE = 44;
     const firstChunk = chunks[0];
 
+    // Debug: Check what's actually in the first chunk
+    console.log(`First chunk size: ${firstChunk.length} bytes`);
+    console.log(
+      `First chunk first 4 bytes: ${Array.from(firstChunk.slice(0, 4))
+        .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+        .join(" ")}`
+    );
+    console.log(`First chunk first 8 bytes as string: "${firstChunk.slice(0, 8).toString()}"`);
+
     // Verify first chunk has WAV header
     const hasWavHeader =
       firstChunk.length >= 4 &&
@@ -297,11 +336,14 @@ export class AudioStreamer implements IAudioStreamer {
       firstChunk[2] === 0x46 && // 'F'
       firstChunk[3] === 0x46; // 'F'
 
+    console.log(`WAV header detected: ${hasWavHeader}`);
+
     if (!hasWavHeader) {
       logger.warn("First chunk missing WAV header, using simple concatenation", {
         component: this.name,
         method: "combineAudioChunks",
       });
+      console.log("Using simple concatenation due to missing WAV header");
       return this.simpleConcatenation(chunks);
     }
 
@@ -335,15 +377,25 @@ export class AudioStreamer implements IAudioStreamer {
     const updatedHeader = new Uint8Array(wavHeader);
     const totalFileSize = WAV_HEADER_SIZE + totalAudioSize - 8;
 
+    // Update file size (bytes 4-7) - this is correct
     updatedHeader[4] = totalFileSize & 0xff;
     updatedHeader[5] = (totalFileSize >> 8) & 0xff;
     updatedHeader[6] = (totalFileSize >> 16) & 0xff;
     updatedHeader[7] = (totalFileSize >> 24) & 0xff;
 
+    // Update data chunk size (bytes 40-43) - this is correct
     updatedHeader[40] = totalAudioSize & 0xff;
     updatedHeader[41] = (totalAudioSize >> 8) & 0xff;
     updatedHeader[42] = (totalAudioSize >> 16) & 0xff;
     updatedHeader[43] = (totalAudioSize >> 24) & 0xff;
+
+    // Debug: Check the updated header
+    console.log(
+      `Updated header first 12 bytes: ${Array.from(updatedHeader.slice(0, 12))
+        .map((b) => "0x" + b.toString(16).padStart(2, "0"))
+        .join(" ")}`
+    );
+    console.log(`Updated header as string: "${updatedHeader.slice(0, 12).toString()}"`);
 
     // Combine all audio data
     const combinedAudio = new Uint8Array(WAV_HEADER_SIZE + totalAudioSize);

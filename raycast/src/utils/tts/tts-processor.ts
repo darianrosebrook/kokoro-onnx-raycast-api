@@ -82,7 +82,7 @@ import { PlaybackManager } from "./playback-manager";
 import { PerformanceMonitor } from "../performance/performance-monitor";
 import { RetryManager } from "../api/retry-manager";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager";
-import { StreamingContext, TextSegment } from "../validation/tts-types";
+import { StreamingContext, TextSegment, TTS_CONSTANTS } from "../validation/tts-types";
 
 // const execAsync = promisify(exec);
 
@@ -309,7 +309,12 @@ export class TTSSpeechProcessor {
     try {
       this.onStatusUpdate({ message: "Processing text...", isPlaying: true, isPaused: false });
       const processedText = this.textProcessor.preprocessText(text);
-      this.textParagraphs = this.textProcessor.segmentText(processedText, this.maxSentenceLength);
+      // Use the actual maximum text length (1800) instead of maxSentenceLength (100)
+      // This prevents word-by-word processing and allows for proper sentence/paragraph segmentation
+      this.textParagraphs = this.textProcessor.segmentText(
+        processedText,
+        TTS_CONSTANTS.MAX_TEXT_LENGTH
+      );
 
       for (const segment of this.textParagraphs) {
         if (signal.aborted) break;
@@ -334,19 +339,62 @@ export class TTSSpeechProcessor {
 
         await this.retryManager.executeWithRetry(
           () =>
-            this.audioStreamer.streamAudio(requestParams, streamingContext, (_chunk) => {
+            this.audioStreamer.streamAudio(requestParams, streamingContext, async (chunk) => {
               this.onStatusUpdate({
                 message: "Streaming audio...",
                 style: Toast.Style.Success,
                 isPlaying: true,
                 isPaused: false,
               });
+
+              // Actually play the audio data
+              console.log(`Received audio chunk: ${chunk.data.length} bytes`);
+
+              const playbackContext = {
+                audioData: chunk.data,
+                format: {
+                  format: this.format,
+                  sampleRate: TTS_CONSTANTS.SAMPLE_RATE,
+                  channels: TTS_CONSTANTS.CHANNELS,
+                  bitDepth: TTS_CONSTANTS.BIT_DEPTH,
+                  bytesPerSample: TTS_CONSTANTS.BYTES_PER_SAMPLE,
+                  bytesPerSecond:
+                    TTS_CONSTANTS.SAMPLE_RATE *
+                    TTS_CONSTANTS.CHANNELS *
+                    TTS_CONSTANTS.BYTES_PER_SAMPLE,
+                },
+                metadata: {
+                  voice: this.voice,
+                  speed: this.speed,
+                  size: chunk.data.length,
+                },
+                playbackOptions: {
+                  useHardwareAcceleration: true,
+                  backgroundPlayback: true,
+                },
+              };
+
+              try {
+                console.time("Playback time");
+                console.timeLog("Playback time", "Playback time");
+                // Wait for audio playback to complete before continuing
+                await this.playbackManager.playAudio(playbackContext, signal);
+                console.timeLog("Playback time", "Audio playback completed successfully");
+                console.timeEnd("Playback time");
+
+                // Add a small delay to ensure afplay has fully completed
+                await new Promise((resolve) => setTimeout(resolve, 50));
+              } catch (playbackError) {
+                console.error("Playback failed:", playbackError);
+                throw playbackError;
+              }
             }),
           "tts-audio-streaming"
         );
       }
 
       if (!signal.aborted) {
+        console.log("All audio segments processed and played successfully");
         this.onStatusUpdate({
           message: "Speech completed",
           style: Toast.Style.Success,

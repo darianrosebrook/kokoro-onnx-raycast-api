@@ -90,6 +90,7 @@ export default async function SpeakSelection() {
     });
 
     console.log("Starting TTS processing...");
+    console.log({ text });
     // This will await until playback is completely finished
     await processor.speak(text);
     console.log("TTS processing completed successfully");
@@ -112,9 +113,8 @@ export default async function SpeakSelection() {
       message: error instanceof Error ? error.message : "Unknown error",
     });
   } finally {
-    // Clean up processor if it exists
-    if (processor) {
-      processor.stop();
-    }
+    // The processor will handle its own cleanup when playback completes naturally
+    // Calling processor.stop() here would prematurely terminate ongoing playback
+    console.log("Speak selection command completed");
   }
 }
