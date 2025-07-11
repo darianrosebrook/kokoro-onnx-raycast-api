@@ -231,6 +231,12 @@ export class PlaybackManager implements IPlaybackManager {
     };
 
     // PHASE 1 OPTIMIZATION: Create afplay process with stdin pipe
+    logger.info("PHASE 1 OPTIMIZATION: Creating afplay process with stdin pipe", {
+      component: this.name,
+      method: "startStreamingPlayback",
+      sessionId,
+    });
+
     const afplayProcess = spawn("afplay", ["-"], {
       stdio: ["pipe", "ignore", "ignore"],
       detached: true,
@@ -239,49 +245,126 @@ export class PlaybackManager implements IPlaybackManager {
     this.currentSession.process = afplayProcess;
     this.currentSession.isPlaying = true;
 
-    // Handle process events
+    // CRITICAL DEBUGGING: Monitor process state
+    console.log(`Starting afplay process with PID: ${afplayProcess.pid}`);
+    console.log(`afplay process stdin available: ${!!afplayProcess.stdin}`);
+    console.log(`afplay process killed status: ${afplayProcess.killed}`);
+
+    // Handle process events with detailed logging
     let processEnded = false;
+    let closeReason = "unknown";
+
     const processEndPromise = new Promise<void>((resolve, reject) => {
-      afplayProcess.on("close", (code) => {
+      afplayProcess.on("close", (code, signal) => {
         processEnded = true;
+        closeReason = `code=${code}, signal=${signal}`;
+
         logger.info("PHASE 1 OPTIMIZATION: afplay process closed", {
           component: this.name,
           method: "startStreamingPlayback",
           sessionId,
           exitCode: code,
+          exitSignal: signal,
         });
-        resolve();
+
+        console.log(`afplay process closed: code=${code}, signal=${signal}`);
+
+        if (code === 0) {
+          resolve();
+        } else {
+          const error = new Error(`afplay process exited with code ${code}, signal ${signal}`);
+          console.error("afplay process failed:", error);
+          reject(error);
+        }
       });
 
       afplayProcess.on("error", (error) => {
         processEnded = true;
+        closeReason = `error: ${error.message}`;
+
         logger.error("PHASE 1 OPTIMIZATION: afplay process error", {
           component: this.name,
           method: "startStreamingPlayback",
           sessionId,
           error: error.message,
         });
+
+        console.error("afplay process error:", error);
         reject(error);
       });
+
+      // Additional process monitoring for debugging
+      afplayProcess.on("spawn", () => {
+        console.log(`afplay process spawned successfully with PID: ${afplayProcess.pid}`);
+      });
+
+      afplayProcess.on("exit", (code, signal) => {
+        console.log(`afplay process exited: code=${code}, signal=${signal}`);
+      });
+
+      // Monitor stdin state
+      if (afplayProcess.stdin) {
+        afplayProcess.stdin.on("error", (error) => {
+          console.error("afplay stdin error:", error);
+          closeReason = `stdin error: ${error.message}`;
+        });
+
+        afplayProcess.stdin.on("close", () => {
+          console.log("afplay stdin closed");
+        });
+      }
     });
 
     // Handle abort signal
     const onAbort = () => {
+      console.log("Abort signal received - killing afplay process");
       if (!processEnded && !afplayProcess.killed) {
-        afplayProcess.kill();
+        afplayProcess.kill("SIGTERM");
       }
     };
     signal.addEventListener("abort", onAbort);
 
-    // PHASE 1 OPTIMIZATION: Return streaming interface
+    // Add a small delay to ensure process is ready
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // PHASE 1 OPTIMIZATION: Return streaming interface with enhanced error handling
     return {
       writeChunk: async (chunk: Uint8Array): Promise<void> => {
-        if (processEnded || afplayProcess.killed || !afplayProcess.stdin) {
-          throw new Error("Streaming process not available");
+        // Enhanced error checking with detailed diagnostics
+        if (processEnded) {
+          const error = `Streaming process ended (${closeReason})`;
+          console.error("CRITICAL ERROR:", error);
+          console.error("Process state at failure:");
+          console.error(`  - Process ended: ${processEnded}`);
+          console.error(`  - Process killed: ${afplayProcess.killed}`);
+          console.error(`  - Process PID: ${afplayProcess.pid}`);
+          console.error(`  - Stdin available: ${!!afplayProcess.stdin}`);
+          throw new Error(error);
+        }
+
+        if (afplayProcess.killed) {
+          const error = "afplay process was killed";
+          console.error("CRITICAL ERROR:", error);
+          throw new Error(error);
+        }
+
+        if (!afplayProcess.stdin) {
+          const error = "afplay stdin not available";
+          console.error("CRITICAL ERROR:", error);
+          console.error("This usually means the process rejected the audio format");
+          throw new Error(error);
         }
 
         return new Promise((resolve, reject) => {
+          // Add timeout for write operations
+          const writeTimeout = setTimeout(() => {
+            console.error("Write operation timed out - afplay may have stopped responding");
+            reject(new Error("Write timeout - afplay process not responding"));
+          }, 5000);
+
           afplayProcess.stdin!.write(chunk, (error) => {
+            clearTimeout(writeTimeout);
+
             if (error) {
               logger.error("PHASE 1 OPTIMIZATION: Failed to write chunk", {
                 component: this.name,
@@ -289,7 +372,16 @@ export class PlaybackManager implements IPlaybackManager {
                 sessionId,
                 chunkSize: chunk.length,
                 error: error.message,
+                processEnded,
+                processKilled: afplayProcess.killed,
               });
+
+              console.error("Write failed:", error);
+              console.error("Process state during write failure:");
+              console.error(`  - Process ended: ${processEnded}`);
+              console.error(`  - Process killed: ${afplayProcess.killed}`);
+              console.error(`  - Chunk size: ${chunk.length} bytes`);
+
               reject(error);
             } else {
               logger.debug("PHASE 1 OPTIMIZATION: Chunk written successfully", {
@@ -305,12 +397,28 @@ export class PlaybackManager implements IPlaybackManager {
       },
 
       endStream: async (): Promise<void> => {
+        console.log("Ending stream - closing afplay stdin");
+
         if (!processEnded && !afplayProcess.killed && afplayProcess.stdin) {
           afplayProcess.stdin.end();
         }
 
-        // Wait for process to end
-        await processEndPromise;
+        // Wait for process to end with timeout
+        const timeoutPromise = new Promise<void>((_, reject) => {
+          setTimeout(() => {
+            console.error("Process end timeout - forcing kill");
+            if (!processEnded && !afplayProcess.killed) {
+              afplayProcess.kill("SIGKILL");
+            }
+            reject(new Error("Process end timeout"));
+          }, 10000);
+        });
+
+        try {
+          await Promise.race([processEndPromise, timeoutPromise]);
+        } catch (error) {
+          console.error("Error while ending stream:", error);
+        }
 
         // Clean up
         signal.removeEventListener("abort", onAbort);
@@ -319,7 +427,10 @@ export class PlaybackManager implements IPlaybackManager {
           component: this.name,
           method: "endStream",
           sessionId,
+          closeReason,
         });
+
+        console.log(`Stream ended. Final close reason: ${closeReason}`);
       },
     };
   }
