@@ -401,6 +401,18 @@ export class TTSSpeechProcessor {
                     `First chunk first 8 bytes as string: "${new TextDecoder().decode(chunk.data.slice(0, 8))}"`
                   );
 
+                  // CRITICAL: Check if first chunk has minimum WAV header size
+                  if (chunk.data.length < 44) {
+                    console.error(
+                      `⚠️ CRITICAL: First chunk too small (${chunk.data.length} bytes) - WAV header needs at least 44 bytes`
+                    );
+                    console.error("This will cause afplay to fail with exit code 1");
+                  } else {
+                    console.log(
+                      `✅ First chunk has sufficient size (${chunk.data.length} bytes) for WAV header`
+                    );
+                  }
+
                   // Verify first chunk has WAV header
                   const hasWavHeader =
                     chunk.data.length >= 4 &&

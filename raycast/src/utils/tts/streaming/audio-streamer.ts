@@ -270,35 +270,42 @@ export class AudioStreamer implements IAudioStreamer {
       if (value) {
         chunks.push(value);
 
-        // PHASE 1 OPTIMIZATION: Immediate chunk processing for streaming
-        if (firstChunk || chunkIndex % 5 === 0) {
-          // Every 5th chunk for efficiency
-          const currentTime = Date.now();
+        // PHASE 1 OPTIMIZATION: Send ALL chunks to afplay for proper audio playback
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - startTime;
+        const chunkSize = value.length;
 
-          // Calculate streaming efficiency
-          const elapsedTime = currentTime - startTime;
-          const chunkSize = value.length;
+        // CRITICAL FIX: Send every chunk to afplay (not just every 5th)
+        onChunk({
+          data: value,
+          index: chunkIndex,
+          timestamp: currentTime,
+          duration: this.calculateChunkDuration(chunkSize),
+        });
 
-          // Notify about chunk availability immediately
-          onChunk({
-            data: value,
-            index: chunkIndex,
-            timestamp: currentTime,
-            duration: this.calculateChunkDuration(chunkSize),
+        // Log TTFA for first chunk
+        if (firstChunk) {
+          logger.info("PHASE 1 OPTIMIZATION: First chunk received", {
+            component: this.name,
+            method: "streamFromServerWithImmediatePlayback",
+            requestId: context.requestId,
+            ttfa: `${elapsedTime}ms`,
+            chunkSize,
+            targetTTFA: "800ms",
           });
+          firstChunk = false;
+        }
 
-          // Log TTFA for first chunk
-          if (firstChunk) {
-            logger.info("PHASE 1 OPTIMIZATION: First chunk received", {
-              component: this.name,
-              method: "streamFromServerWithImmediatePlayback",
-              requestId: context.requestId,
-              ttfa: `${elapsedTime}ms`,
-              chunkSize,
-              targetTTFA: "800ms",
-            });
-            firstChunk = false;
-          }
+        // Log every 5th chunk for monitoring (but send ALL chunks)
+        if (chunkIndex % 5 === 0) {
+          logger.debug("PHASE 1 OPTIMIZATION: Chunk progress", {
+            component: this.name,
+            method: "streamFromServerWithImmediatePlayback",
+            requestId: context.requestId,
+            chunkIndex,
+            chunkSize,
+            elapsedTime: `${elapsedTime}ms`,
+          });
         }
 
         chunkIndex++;
