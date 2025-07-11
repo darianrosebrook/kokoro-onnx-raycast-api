@@ -111,6 +111,7 @@ interface Preferences {
   sentencePauses?: boolean;
   maxSentenceLength?: string; // Stored as string from Raycast preferences, parsed to int
   onStatusUpdate?: (status: StatusUpdate) => void;
+  developmentMode?: boolean;
 }
 
 /**
@@ -150,6 +151,7 @@ export class TTSSpeechProcessor {
   private sentencePauses: boolean;
   private maxSentenceLength: number;
   private format: "wav" | "pcm" = "wav";
+  private developmentMode: boolean;
 
   // State management for playback control
   private isPlaying = false;
@@ -201,6 +203,7 @@ export class TTSSpeechProcessor {
       (({ message, style = Toast.Style.Animated }) => {
         showToast({ style, title: message });
       });
+    this.developmentMode = prefs.developmentMode ?? true;
   }
 
   /**
@@ -587,224 +590,128 @@ export class TTSSpeechProcessor {
    */
   private async handleStreaming(text: string, signal: AbortSignal): Promise<void> {
     if (this.isStopped || signal.aborted) return;
-    console.time("Debug – Stream timespan");
-    console.timeLog("Debug – Stream timespan", "start");
-    // Timing metrics for detailed performance analysis
-    const timingMetrics = {
-      startTime: performance.now(),
-      sendTime: 0,
-      timeToFirstByte: 0,
-      timeToFirstChunk: 0,
-      streamToPlayDelay: 0,
-      firstAudioPlayTime: 0,
-      totalTime: 0,
-      streamOpenSpan: 0,
-    };
+    const devMode = this.developmentMode;
+    devMode && console.time("TTS.handleStreaming.Performance");
+    devMode &&
+      console.timeLog(
+        "TTS.handleStreaming.Performance",
+        `[START] for text: "${text.substring(0, 30)}..."`
+      );
 
-    // Create TTS request object for caching
     const ttsRequest: TTSRequest = {
       text,
       voice: this.voice,
       speed: this.speed,
       lang: "en-us",
-      stream: true,
+      stream: true, // We still tell the server to stream, even if we buffer it completely on the client
       format: this.format,
     };
 
-    // Check cache first
-    const cachedResponse = cacheManager.getCachedTTSResponse(ttsRequest);
-    if (cachedResponse && !signal.aborted) {
+    try {
+      devMode && console.timeLog("TTS.handleStreaming.Performance", "[CACHE] Checking cache...");
+      // Check cache first
+      const cachedResponse = cacheManager.getCachedTTSResponse(ttsRequest);
+      if (cachedResponse && !signal.aborted) {
+        devMode &&
+          console.timeLog(
+            "TTS.handleStreaming.Performance",
+            "[CACHE] Cache hit. Playing from cache."
+          );
+        this.onStatusUpdate({
+          message: "Playing cached audio...",
+          isPlaying: this.isPlaying,
+          isPaused: this.isPaused,
+        });
+
+        await this.playAudioData(new Uint8Array(cachedResponse.audioData), signal);
+        return;
+      }
+      devMode &&
+        console.timeLog(
+          "TTS.handleStreaming.Performance",
+          "[CACHE] Cache miss. Fetching from network."
+        );
+
       this.onStatusUpdate({
-        message: "Playing cached audio...",
+        message: "Synthesizing speech (streaming)...",
         isPlaying: this.isPlaying,
         isPaused: this.isPaused,
       });
 
-      // Play cached audio directly
-      await this.playAudioData(new Uint8Array(cachedResponse.audioData), signal);
-      return;
-    }
-
-    const url = `${this.serverUrl}/v1/audio/speech`;
-
-    this.onStatusUpdate({
-      message: "Synthesizing speech (streaming)...",
-      isPlaying: this.isPlaying,
-      isPaused: this.isPaused,
-    });
-
-    // Measure send time
-    timingMetrics.sendTime = performance.now() - timingMetrics.startTime;
-
-    // Initiate streaming request
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "audio/wav",
-      },
-      body: JSON.stringify(ttsRequest),
-      signal,
-    });
-
-    // Measure time to first byte
-    timingMetrics.timeToFirstByte = performance.now() - timingMetrics.startTime;
-
-    if (!response.ok) {
-      throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
-    }
-
-    if (!response.body) {
-      throw new Error("Streaming not supported by this environment");
-    }
-
-    // Set up streaming pipeline
-    const reader = response.body.getReader();
-
-    // Handle abort signal
-    const onAbort = () => this.currentProcess?.kill();
-    signal.addEventListener("abort", onAbort, { once: true });
-    //count the time it takes from stream open to strem end using performance.now()
-    const streamOpenSpan = performance.now();
-    console.log("debug stream open span", `start: ${streamOpenSpan.toFixed(2)}ms`);
-    const streamPromise = new Promise<void>(async (resolve, reject) => {
-      try {
-        const audioData: Uint8Array[] = [];
-        let firstChunkReceived = false;
-        let hasStartedPlaying = false;
-
-        // For WAV streaming, we need at least the WAV header to start playback
-        const MIN_AUDIO_BUFFER_SIZE = 1024; // Minimum bytes needed for valid WAV playback
-
-        // Read stream with pause/resume coordination
-        while (true) {
-          // Pause coordination: halt reading until resumed
-          if (this.isPaused) {
-            await new Promise<void>((r) => (this.resumeCallback = r));
-          }
-
-          // Check termination conditions
-          if (this.isStopped || signal.aborted) {
-            await reader.cancel();
-            break;
-          }
-
-          // Read next chunk
-          const { done, value } = await reader.read();
-
-          if (done) {
-            break;
-          }
-
-          if (value) {
-            audioData.push(value);
-
-            // Measure time to first chunk
-            if (!firstChunkReceived) {
-              timingMetrics.timeToFirstChunk = performance.now() - timingMetrics.startTime;
-              firstChunkReceived = true;
-              console.log(`📊 TTS Streaming Metrics:
-  Send time: ${timingMetrics.sendTime.toFixed(2)}ms
-  Processing time: ${(timingMetrics.timeToFirstByte - timingMetrics.sendTime).toFixed(2)}ms
-  Time to first chunk: ${timingMetrics.timeToFirstChunk.toFixed(2)}ms`);
-            }
-
-            // Check if we have enough data to start streaming playback
-            const totalBytes = audioData.reduce((sum, chunk) => sum + chunk.length, 0);
-
-            if (!hasStartedPlaying && totalBytes >= MIN_AUDIO_BUFFER_SIZE) {
-              hasStartedPlaying = true;
-
-              // Measure stream-to-play delay
-              const streamToPlayStart = performance.now();
-
-              // Start immediate playback with current chunks
-              const currentAudio = this.combineAudioChunks(audioData);
-              const tempFile = await this.createTempFile(currentAudio);
-
-              timingMetrics.streamToPlayDelay = performance.now() - streamToPlayStart;
-              timingMetrics.firstAudioPlayTime = performance.now() - timingMetrics.startTime;
-
-              console.log(`🎵 Starting immediate playback:
-  Stream-to-play delay: ${timingMetrics.streamToPlayDelay.toFixed(2)}ms
-  Total time to first audio: ${timingMetrics.firstAudioPlayTime.toFixed(2)}ms`);
-
-              // Start playing the initial chunk
-              console.timeLog("Debug – Stream timespan", "first audio play start");
-              await this.startStreamingPlayback(tempFile, signal);
-              console.timeLog("Debug – Stream timespan", "first audio play end");
-              console.timeLog(
-                "Debug – Stream timespan",
-                "first audio play duration",
-                `${(performance.now() - streamToPlayStart).toFixed(2)}ms`
-              );
-              this.onStatusUpdate({
-                message: "Playing streaming audio...",
-                isPlaying: this.isPlaying,
-                isPaused: this.isPaused,
-                primaryAction: { title: "Pause", onAction: () => this.pause() },
-                secondaryAction: { title: "Stop", onAction: () => this.stop() },
-              });
-            }
-          }
-        }
-
-        // If we haven't started playing yet (very small response), play everything
-        if (!hasStartedPlaying && audioData.length > 0 && !this.isStopped && !signal.aborted) {
-          const combinedAudio = this.combineAudioChunks(audioData);
-          const tempFile = await this.createTempFile(combinedAudio);
-
-          timingMetrics.streamToPlayDelay = performance.now() - timingMetrics.startTime;
-          timingMetrics.firstAudioPlayTime = timingMetrics.streamToPlayDelay;
-
-          await this.startStreamingPlayback(tempFile, signal);
-
-          this.onStatusUpdate({
-            message: "Playing audio...",
-            isPlaying: this.isPlaying,
-            isPaused: this.isPaused,
-            primaryAction: { title: "Pause", onAction: () => this.pause() },
-            secondaryAction: { title: "Stop", onAction: () => this.stop() },
-          });
-        }
-
-        // Cache the complete response for future use
-        if (audioData.length > 0) {
-          const combinedAudio = this.combineAudioChunks(audioData);
-          const audioBuffer = combinedAudio.buffer.slice(
-            combinedAudio.byteOffset,
-            combinedAudio.byteOffset + combinedAudio.byteLength
-          );
-          cacheManager.cacheTTSResponse(ttsRequest, audioBuffer);
-        }
-
-        // Calculate total time
-        timingMetrics.totalTime = performance.now() - timingMetrics.startTime;
-
-        console.log(`📊 TTS Streaming Complete:
-  Total time: ${timingMetrics.totalTime.toFixed(2)}ms
-  Processed ${audioData.length} chunks
-  First audio at: ${timingMetrics.firstAudioPlayTime.toFixed(2)}ms`);
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    });
-
-    try {
-      await streamPromise;
-    } catch (error) {
-      if (!this.isStopped && !signal.aborted) {
-        throw new Error(
-          `Streaming failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      const url = `${this.serverUrl}/v1/audio/speech`;
+      devMode &&
+        console.timeLog("TTS.handleStreaming.Performance", "[FETCH] Initiating network request...");
+      const fetchStart = devMode ? performance.now() : 0;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "audio/wav",
+        },
+        body: JSON.stringify(ttsRequest),
+        signal,
+      });
+      if (devMode) {
+        const fetchEnd = performance.now();
+        console.timeLog(
+          "TTS.handleStreaming.Performance",
+          `[FETCH] Response received with status: ${response.status}. Took ${(fetchEnd - fetchStart).toFixed(2)}ms.`
         );
       }
+
+      if (!response.ok) {
+        throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+      }
+
+      devMode &&
+        console.timeLog("TTS.handleStreaming.Performance", "[BUFFER] Reading response body...");
+      const bufferStart = devMode ? performance.now() : 0;
+      const audioData = new Uint8Array(await response.arrayBuffer());
+
+      if (devMode) {
+        const bufferEnd = performance.now();
+        console.timeLog(
+          "TTS.handleStreaming.Performance",
+          `[BUFFER] Body read. Size: ${audioData.length} bytes. Took ${(bufferEnd - bufferStart).toFixed(2)}ms.`
+        );
+      }
+
+      if (audioData.length === 0 && !this.isStopped && !signal.aborted) {
+        console.warn("Received empty audio stream for a segment.");
+        return; // Don't throw, just move to the next segment.
+      }
+
+      // Cache the complete response for future use.
+      devMode && console.timeLog("TTS.handleStreaming.Performance", "[CACHE] Caching response...");
+      cacheManager.cacheTTSResponse(ttsRequest, audioData.buffer);
+
+      this.onStatusUpdate({
+        message: "Playing streaming audio...",
+        isPlaying: this.isPlaying,
+        isPaused: this.isPaused,
+        primaryAction: { title: "Pause", onAction: () => this.pause() },
+        secondaryAction: { title: "Stop", onAction: () => this.stop() },
+      });
+
+      devMode &&
+        console.timeLog("TTS.handleStreaming.Performance", "[PLAYBACK] Calling playAudioData...");
+      await this.playAudioData(audioData, signal);
+      devMode &&
+        console.timeLog("TTS.handleStreaming.Performance", "[PLAYBACK] playAudioData finished.");
+    } catch (error) {
+      if (!this.isStopped && !signal.aborted) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        console.error(`Streaming failed for segment: ${errorMessage}`);
+        // We'll show a toast but won't re-throw, allowing playback to continue with the next segment.
+        showToast({
+          style: Toast.Style.Failure,
+          title: "TTS Segment Error",
+          message: errorMessage,
+        });
+      }
     } finally {
-      this.currentProcess = null;
-      signal.removeEventListener("abort", onAbort);
+      devMode && console.timeEnd("TTS.handleStreaming.Performance");
     }
-    console.timeLog("Debug – Stream timespan", "end");
-    console.timeEnd("Debug – Stream timespan");
   }
 
   /**
@@ -995,6 +902,7 @@ export class TTSSpeechProcessor {
       console.warn("Empty audio data received or playback stopped.");
       return;
     }
+    const devMode = this.developmentMode;
 
     this.onStatusUpdate({
       message: "Playing audio...",
@@ -1020,9 +928,21 @@ export class TTSSpeechProcessor {
       this.tempFiles.push(tempFile);
 
       // Write audio data to temporary file
+      devMode &&
+        console.timeLog(
+          "TTS.handleStreaming.Performance",
+          `[PLAYBACK-IO] Writing ${audioData.length} bytes to temp file...`
+        );
       await writeFile(tempFile, audioData);
+      devMode &&
+        console.timeLog(
+          "TTS.handleStreaming.Performance",
+          `[PLAYBACK-IO] Finished writing to temp file.`
+        );
 
       // Play using afplay (macOS built-in audio player)
+      devMode &&
+        console.timeLog("TTS.handleStreaming.Performance", `[PLAYBACK-PROC] Executing afplay...`);
       const playProcess = exec(`afplay "${tempFile}"`);
       this.currentProcess = playProcess;
 
@@ -1037,6 +957,11 @@ export class TTSSpeechProcessor {
       }).finally(() => {
         signal.removeEventListener("abort", onAbort);
       });
+      devMode &&
+        console.timeLog(
+          "TTS.handleStreaming.Performance",
+          `[PLAYBACK-PROC] afplay process finished.`
+        );
     } catch (error) {
       if (!this.isStopped && !signal.aborted) {
         console.warn("Failed to play audio:", error);
