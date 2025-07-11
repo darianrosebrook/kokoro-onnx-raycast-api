@@ -323,15 +323,11 @@ export class TTSSpeechProcessor {
         TTS_CONSTANTS.MAX_TEXT_LENGTH
       );
 
-      // PHASE 1 OPTIMIZATION: Initialize streaming playback once
-      if (this.useStreaming) {
-        streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
-        this.onStatusUpdate({
-          message: "Starting streaming playback...",
-          isPlaying: true,
-          isPaused: false,
-        });
-      }
+      // PHASE 1 OPTIMIZATION: Don't start afplay until first chunk arrives
+      let streamingPlayback: {
+        writeChunk: (chunk: Uint8Array) => Promise<void>;
+        endStream: () => Promise<void>;
+      } | null = null;
 
       let totalChunksReceived = 0;
       const startTime = performance.now();
@@ -363,6 +359,17 @@ export class TTSSpeechProcessor {
               totalChunksReceived++;
               const currentTime = performance.now();
               const elapsedTime = currentTime - startTime;
+
+              // PHASE 1 OPTIMIZATION: Start afplay only when first chunk arrives
+              if (totalChunksReceived === 1 && this.useStreaming) {
+                console.log("🚀 PHASE 1 OPTIMIZATION: First chunk received - starting afplay now");
+                streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
+                this.onStatusUpdate({
+                  message: "Starting streaming playback...",
+                  isPlaying: true,
+                  isPaused: false,
+                });
+              }
 
               // PHASE 1 OPTIMIZATION: Log TTFA for first chunk
               if (totalChunksReceived === 1) {

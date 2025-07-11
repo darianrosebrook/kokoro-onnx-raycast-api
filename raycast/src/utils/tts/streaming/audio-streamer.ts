@@ -238,6 +238,9 @@ export class AudioStreamer implements IAudioStreamer {
     context: StreamingContext,
     onChunk: (chunk: AudioChunk) => void
   ): Promise<void> {
+    console.log("🔍 DEBUGGING: Starting streamFromServerWithImmediatePlayback");
+    console.log("🔍 DEBUGGING: Request:", JSON.stringify(request, null, 2));
+
     const url = `${this.config.serverUrl}/v1/audio/speech`;
     const response = await fetch(url, {
       method: "POST",
@@ -246,13 +249,18 @@ export class AudioStreamer implements IAudioStreamer {
       signal: context.abortController.signal,
     });
 
+    console.log("🔍 DEBUGGING: Response status:", response.status);
+    console.log("🔍 DEBUGGING: Response headers:", [...response.headers.entries()]);
+
     if (!response || !response.ok) {
       const status = response?.status || 500;
       const statusText = response?.statusText || "Unknown error";
+      console.error("🔍 DEBUGGING: Response failed:", status, statusText);
       throw new Error(`TTS request failed: ${status} ${statusText}`);
     }
 
     if (!response.body) {
+      console.error("🔍 DEBUGGING: No response body - streaming not supported");
       throw new Error("Streaming not supported by this environment");
     }
 
@@ -262,18 +270,47 @@ export class AudioStreamer implements IAudioStreamer {
     let firstChunk = true;
     const startTime = Date.now();
 
+    console.log("🔍 DEBUGGING: Starting to read chunks...");
+
     // PHASE 1 OPTIMIZATION: Stream chunks immediately for <800ms TTFA
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        console.log("🔍 DEBUGGING: Stream reading completed");
+        break;
+      }
 
       if (value) {
+        console.log(`🔍 DEBUGGING: Received chunk ${chunkIndex}: ${value.length} bytes`);
+
+        // Debug first chunk specifically
+        if (chunkIndex === 0) {
+          console.log("🔍 DEBUGGING: First chunk details:");
+          console.log("  Size:", value.length);
+          console.log(
+            "  First 8 bytes:",
+            Array.from(value.slice(0, 8))
+              .map((b) => `0x${b.toString(16).padStart(2, "0")}`)
+              .join(" ")
+          );
+          console.log("  First 8 bytes as string:", new TextDecoder().decode(value.slice(0, 8)));
+
+          // Check for RIFF header
+          if (value.length >= 4) {
+            const hasRiff =
+              value[0] === 0x52 && value[1] === 0x49 && value[2] === 0x46 && value[3] === 0x46;
+            console.log("  Has RIFF header:", hasRiff);
+          }
+        }
+
         chunks.push(value);
 
         // PHASE 1 OPTIMIZATION: Send ALL chunks to afplay for proper audio playback
         const currentTime = Date.now();
         const elapsedTime = currentTime - startTime;
         const chunkSize = value.length;
+
+        console.log(`🔍 DEBUGGING: Calling onChunk for chunk ${chunkIndex}...`);
 
         // CRITICAL FIX: Send every chunk to afplay (not just every 5th)
         onChunk({
@@ -282,6 +319,8 @@ export class AudioStreamer implements IAudioStreamer {
           timestamp: currentTime,
           duration: this.calculateChunkDuration(chunkSize),
         });
+
+        console.log(`🔍 DEBUGGING: onChunk completed for chunk ${chunkIndex}`);
 
         // Log TTFA for first chunk
         if (firstChunk) {
