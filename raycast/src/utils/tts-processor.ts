@@ -730,8 +730,14 @@ export class TTSSpeechProcessor {
   Total time to first audio: ${timingMetrics.firstAudioPlayTime.toFixed(2)}ms`);
 
               // Start playing the initial chunk
-              this.startStreamingPlayback(tempFile, signal);
-
+              console.timeLog("Debug – Stream timespan", "first audio play start");
+              await this.startStreamingPlayback(tempFile, signal);
+              console.timeLog("Debug – Stream timespan", "first audio play end");
+              console.timeLog(
+                "Debug – Stream timespan",
+                "first audio play duration",
+                `${(performance.now() - streamToPlayStart).toFixed(2)}ms`
+              );
               this.onStatusUpdate({
                 message: "Playing streaming audio...",
                 isPlaying: this.isPlaying,
