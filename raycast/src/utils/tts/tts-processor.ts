@@ -328,6 +328,8 @@ export class TTSSpeechProcessor {
         writeChunk: (chunk: Uint8Array) => Promise<void>;
         endStream: () => Promise<void>;
       } | null = null;
+      let streamingStarted = false;
+      let streamingTerminated = false;
 
       let totalChunksReceived = 0;
       const startTime = performance.now();
@@ -364,6 +366,7 @@ export class TTSSpeechProcessor {
               if (totalChunksReceived === 1 && this.useStreaming) {
                 console.log("🚀 PHASE 1 OPTIMIZATION: First chunk received - starting afplay now");
                 streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
+                streamingStarted = true;
                 this.onStatusUpdate({
                   message: "Starting streaming playback...",
                   isPlaying: true,
@@ -390,7 +393,12 @@ export class TTSSpeechProcessor {
                 isPaused: false,
               });
 
-              if (this.useStreaming && streamingPlayback) {
+              if (
+                this.useStreaming &&
+                streamingStarted &&
+                !streamingTerminated &&
+                streamingPlayback
+              ) {
                 // PHASE 1 OPTIMIZATION: Stream properly formatted audio directly to afplay
                 console.log(`Received audio chunk: ${chunk.data.length} bytes`);
 
@@ -411,7 +419,8 @@ export class TTSSpeechProcessor {
                     errorMessage.includes("process ended");
 
                   if (isNormalTermination) {
-                    console.log("✅ Normal termination detected - continuing without fallback");
+                    console.log("✅ Normal termination detected - marking streaming as complete");
+                    streamingTerminated = true;
                     // Don't abort or fallback for normal termination
                     return;
                   } else {
@@ -420,6 +429,10 @@ export class TTSSpeechProcessor {
                     throw streamError;
                   }
                 }
+              } else if (this.useStreaming && streamingTerminated) {
+                // Streaming completed normally - skip remaining chunks
+                console.log(`✅ Skipping chunk ${totalChunksReceived} - streaming completed`);
+                return;
               } else {
                 // LEGACY: Sequential playback for non-streaming mode
                 console.log("🔍 DEBUGGING: Using legacy playback mode (non-streaming)");
@@ -461,7 +474,7 @@ export class TTSSpeechProcessor {
       }
 
       // PHASE 1 OPTIMIZATION: End streaming playback
-      if (streamingPlayback) {
+      if (streamingPlayback && streamingStarted) {
         try {
           await streamingPlayback.endStream();
           console.log("✅ Streaming playback ended gracefully");
@@ -481,6 +494,8 @@ export class TTSSpeechProcessor {
             // Don't throw for endStream errors - they're not critical
           }
         }
+      } else if (streamingTerminated) {
+        console.log("✅ Streaming already terminated normally - no need to end stream");
       }
 
       if (!signal.aborted) {
