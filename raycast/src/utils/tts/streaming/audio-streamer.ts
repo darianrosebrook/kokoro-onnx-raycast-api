@@ -82,6 +82,7 @@ export class AudioStreamer implements IAudioStreamer {
     efficiency: 0,
     underruns: 0,
     bufferHealth: 1.0,
+    totalAudioDuration: 0, // Add missing property for Phase 1 optimization
   };
 
   constructor(config: Partial<TTSProcessorConfig> = {}) {
@@ -189,37 +190,17 @@ export class AudioStreamer implements IAudioStreamer {
         return; // Exit early if cache hit
       }
 
-      // Stream from server
-      const audioData = await this.streamFromServer(request, context);
+      // PHASE 1 OPTIMIZATION: Stream chunks immediately as they arrive
+      await this.streamFromServerWithImmediatePlayback(request, context, onChunk);
       logger.endTiming(timerId, { cached: false, success: true });
-
-      // Log audio data details for debugging
-      logger.info("Audio streaming completed", {
-        component: this.name,
-        method: "streamAudio",
-        requestId: context.requestId,
-        audioSize: audioData.length,
-        textLength: request.text.length,
-        voice: request.voice,
-      });
-
-      console.log(
-        `Audio streaming completed: ${audioData.length} bytes for text "${request.text.substring(0, 50)}..."`
-      );
-
-      onChunk({
-        data: audioData,
-        index: 0,
-        timestamp: Date.now(),
-      });
     } catch (error) {
-      logger.endTiming(timerId, { success: false });
       logger.error("Audio streaming failed", {
         component: this.name,
         method: "streamAudio",
         requestId: context.requestId,
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      logger.endTiming(timerId, { cached: false, success: false });
       throw error;
     }
   }
@@ -249,7 +230,128 @@ export class AudioStreamer implements IAudioStreamer {
   }
 
   /**
-   * Stream audio from the server and return the data.
+   * PHASE 1 OPTIMIZATION: Stream from server with immediate playback
+   * This implements the critical streaming fix to eliminate 17s latency
+   */
+  private async streamFromServerWithImmediatePlayback(
+    request: TTSRequestParams,
+    context: StreamingContext,
+    onChunk: (chunk: AudioChunk) => void
+  ): Promise<void> {
+    const url = `${this.config.serverUrl}/v1/audio/speech`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "audio/wav" },
+      body: JSON.stringify({ ...request, stream: true }), // Force streaming
+      signal: context.abortController.signal,
+    });
+
+    if (!response || !response.ok) {
+      const status = response?.status || 500;
+      const statusText = response?.statusText || "Unknown error";
+      throw new Error(`TTS request failed: ${status} ${statusText}`);
+    }
+
+    if (!response.body) {
+      throw new Error("Streaming not supported by this environment");
+    }
+
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let chunkIndex = 0;
+    let firstChunk = true;
+    const startTime = Date.now();
+
+    // PHASE 1 OPTIMIZATION: Stream chunks immediately for <800ms TTFA
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      if (value) {
+        chunks.push(value);
+
+        // PHASE 1 OPTIMIZATION: Immediate chunk processing for streaming
+        if (firstChunk || chunkIndex % 5 === 0) {
+          // Every 5th chunk for efficiency
+          const currentTime = Date.now();
+
+          // Calculate streaming efficiency
+          const elapsedTime = currentTime - startTime;
+          const chunkSize = value.length;
+
+          // Notify about chunk availability immediately
+          onChunk({
+            data: value,
+            index: chunkIndex,
+            timestamp: currentTime,
+            duration: this.calculateChunkDuration(chunkSize),
+          });
+
+          // Log TTFA for first chunk
+          if (firstChunk) {
+            logger.info("PHASE 1 OPTIMIZATION: First chunk received", {
+              component: this.name,
+              method: "streamFromServerWithImmediatePlayback",
+              requestId: context.requestId,
+              ttfa: `${elapsedTime}ms`,
+              chunkSize,
+              targetTTFA: "800ms",
+            });
+            firstChunk = false;
+          }
+        }
+
+        chunkIndex++;
+      }
+    }
+
+    // Combine all chunks for final processing and caching
+    const combinedAudio = this.combineAudioChunks(chunks);
+
+    // Cache the complete audio for future requests
+    if (combinedAudio.length > 0) {
+      cacheManager.cacheTTSResponse(request, combinedAudio.buffer);
+    }
+
+    // Update streaming stats
+    this.stats.chunksReceived = chunkIndex;
+    this.stats.bytesReceived = combinedAudio.length;
+    this.stats.averageChunkSize = combinedAudio.length / chunkIndex;
+    this.stats.streamingDuration = Date.now() - startTime;
+    this.stats.efficiency = this.calculateStreamingEfficiency(this.stats.streamingDuration);
+
+    logger.info("PHASE 1 OPTIMIZATION: Streaming completed", {
+      component: this.name,
+      method: "streamFromServerWithImmediatePlayback",
+      requestId: context.requestId,
+      totalChunks: chunkIndex,
+      totalSize: combinedAudio.length,
+      streamingDuration: `${this.stats.streamingDuration}ms`,
+      efficiency: `${(this.stats.efficiency * 100).toFixed(1)}%`,
+    });
+  }
+
+  /**
+   * Calculate chunk duration for streaming optimization
+   */
+  private calculateChunkDuration(chunkSize: number): number {
+    // Convert bytes to duration based on audio format
+    const bytesPerSecond =
+      this.audioFormat.sampleRate * this.audioFormat.channels * this.audioFormat.bytesPerSample;
+    return (chunkSize / bytesPerSecond) * 1000; // Duration in milliseconds
+  }
+
+  /**
+   * Calculate streaming efficiency for Phase 1 optimization
+   */
+  private calculateStreamingEfficiency(streamingDuration: number): number {
+    // Calculate expected time for real-time streaming
+    const expectedTime = this.stats.totalAudioDuration || streamingDuration;
+    return Math.min(1.0, expectedTime / streamingDuration);
+  }
+
+  /**
+   * LEGACY: Keep original method for backwards compatibility
    */
   private async streamFromServer(
     request: TTSRequestParams,
@@ -289,7 +391,7 @@ export class AudioStreamer implements IAudioStreamer {
 
     const combinedAudio = this.combineAudioChunks(chunks);
 
-    // Log combined audio details
+    // Log combined audio details for debugging
     logger.info("Audio chunks combined", {
       component: this.name,
       method: "streamFromServer",

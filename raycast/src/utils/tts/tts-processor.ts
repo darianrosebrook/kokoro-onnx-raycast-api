@@ -83,6 +83,7 @@ import { PerformanceMonitor } from "../performance/performance-monitor";
 import { RetryManager } from "../api/retry-manager";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager";
 import { StreamingContext, TextSegment, TTS_CONSTANTS } from "../validation/tts-types";
+import { logger } from "../core/logger";
 
 // const execAsync = promisify(exec);
 
@@ -306,6 +307,12 @@ export class TTSSpeechProcessor {
     const requestId = `tts-${Date.now()}`;
     this.performanceMonitor.startTracking(requestId);
 
+    // PHASE 1 OPTIMIZATION: Start streaming playback immediately
+    let streamingPlayback: {
+      writeChunk: (chunk: Uint8Array) => Promise<void>;
+      endStream: () => Promise<void>;
+    } | null = null;
+
     try {
       this.onStatusUpdate({ message: "Processing text...", isPlaying: true, isPaused: false });
       const processedText = this.textProcessor.preprocessText(text);
@@ -315,6 +322,19 @@ export class TTSSpeechProcessor {
         processedText,
         TTS_CONSTANTS.MAX_TEXT_LENGTH
       );
+
+      // PHASE 1 OPTIMIZATION: Initialize streaming playback once
+      if (this.useStreaming) {
+        streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
+        this.onStatusUpdate({
+          message: "Starting streaming playback...",
+          isPlaying: true,
+          isPaused: false,
+        });
+      }
+
+      let totalChunksReceived = 0;
+      const startTime = performance.now();
 
       for (const segment of this.textParagraphs) {
         if (signal.aborted) break;
@@ -340,61 +360,89 @@ export class TTSSpeechProcessor {
         await this.retryManager.executeWithRetry(
           () =>
             this.audioStreamer.streamAudio(requestParams, streamingContext, async (chunk) => {
+              totalChunksReceived++;
+              const currentTime = performance.now();
+              const elapsedTime = currentTime - startTime;
+
+              // PHASE 1 OPTIMIZATION: Log TTFA for first chunk
+              if (totalChunksReceived === 1) {
+                logger.info("PHASE 1 OPTIMIZATION: First chunk received in TTS processor", {
+                  component: this.audioStreamer.name,
+                  method: "speak",
+                  requestId,
+                  ttfa: `${elapsedTime}ms`,
+                  targetTTFA: "800ms",
+                  achieved: elapsedTime < 800 ? "✅" : "❌",
+                });
+              }
+
               this.onStatusUpdate({
-                message: "Streaming audio...",
+                message: `Streaming audio... (${totalChunksReceived} chunks)`,
                 style: Toast.Style.Success,
                 isPlaying: true,
                 isPaused: false,
               });
 
-              // Actually play the audio data
-              console.log(`Received audio chunk: ${chunk.data.length} bytes`);
+              if (this.useStreaming && streamingPlayback) {
+                // PHASE 1 OPTIMIZATION: Stream chunk directly to afplay
+                try {
+                  await streamingPlayback.writeChunk(chunk.data);
+                  console.log(
+                    `PHASE 1 OPTIMIZATION: Streamed chunk ${totalChunksReceived} (${chunk.data.length} bytes) in ${elapsedTime}ms`
+                  );
+                } catch (streamError) {
+                  console.error("PHASE 1 OPTIMIZATION: Failed to stream chunk:", streamError);
+                  throw streamError;
+                }
+              } else {
+                // LEGACY: Sequential playback for non-streaming mode
+                const playbackContext = {
+                  audioData: chunk.data,
+                  format: {
+                    format: this.format,
+                    sampleRate: TTS_CONSTANTS.SAMPLE_RATE,
+                    channels: TTS_CONSTANTS.CHANNELS,
+                    bitDepth: TTS_CONSTANTS.BIT_DEPTH,
+                    bytesPerSample: TTS_CONSTANTS.BYTES_PER_SAMPLE,
+                    bytesPerSecond:
+                      TTS_CONSTANTS.SAMPLE_RATE *
+                      TTS_CONSTANTS.CHANNELS *
+                      TTS_CONSTANTS.BYTES_PER_SAMPLE,
+                  },
+                  metadata: {
+                    voice: this.voice,
+                    speed: this.speed,
+                    size: chunk.data.length,
+                  },
+                  playbackOptions: {
+                    useHardwareAcceleration: true,
+                    backgroundPlayback: true,
+                  },
+                };
 
-              const playbackContext = {
-                audioData: chunk.data,
-                format: {
-                  format: this.format,
-                  sampleRate: TTS_CONSTANTS.SAMPLE_RATE,
-                  channels: TTS_CONSTANTS.CHANNELS,
-                  bitDepth: TTS_CONSTANTS.BIT_DEPTH,
-                  bytesPerSample: TTS_CONSTANTS.BYTES_PER_SAMPLE,
-                  bytesPerSecond:
-                    TTS_CONSTANTS.SAMPLE_RATE *
-                    TTS_CONSTANTS.CHANNELS *
-                    TTS_CONSTANTS.BYTES_PER_SAMPLE,
-                },
-                metadata: {
-                  voice: this.voice,
-                  speed: this.speed,
-                  size: chunk.data.length,
-                },
-                playbackOptions: {
-                  useHardwareAcceleration: true,
-                  backgroundPlayback: true,
-                },
-              };
-
-              try {
-                console.time("Playback time");
-                console.timeLog("Playback time", "Playback time");
-                // Wait for audio playback to complete before continuing
-                await this.playbackManager.playAudio(playbackContext, signal);
-                console.timeLog("Playback time", "Audio playback completed successfully");
-                console.timeEnd("Playback time");
-
-                // Add a small delay to ensure afplay has fully completed
-                await new Promise((resolve) => setTimeout(resolve, 50));
-              } catch (playbackError) {
-                console.error("Playback failed:", playbackError);
-                throw playbackError;
+                try {
+                  await this.playbackManager.playAudio(playbackContext, signal);
+                  await new Promise((resolve) => setTimeout(resolve, 50));
+                } catch (playbackError) {
+                  console.error("Legacy playback failed:", playbackError);
+                  throw playbackError;
+                }
               }
             }),
           "tts-audio-streaming"
         );
       }
 
+      // PHASE 1 OPTIMIZATION: End streaming playback
+      if (streamingPlayback) {
+        await streamingPlayback.endStream();
+      }
+
       if (!signal.aborted) {
-        console.log("All audio segments processed and played successfully");
+        const totalTime = performance.now() - startTime;
+        console.log(
+          `PHASE 1 OPTIMIZATION: All ${totalChunksReceived} chunks processed in ${totalTime}ms`
+        );
         this.onStatusUpdate({
           message: "Speech completed",
           style: Toast.Style.Success,
@@ -403,6 +451,15 @@ export class TTSSpeechProcessor {
         });
       }
     } catch (error) {
+      // PHASE 1 OPTIMIZATION: Clean up streaming playback on error
+      if (streamingPlayback) {
+        try {
+          await streamingPlayback.endStream();
+        } catch (cleanupError) {
+          console.error("Failed to clean up streaming playback:", cleanupError);
+        }
+      }
+
       if (!this.playbackManager.isStopped() && !signal.aborted) {
         console.error("TTS Error:", error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";

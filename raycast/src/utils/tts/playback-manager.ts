@@ -175,6 +175,156 @@ export class PlaybackManager implements IPlaybackManager {
   }
 
   /**
+   * PHASE 1 OPTIMIZATION: Stream audio chunks directly to afplay via stdin
+   * This eliminates file I/O latency and enables true streaming playback
+   */
+  async startStreamingPlayback(signal: AbortSignal): Promise<{
+    writeChunk: (chunk: Uint8Array) => Promise<void>;
+    endStream: () => Promise<void>;
+  }> {
+    if (!this.initialized) {
+      throw new Error("Playback manager not initialized");
+    }
+
+    const sessionId = `streaming-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    logger.info("PHASE 1 OPTIMIZATION: Starting streaming playback", {
+      component: this.name,
+      method: "startStreamingPlayback",
+      sessionId,
+    });
+
+    // Stop any existing playback
+    await this.stop();
+
+    // Create streaming session
+    this.currentSession = {
+      id: sessionId,
+      context: {
+        audioData: new Uint8Array(0), // Placeholder - will be streamed
+        format: {
+          format: "wav",
+          sampleRate: 24000,
+          channels: 1,
+          bitDepth: 16,
+          bytesPerSample: 2,
+          bytesPerSecond: 48000,
+        },
+        metadata: {
+          voice: "af_heart", // Placeholder
+          speed: 1.0,
+          size: 0,
+        },
+        playbackOptions: {
+          useHardwareAcceleration: true,
+          backgroundPlayback: true,
+        },
+      },
+      startTime: performance.now(),
+      process: null,
+      isPlaying: false,
+      isPaused: false,
+      isStopped: false,
+      pausePromise: null,
+      pauseResolve: null,
+      pauseReject: null,
+    };
+
+    // PHASE 1 OPTIMIZATION: Create afplay process with stdin pipe
+    const afplayProcess = spawn("afplay", ["-"], {
+      stdio: ["pipe", "ignore", "ignore"],
+      detached: true,
+    });
+
+    this.currentSession.process = afplayProcess;
+    this.currentSession.isPlaying = true;
+
+    // Handle process events
+    let processEnded = false;
+    const processEndPromise = new Promise<void>((resolve, reject) => {
+      afplayProcess.on("close", (code) => {
+        processEnded = true;
+        logger.info("PHASE 1 OPTIMIZATION: afplay process closed", {
+          component: this.name,
+          method: "startStreamingPlayback",
+          sessionId,
+          exitCode: code,
+        });
+        resolve();
+      });
+
+      afplayProcess.on("error", (error) => {
+        processEnded = true;
+        logger.error("PHASE 1 OPTIMIZATION: afplay process error", {
+          component: this.name,
+          method: "startStreamingPlayback",
+          sessionId,
+          error: error.message,
+        });
+        reject(error);
+      });
+    });
+
+    // Handle abort signal
+    const onAbort = () => {
+      if (!processEnded && !afplayProcess.killed) {
+        afplayProcess.kill();
+      }
+    };
+    signal.addEventListener("abort", onAbort);
+
+    // PHASE 1 OPTIMIZATION: Return streaming interface
+    return {
+      writeChunk: async (chunk: Uint8Array): Promise<void> => {
+        if (processEnded || afplayProcess.killed || !afplayProcess.stdin) {
+          throw new Error("Streaming process not available");
+        }
+
+        return new Promise((resolve, reject) => {
+          afplayProcess.stdin!.write(chunk, (error) => {
+            if (error) {
+              logger.error("PHASE 1 OPTIMIZATION: Failed to write chunk", {
+                component: this.name,
+                method: "writeChunk",
+                sessionId,
+                chunkSize: chunk.length,
+                error: error.message,
+              });
+              reject(error);
+            } else {
+              logger.debug("PHASE 1 OPTIMIZATION: Chunk written successfully", {
+                component: this.name,
+                method: "writeChunk",
+                sessionId,
+                chunkSize: chunk.length,
+              });
+              resolve();
+            }
+          });
+        });
+      },
+
+      endStream: async (): Promise<void> => {
+        if (!processEnded && !afplayProcess.killed && afplayProcess.stdin) {
+          afplayProcess.stdin.end();
+        }
+
+        // Wait for process to end
+        await processEndPromise;
+
+        // Clean up
+        signal.removeEventListener("abort", onAbort);
+
+        logger.info("PHASE 1 OPTIMIZATION: Streaming playback completed", {
+          component: this.name,
+          method: "endStream",
+          sessionId,
+        });
+      },
+    };
+  }
+
+  /**
    * Pause current playback with promise-based coordination
    */
   pause(): void {

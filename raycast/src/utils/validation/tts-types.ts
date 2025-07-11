@@ -333,6 +333,7 @@ export interface StreamingStats {
   efficiency: number;
   underruns: number;
   bufferHealth: number;
+  totalAudioDuration: number; // Add missing property for Phase 1 optimization
 }
 
 /**
@@ -408,6 +409,11 @@ export interface IPlaybackManager extends TTSModule {
   resume(): void;
   stop(): Promise<void>;
   getPlaybackState(): PlaybackState;
+  // PHASE 1 OPTIMIZATION: Add streaming playback method
+  startStreamingPlayback(signal: AbortSignal): Promise<{
+    writeChunk: (chunk: Uint8Array) => Promise<void>;
+    endStream: () => Promise<void>;
+  }>;
 }
 
 /**
