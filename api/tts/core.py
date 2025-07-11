@@ -314,6 +314,16 @@ async def stream_tts_audio(
     successful_segments = 0
     audio_output_buffer = io.BytesIO()
 
+    # Enhanced chunk timing tracking for debugging streaming pipeline
+    chunk_timing_state = {
+        'chunk_count': 0,
+        'last_chunk_yield_time': None,
+        'last_chunk_end_time': None,
+        'total_audio_duration_ms': 0,
+        'timing_gaps': [],
+        'timing_overlaps': []
+    }
+
     try:
         while True:
             tasks_to_remove = []
@@ -357,17 +367,46 @@ async def stream_tts_audio(
                 chunk = audio_output_buffer.read(TTSConfig.CHUNK_SIZE_BYTES)
                 if not chunk:
                     break
-                logger.debug(f"[{request_id}] Yielding chunk of {len(chunk)} bytes.")
-                yield chunk
-                last_yield_time = time.monotonic()
                 
-                # Add intelligent chunk pacing for better streaming experience
-                # Target: 50ms chunk duration for smooth playback
-                # Only pace if we have more chunks to send (don't delay the last chunk)
+                # Enhanced chunk timing tracking for streaming pipeline debugging
+                current_time = time.monotonic()
+                chunk_timing_state['chunk_count'] += 1
+                
+                # Calculate actual audio duration represented by this chunk
+                actual_audio_duration_ms = (len(chunk) / TTSConfig.BYTES_PER_SAMPLE / TTSConfig.SAMPLE_RATE) * 1000
+                chunk_timing_state['total_audio_duration_ms'] += actual_audio_duration_ms
+                
+                # Track timing between chunks for gap/overlap detection
+                if chunk_timing_state['last_chunk_end_time'] is not None:
+                    # Time since last chunk should have finished playing
+                    gap_ms = (current_time - chunk_timing_state['last_chunk_end_time']) * 1000
+                    
+                    if gap_ms > 5:  # Gap of more than 5ms
+                        chunk_timing_state['timing_gaps'].append(gap_ms)
+                        logger.debug(f"[{request_id}] Chunk {chunk_timing_state['chunk_count']}: Gap of {gap_ms:.1f}ms between chunk end and next chunk start")
+                    elif gap_ms < -5:  # Next chunk arrived before previous should finish (overlap)
+                        chunk_timing_state['timing_overlaps'].append(abs(gap_ms))
+                        logger.debug(f"[{request_id}] Chunk {chunk_timing_state['chunk_count']}: Received next chunk {abs(gap_ms):.1f}ms before current chunk ended")
+                    else:
+                        logger.debug(f"[{request_id}] Chunk {chunk_timing_state['chunk_count']}: Good timing - next chunk arrived {gap_ms:.1f}ms after expected")
+                
+                # Yield the chunk
+                logger.debug(f"[{request_id}] Yielding chunk {chunk_timing_state['chunk_count']} of {len(chunk)} bytes (audio duration: {actual_audio_duration_ms:.1f}ms).")
+                yield chunk
+                last_yield_time = current_time
+                
+                # Calculate when this chunk should finish playing
+                chunk_timing_state['last_chunk_yield_time'] = current_time
+                chunk_timing_state['last_chunk_end_time'] = current_time + (actual_audio_duration_ms / 1000)
+                
+                # FIXED: Dynamic audio-duration-based pacing
+                # Calculate actual audio duration from chunk size instead of using fixed delays
                 if len(audio_output_buffer.getvalue()) > 0:  # More chunks pending
-                    chunk_duration_ms = TTSConfig.CHUNK_DURATION_MS
-                    # Add small random variation to prevent rigid timing
-                    pacing_delay = (chunk_duration_ms / 1000) * 0.8  # 80% of chunk duration
+                    # Use 80% of actual audio duration for pacing to allow slight overlap
+                    # This ensures smooth playback while preventing buffer underruns
+                    pacing_delay = (actual_audio_duration_ms / 1000) * 0.8
+                    
+                    logger.debug(f"[{request_id}] Chunk {chunk_timing_state['chunk_count']} pacing delay: {pacing_delay*1000:.1f}ms")
                     await asyncio.sleep(pacing_delay)
 
             # Enhanced memory management for buffer
@@ -412,6 +451,27 @@ async def stream_tts_audio(
     except Exception as e:
         logger.error(f"Error in audio streaming: {e}", exc_info=True)
     finally:
+        # Enhanced streaming performance summary with timing analysis
+        if chunk_timing_state['chunk_count'] > 0:
+            total_streaming_time = time.monotonic() - last_yield_time if last_yield_time else 0
+            avg_gap = sum(chunk_timing_state['timing_gaps']) / len(chunk_timing_state['timing_gaps']) if chunk_timing_state['timing_gaps'] else 0
+            avg_overlap = sum(chunk_timing_state['timing_overlaps']) / len(chunk_timing_state['timing_overlaps']) if chunk_timing_state['timing_overlaps'] else 0
+            
+            logger.info(f"[{request_id}] 📊 Streaming Performance Summary:")
+            logger.info(f"[{request_id}]   - Total chunks: {chunk_timing_state['chunk_count']}")
+            logger.info(f"[{request_id}]   - Total audio duration: {chunk_timing_state['total_audio_duration_ms']:.0f}ms")
+            logger.info(f"[{request_id}]   - Streaming efficiency: {((chunk_timing_state['total_audio_duration_ms'] / 1000) / total_streaming_time * 100):.1f}% of real-time" if total_streaming_time > 0 else "N/A")
+            logger.info(f"[{request_id}]   - Timing gaps: {len(chunk_timing_state['timing_gaps'])} (avg: {avg_gap:.1f}ms)")
+            logger.info(f"[{request_id}]   - Timing overlaps: {len(chunk_timing_state['timing_overlaps'])} (avg: {avg_overlap:.1f}ms)")
+            
+            # Warn about potential streaming issues
+            if len(chunk_timing_state['timing_gaps']) > chunk_timing_state['chunk_count'] * 0.3:
+                logger.warning(f"[{request_id}] ⚠️ High number of timing gaps detected - may indicate buffering issues")
+            if avg_gap > 100:
+                logger.warning(f"[{request_id}] ⚠️ Large average gap ({avg_gap:.1f}ms) - streaming may be too slow")
+            if avg_overlap > 50:
+                logger.warning(f"[{request_id}] ⚠️ Large average overlap ({avg_overlap:.1f}ms) - streaming may be too fast")
+        
         logger.info(f"[{request_id}] Cleaning up stream resources.")
         for task in list(tasks.values()):
             if not task.done():
