@@ -79,7 +79,7 @@ import { exec, ChildProcess, spawn } from "child_process";
 import { writeFile, unlink, stat } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { StatusUpdate, TextSegment } from "../../types";
+import { StatusUpdate } from "../../types";
 import { cacheManager } from "../core/cache";
 import { TextProcessor } from "./text-processor";
 import { AudioStreamer } from "./streaming/audio-streamer";
@@ -87,6 +87,12 @@ import { PlaybackManager } from "./playback-manager";
 import { PerformanceMonitor } from "../performance/performance-monitor";
 import { RetryManager } from "../api/retry-manager";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager";
+import {
+  PlaybackContext,
+  StreamingContext,
+  TextSegment,
+  TTSRequestParams,
+} from "../validation/tts-types";
 
 // const execAsync = promisify(exec);
 
@@ -221,7 +227,7 @@ export class TTSSpeechProcessor {
     // Status update callback with fallback to toast notifications
     this.onStatusUpdate =
       prefs.onStatusUpdate ??
-      (({ message, style = Toast.Style.Animated }) => {
+      (({ message, style = Toast.Style.Failure }) => {
         showToast({ style, title: message });
       });
     this.developmentMode = prefs.developmentMode ?? true;

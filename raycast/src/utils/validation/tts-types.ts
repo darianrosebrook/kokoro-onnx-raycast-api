@@ -16,6 +16,8 @@
  * @since 2025-01-20
  */
 
+import type { Toast } from "@raycast/api";
+
 export type VoiceOption =
   // American English
   | "af_heart"
@@ -86,7 +88,7 @@ export type VoiceOption =
  */
 export interface StatusUpdate {
   message: string;
-  style?: "animated" | "success" | "failure";
+  style?: Toast.Style;
   isPlaying: boolean;
   isPaused: boolean;
   primaryAction?: {

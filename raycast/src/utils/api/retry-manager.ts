@@ -228,7 +228,11 @@ export class RetryManager {
         this.recordFailure();
 
         // Check if we should retry
-        if (!isRetryable || attempt === config.maxAttempts) {
+        if (
+          (config.retryCondition && !config.retryCondition(lastError)) ||
+          !isRetryable ||
+          attempt === config.maxAttempts
+        ) {
           break;
         }
 

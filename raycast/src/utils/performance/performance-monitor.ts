@@ -460,6 +460,12 @@ export class PerformanceMonitor implements IPerformanceMonitor {
       case "completedSegments":
         this.globalMetrics.completedSegments += value;
         break;
+      case "cacheHits":
+        this.globalMetrics.cacheHits += value;
+        break;
+      case "cacheMisses":
+        this.globalMetrics.cacheMisses += value;
+        break;
     }
   }
 
@@ -479,6 +485,12 @@ export class PerformanceMonitor implements IPerformanceMonitor {
         break;
       case "underrunCount":
         session.metrics.underrunCount = (session.metrics.underrunCount || 0) + value;
+        break;
+      case "cacheHits":
+        session.metrics.cacheHits = (session.metrics.cacheHits || 0) + value;
+        break;
+      case "cacheMisses":
+        session.metrics.cacheMisses = (session.metrics.cacheMisses || 0) + value;
         break;
     }
   }

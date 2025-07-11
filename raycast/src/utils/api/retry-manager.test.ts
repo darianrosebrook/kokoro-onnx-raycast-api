@@ -70,19 +70,16 @@ describe("RetryManager", () => {
     expect(result.error?.message).toBe("persistent failure");
   });
 
-  it.skip("should not retry on a non-retryable error", async () => {
-    // This test is timing out for unclear reasons. Skipping for now.
-    vi.useRealTimers();
+  it("should not retry on a non-retryable error", async () => {
     const operation = vi.fn().mockRejectedValue(new Error("fatal"));
     const retryCondition = (error: Error) => error.message !== "fatal";
 
-    // No timers should be involved here, so it should resolve quickly.
     const result = await retryManager.executeWithRetry(operation, "test-fatal", { retryCondition });
 
     expect(operation).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(false);
     expect(result.error?.message).toBe("fatal");
-  });
+  }, 10000); // Increase timeout
 
   describe("Circuit Breaker", () => {
     it("should open the circuit after enough failures", async () => {
