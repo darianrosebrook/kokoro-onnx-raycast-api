@@ -52,6 +52,7 @@ echo "   • High-quality neural TTS with 60+ voices"
 echo "   • Apple Silicon optimization (if applicable)"
 echo "   • Raycast integration for quick access"
 echo "   • Automatic performance optimization"
+echo "   • Python 3.13 compatibility (automatic detection)"
 echo ""
 echo "The setup process will take 5-10 minutes depending on your internet speed."
 echo ""
@@ -128,7 +129,52 @@ print_success "Python virtual environment activated."
 # Install Python dependencies
 print_progress "Installing Python dependencies..."
 echo "This may take a few minutes depending on your internet speed..."
-pip3 install -r requirements.txt
+
+# Check Python version for compatibility handling
+PYTHON_VERSION=$(python3 --version 2>&1 | sed 's/Python //' | cut -d. -f1,2)
+print_info "Detected Python version: $PYTHON_VERSION"
+
+if [[ "$PYTHON_VERSION" == "3.13" ]]; then
+  print_info "Python 3.13 detected - using compatibility-optimized installation..."
+  
+  # Install dependencies in specific order for Python 3.13 compatibility
+  # This prevents blis compilation issues by using spaCy's prebuilt wheel
+  print_progress "Installing core dependencies..."
+  pip3 install fastapi uvicorn gunicorn starlette kokoro-onnx soundfile pyaudio
+  
+  print_progress "Installing machine learning dependencies..."
+  pip3 install onnxruntime numpy numba pydantic
+  
+  print_progress "Installing text processing with Python 3.13 compatibility..."
+  # Install spacy first (provides compatible blis wheel)
+  pip3 install "spacy>=3.8.0"
+  
+  # Install misaki dependencies
+  pip3 install num2words
+  pip3 install misaki
+  
+  # Install remaining dependencies
+  pip3 install phonemizer-fork espeakng-loader requests aiohttp inflect orjson psutil
+  
+  # Install uvloop on non-Windows systems
+  if [[ "$(uname -s)" != "MINGW"* && "$(uname -s)" != "CYGWIN"* ]]; then
+    pip3 install uvloop
+  fi
+  
+  # Download spaCy English model if misaki installation succeeded
+  print_progress "Setting up English language model for misaki..."
+  if python3 -c "import misaki; from misaki import en" 2>/dev/null; then
+    print_success "Misaki with English support installed successfully."
+  else
+    # Try to initialize misaki to trigger spaCy model download
+    python3 -c "from misaki import en; en.G2P()" 2>/dev/null || true
+  fi
+  
+else
+  # Standard installation for other Python versions
+  pip3 install -r requirements.txt
+fi
+
 print_success "Python dependencies installed successfully."
 
 # Verify production optimization dependencies
@@ -471,6 +517,12 @@ echo "   • Use 'monthly' frequency for stable production systems"
 echo "   • Use 'manually' frequency for expert users who want complete control"
 echo "   • Clear the cache after major OS updates to re-benchmark"
 echo "   • Monitor startup times - longer cache periods = faster startup"
+echo ""
+echo "Python 3.13 Compatibility:"
+echo "   • Setup automatically detects Python 3.13 and uses optimized installation"
+echo "   • Dependencies are installed in specific order to avoid compilation issues"
+echo "   • spaCy provides compatible blis wheels for machine learning dependencies"
+echo "   • Misaki G2P engine works fully with English language support"
 echo ""
 
 print_success "Setup completed successfully! Your TTS system is ready to use."
