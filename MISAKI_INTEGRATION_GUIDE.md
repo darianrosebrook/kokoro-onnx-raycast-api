@@ -72,7 +72,7 @@ CMD ["python", "api/main.py"]
 - **Consistency**: Reduced word count mismatches
 - **Performance**: Better processing speed for complex text
 
-##  **Immediate Action Plan**
+## 🚀 **Immediate Action Plan**
 
 ### **Phase 1: Optimize Current System**
 1. **Enable Enhanced Phonemizer Configuration**
@@ -153,7 +153,7 @@ MISAKI_QUALITY_THRESHOLD = 0.8  # ✅ Already configured
 - **Performance Monitoring**: ✅ Complete (api/performance/stats.py)
 - **Testing Framework**: ✅ Complete (scripts/demo_misaki_integration.py)
 
-##  **Next Steps**
+## 📋 **Next Steps**
 
 ### **Immediate (Today)**
 1. **Optimize Current Phonemizer**: Implement enhanced phonemizer settings
@@ -189,4 +189,70 @@ The TTS system is already highly optimized with Phase 1 improvements showing sig
 
 **Current Status**: ✅ System functional with good performance
 **Next Priority**: 🔧 Optimize current phonemizer + prepare Misaki environment
-**Long-term Goal**:  Full Misaki integration for maximum quality 
+**Long-term Goal**:  Full Misaki integration for maximum quality
+
+---
+
+## 🔧 **Implementation Files**
+
+### **Enhanced Phonemizer Configuration**
+- `api/config.py` - Updated phonemizer settings
+- `api/tts/text_processing.py` - Enhanced fallback processing
+- `scripts/benchmark_phase1_improvements.py` - Performance monitoring
+
+### **Misaki Integration**
+- `api/tts/misaki_processing.py` - Complete Misaki implementation
+- `scripts/demo_misaki_integration.py` - Integration testing
+- `scripts/test_misaki_quality.py` - Quality validation
+
+### **Environment Management**
+- `requirements-misaki.txt` - Misaki-specific dependencies
+- `docker/Dockerfile.misaki` - Containerized Misaki setup
+- `scripts/setup_misaki_env.sh` - Environment setup script
+
+---
+
+## 🧩 **Kokoro TTS API Structure & Integration Points**
+
+### **API Overview**
+- **Framework**: FastAPI, async, production-optimized
+- **Endpoints**:
+  - `GET /health`: Health check (model loaded/ready)
+  - `GET /status`: Full server/model/performance status (includes phonemizer fallback rates, provider usage, etc.)
+  - `GET /voices`: Lists all available voices, categorized and recommended
+  - `POST /v1/audio/speech`: Main TTS endpoint (OpenAI-compatible, supports streaming and non-streaming, multi-voice, multi-language, hardware acceleration)
+
+### **Request & Config Models**
+- **TTSRequest**: Pydantic model for all TTS parameters (text, voice, speed, language, streaming, format)
+- **TTSConfig**: Centralizes all runtime, phonemizer, and Misaki settings; validated at startup; environment variable overrides supported
+
+### **Text & Phonemizer Pipeline**
+- **Normalization**: Dates, times, numbers verbalized for TTS
+- **Cleaning**: Whitespace, control chars, punctuation handled
+- **Phoneme Conversion**: Enhanced phonemizer backend (phonemizer-fork or fallback); Misaki is a drop-in replacement with fallback
+- **Segmentation**: Text split into optimal chunks for parallel/streaming synthesis
+
+### **Phonemizer & Misaki Integration**
+- **Default**: Uses `phonemizer-fork` (or fallback to regular phonemizer)
+- **Misaki**: Drop-in replacement, with fallback to phonemizer-fork if unavailable or fails
+- **Settings**: All phonemizer and Misaki options are configurable via environment variables and validated at startup
+- **Fallbacks**: If Misaki is not available (e.g., due to Python version), system automatically falls back to enhanced phonemizer
+
+### **Performance Monitoring & Error Handling**
+- **/status** endpoint exposes real-time stats: phonemizer fallback rates, success rates, provider usage, etc.
+- **Multi-level fallback**: provider, text, segment, and format
+- **Graceful degradation**: If phonemizer or Misaki fails, system falls back to character tokenization
+
+### **Production Validation & Testing**
+- **Environment Variables**: Set all phonemizer and Misaki settings (backend, language, quality mode, error tolerance, cache size, etc.) via env vars for flexible deployment
+- **Startup Validation**: API validates all config and phonemizer/Misaki settings at startup, logging warnings and auto-correcting invalid values
+- **Streaming**: TTS endpoint supports real-time streaming with chunked transfer encoding, optimized for low latency
+- **Monitoring**: Use `/status` endpoint to monitor phonemizer/Misaki performance, fallback rates, and quality metrics in production
+- **Testing**: Use provided scripts for benchmarking and demo integration; ensure Python 3.12 for Misaki
+- **Health Checks**: `/health` endpoint for basic readiness; `/status` for detailed diagnostics
+
+---
+
+@author: @darianrosebrook
+@date: 2025-01-08
+@version: 2.0.0 
