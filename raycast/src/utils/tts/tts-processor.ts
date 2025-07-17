@@ -1,48 +1,44 @@
 /**
- * TTS Processor - Production-Ready Streaming Audio Engine for Kokoro ONNX
+ * TTS Processor Coordinator - Production-Ready Streaming Audio Orchestrator for Kokoro ONNX
  *
- * This module implements a sophisticated streaming TTS architecture designed for macOS,
- * optimized for the Kokoro ONNX model with hardware acceleration and real-time audio delivery.
+ * This module orchestrates the entire TTS pipeline from text input to audio output,
+ * coordinating between text processing, audio streaming, and the standalone audio daemon.
+ * It serves as a coordinator that delegates actual audio processing to the daemon,
+ * not an implementation of audio processing itself.
  *
  * ## Architecture Overview
  *
- * The TTSSpeechProcessor implements a multi-stage pipeline designed to solve several
- * critical challenges in real-time TTS:
+ * The TTSSpeechProcessor implements a sophisticated coordinator pattern:
  *
- * 1. **Streaming Audio Pipeline**: Traditional TTS waits for complete synthesis before
- *    playback, causing 5-10 second delays. Our streaming approach starts audio playback
- *    within 200-500ms by processing and playing audio chunks as they arrive.
+ * 1. **Text Processing Coordination**: Manages text segmentation and preprocessing
+ * 2. **Audio Streaming Coordination**: Coordinates audio chunk delivery to the daemon
+ * 3. **Daemon Communication**: Delegates audio processing to the standalone daemon
+ * 4. **State Management**: Orchestrates the entire TTS pipeline state
+ * 5. **Error Handling**: Provides comprehensive error recovery and fallback
  *
- * 2. **Text Segmentation Strategy**: Kokoro has a 2000-character limit, but optimal
- *    performance requires intelligent segmentation at natural boundaries (paragraphs,
- *    sentences) to maintain speech rhythm and enable parallel processing.
+ * ## Key Design Principles
  *
- * 3. **macOS Audio Integration**: Uses afplay for hardware-accelerated audio playback
- *    instead of web audio APIs, providing better performance, system integration, and
- *    background playback capabilities.
- *
- * 4. **State Management**: Implements granular pause/resume controls that can halt
- *    mid-sentence without audio artifacts, using promise-based coordination between
- *    streaming and playback processes.
- *
- * 5. **Error Resilience**: Multi-level fallback system ensures production reliability
- *    even when network, server, or hardware acceleration fails.
+ * - **Separation of Concerns**: Coordinator only orchestrates, doesn't implement audio processing
+ * - **Process Isolation**: Audio processing runs in separate daemon process
+ * - **Pipeline Coordination**: Manages the flow between text → audio → daemon
+ * - **Error Resilience**: Multi-level fallback system for production reliability
  *
  * ## Performance Characteristics
  *
  * - **Latency**: 200-500ms to first audio chunk depending on hardware and text length (vs 5-10s traditional)
- * - **Memory**: Constant memory usage via temporary files (vs growing buffers)
- * - **Throughput**: ~50ms audio chunks for smooth playback, but can be changed to be longer if needed.
+ * - **Memory**: Constant memory usage via streaming (vs growing buffers)
+ * - **Throughput**: ~50ms audio chunks for smooth playback
  * - **Compatibility**: Works across all macOS versions and hardware configurations
  *
  * ## Technical Implementation Details
  *
  * ### Streaming Protocol
- * The processor uses HTTP streaming with chunked transfer encoding:
+ * The processor coordinates HTTP streaming with chunked transfer encoding:
  * ```
  * Client → Server: POST /v1/audio/speech {stream: true}
  * Server → Client: audio/wav chunks (50ms duration each)
- * Client → macOS: afplay via temporary files
+ * Client → Daemon: Audio chunks via WebSocket
+ * Daemon → macOS: Native audio playback
  * ```
  *
  * ### Text Processing Pipeline
@@ -52,7 +48,7 @@
  *
  * ### Audio Processing Chain
  * ```
- * Streaming Chunks → Temporary Files → afplay → macOS Audio System → Speakers
+ * Streaming Chunks → Audio Daemon → Native Audio System → Speakers
  * ```
  *
  * @author @darianrosebrook
@@ -73,17 +69,16 @@
  * await processor.speak("Hello, world!");
  * ```
  */
-import { showToast, Toast } from "@raycast/api";
 import type { VoiceOption, TTSProcessorConfig, TTSRequestParams } from "../../types";
 import type { StatusUpdate } from "../../types";
-import { TextProcessor } from "./text-processor";
-import { AudioStreamer } from "./streaming/audio-streamer";
-import { PlaybackManager } from "./playback-manager";
-import { PerformanceMonitor } from "../performance/performance-monitor";
-import { RetryManager } from "../api/retry-manager";
-import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager";
-import { StreamingContext, TextSegment, TTS_CONSTANTS } from "../validation/tts-types";
-import { logger } from "../core/logger";
+import { TextProcessor } from "./text-processor.js";
+import { AudioStreamer } from "./streaming/audio-streamer.js";
+import { PlaybackManager } from "./playback-manager.js";
+import { PerformanceMonitor } from "../performance/performance-monitor.js";
+import { RetryManager } from "../api/retry-manager.js";
+import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager.js";
+import { StreamingContext, TextSegment, TTS_CONSTANTS } from "../validation/tts-types.js";
+// import { logger } from "../core/logger";
 
 // const execAsync = promisify(exec);
 
@@ -115,6 +110,7 @@ interface Preferences {
   maxSentenceLength?: string; // Stored as string from Raycast preferences, parsed to int
   onStatusUpdate?: (status: StatusUpdate) => void;
   developmentMode?: boolean;
+  daemonPort?: string; // Stored as string from Raycast preferences, parsed to int
 }
 
 interface ProcessorDependencies {
@@ -156,9 +152,11 @@ interface ProcessorDependencies {
  * @class TTSSpeechProcessor
  */
 export class TTSSpeechProcessor {
+  private instanceId: string;
   private voice: VoiceOption;
   private speed: number;
   private serverUrl: string;
+  private daemonPort: number;
   private useStreaming: boolean;
   private sentencePauses: boolean;
   private maxSentenceLength: number;
@@ -172,6 +170,10 @@ export class TTSSpeechProcessor {
   private performanceMonitor: PerformanceMonitor;
   private retryManager: RetryManager;
   private adaptiveBufferManager: AdaptiveBufferManager;
+
+  // Initialization state
+  private initialized = false;
+  private initializationPromise: Promise<void> | null = null;
 
   // State management for playback control is delegated to PlaybackManager.
   // private isPlaying = false;
@@ -197,6 +199,10 @@ export class TTSSpeechProcessor {
    * @param dependencies - Optional container for injecting mock dependencies during testing
    */
   constructor(prefs: Preferences, dependencies: ProcessorDependencies = {}) {
+    this.instanceId = this.constructor.name + "_" + Date.now();
+    console.log(`[${this.instanceId}] Constructor called`);
+    console.log(`[${this.instanceId}] Dependencies provided:`, Object.keys(dependencies));
+
     // Voice selection with high-quality default
     this.voice = (prefs.voice as VoiceOption) ?? "af_heart";
 
@@ -215,6 +221,9 @@ export class TTSSpeechProcessor {
     // Max sentence length for segmentation optimization
     this.maxSentenceLength = parseInt(prefs.maxSentenceLength ?? "100");
 
+    // Daemon port configuration (default 8081)
+    this.daemonPort = parseInt(prefs.daemonPort ?? "8081");
+
     // Status update callback with fallback to toast notifications
     this.onStatusUpdate =
       prefs.onStatusUpdate ??
@@ -223,22 +232,38 @@ export class TTSSpeechProcessor {
       });
     this.developmentMode = prefs.developmentMode ?? true;
 
+    console.log(`[${this.instanceId}] Configuration:`, {
+      voice: this.voice,
+      speed: this.speed,
+      serverUrl: this.serverUrl,
+      useStreaming: this.useStreaming,
+      developmentMode: this.developmentMode,
+    });
+
     // Initialize modular components
     const processorConfig: TTSProcessorConfig & {
       onStatusUpdate: (status: StatusUpdate) => void;
       developmentMode: boolean;
       format: "wav" | "pcm";
+      daemonPort: number;
     } = {
       voice: this.voice,
       speed: this.speed,
       serverUrl: this.serverUrl,
+      daemonUrl: `http://localhost:${this.daemonPort}`,
       useStreaming: this.useStreaming,
       sentencePauses: this.sentencePauses,
       maxSentenceLength: this.maxSentenceLength,
       onStatusUpdate: this.onStatusUpdate,
       developmentMode: this.developmentMode,
       format: this.format,
+      daemonPort: this.daemonPort,
+      performanceProfile: "balanced",
+      autoSelectProfile: false,
+      showPerformanceMetrics: false,
     };
+
+    console.log(`[${this.instanceId}] Creating component instances`);
 
     this.textProcessor = dependencies.textProcessor ?? new TextProcessor(processorConfig);
     this.audioStreamer = dependencies.audioStreamer ?? new AudioStreamer(processorConfig);
@@ -247,23 +272,97 @@ export class TTSSpeechProcessor {
       dependencies.performanceMonitor ?? new PerformanceMonitor(processorConfig);
     this.retryManager = dependencies.retryManager ?? new RetryManager(processorConfig);
     this.adaptiveBufferManager =
-      dependencies.adaptiveBufferManager ?? new AdaptiveBufferManager(processorConfig);
+      dependencies.adaptiveBufferManager ??
+      new AdaptiveBufferManager({
+        targetBufferMs: 400,
+        bufferSize: 2 * 1024 * 1024,
+        chunkSize: 2400,
+        deliveryRate: 40,
+        minBufferChunks: 4,
+        maxLatency: 100,
+        targetUtilization: 0.7,
+      });
 
-    // Initialize all modules
+    console.log(`[${this.instanceId}] Component instances created`);
+
+    // Initialize all modules properly
     // Note: In a real test environment, you might not initialize the actual modules
     // if you are only testing the processor's orchestration logic.
     if (Object.keys(dependencies).length === 0) {
-      Promise.all([
+      console.log(`[${this.instanceId}] Starting module initialization`);
+      this.initializationPromise = this.initializeModules(processorConfig);
+    } else {
+      console.log(`[${this.instanceId}] Using injected dependencies, skipping initialization`);
+      this.initialized = true;
+    }
+  }
+
+  /**
+   * Initialize all TTS modules asynchronously
+   */
+  private async initializeModules(
+    processorConfig: TTSProcessorConfig & {
+      onStatusUpdate: (status: StatusUpdate) => void;
+      developmentMode: boolean;
+      format: "wav" | "pcm";
+      daemonPort: number;
+    }
+  ): Promise<void> {
+    try {
+      console.log(`[${this.instanceId}] Initializing modules...`);
+
+      await Promise.all([
         this.textProcessor.initialize(processorConfig),
         this.audioStreamer.initialize(processorConfig),
         this.playbackManager.initialize(processorConfig),
         this.performanceMonitor.initialize(processorConfig),
         this.retryManager.initialize(processorConfig),
-        this.adaptiveBufferManager.initialize(processorConfig),
-      ]).catch((error) => {
-        console.error("Failed to initialize TTS modules", error);
-        showToast({ style: Toast.Style.Failure, title: "Initialization Error" });
-      });
+        this.adaptiveBufferManager.initialize({
+          targetBufferMs: 400,
+          bufferSize: 2 * 1024 * 1024,
+          chunkSize: 2400,
+          deliveryRate: 40,
+          minBufferChunks: 4,
+          maxLatency: 100,
+          targetUtilization: 0.7,
+        }),
+      ]);
+
+      // Update daemon port with the actual port from the daemon
+      const actualDaemonPort = this.playbackManager.getDaemonPort();
+      if (actualDaemonPort && actualDaemonPort !== this.daemonPort) {
+        console.log(`[${this.instanceId}] Updating daemon port:`, {
+          original: this.daemonPort,
+          actual: actualDaemonPort,
+        });
+        this.daemonPort = actualDaemonPort;
+      }
+
+      this.initialized = true;
+      console.log(`[${this.instanceId}] All modules initialized successfully`);
+    } catch (error) {
+      console.error(`[${this.instanceId}] Failed to initialize TTS modules:`, error);
+      showToast({ style: Toast.Style.Failure, title: "Initialization Error" });
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure TTS processor is initialized before use
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) {
+      console.log(`[${this.instanceId}] Already initialized`);
+      return;
+    }
+
+    if (this.initializationPromise) {
+      console.log(`[${this.instanceId}] Waiting for initialization to complete...`);
+      await this.initializationPromise;
+      console.log(`[${this.instanceId}] Initialization completed`);
+    } else {
+      console.log(`[${this.instanceId}] No initialization promise found`);
+      throw new Error("TTS Processor initialization failed");
     }
   }
 
@@ -271,11 +370,12 @@ export class TTSSpeechProcessor {
    * Main entry point for text-to-speech processing.
    *
    * **Architecture Overview**:
-   * 1. **Input validation**: Ensure text is provided and processor is available
-   * 2. **State initialization**: Set up streaming controls and abort mechanisms
-   * 3. **Text preprocessing**: Clean and segment text for optimal processing
-   * 4. **Sequential processing**: Process segments in order while maintaining state
-   * 5. **Cleanup**: Ensure proper resource cleanup regardless of completion status
+   * 1. **Initialization check**: Ensure all components are ready
+   * 2. **Input validation**: Ensure text is provided and processor is available
+   * 3. **State initialization**: Set up streaming controls and abort mechanisms
+   * 4. **Text preprocessing**: Clean and segment text for optimal processing
+   * 5. **Sequential processing**: Process segments in order while maintaining state
+   * 6. **Cleanup**: Ensure proper resource cleanup regardless of completion status
    *
    * **Why Sequential Processing?**
    * While segments are synthesized in parallel on the server, playback must be
@@ -286,7 +386,30 @@ export class TTSSpeechProcessor {
    * @throws {Error} When text is empty or processing fails
    */
   async speak(text: string): Promise<void> {
+    console.log(`[${this.instanceId}] speak() called with text:`, text);
+    console.log(`[${this.instanceId}] Input text:`, {
+      length: text.length,
+      preview: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
+    });
+
+    // CRITICAL: Ensure initialization before proceeding
+    console.log(`[${this.instanceId}] Ensuring initialization...`);
+    try {
+      await this.ensureInitialized();
+      console.log(`[${this.instanceId}] ensureInitialized() complete`);
+    } catch (error) {
+      console.error(`[${this.instanceId}] Initialization failed:`, error);
+      this.onStatusUpdate({
+        message: "TTS system initialization failed",
+        style: Toast.Style.Failure,
+        isPlaying: false,
+        isPaused: false,
+      });
+      throw error;
+    }
+
     if (!text?.trim()) {
+      console.log(`[${this.instanceId}] No text provided`);
       this.onStatusUpdate({
         message: "No text to speak",
         style: Toast.Style.Failure,
@@ -296,15 +419,28 @@ export class TTSSpeechProcessor {
       return;
     }
 
+    console.log(`[${this.instanceId}] Configuration:`, {
+      voice: this.voice,
+      speed: this.speed,
+      serverUrl: this.serverUrl,
+      useStreaming: this.useStreaming,
+      sentencePauses: this.sentencePauses,
+      maxSentenceLength: this.maxSentenceLength,
+      format: this.format,
+    });
+
     // Stop any existing playback before starting new
     if (this.playbackManager.isActive()) {
+      console.log(`[${this.instanceId}] Stopping existing playback`);
       await this.playbackManager.stop();
+      console.log(`[${this.instanceId}] Existing playback stopped`);
     }
 
     this.abortController = new AbortController();
     const { signal } = this.abortController;
 
     const requestId = `tts-${Date.now()}`;
+    console.log(`[${this.instanceId}] Starting performance tracking for request:`, requestId);
     this.performanceMonitor.startTracking(requestId);
 
     // PHASE 1 OPTIMIZATION: Start streaming playback immediately
@@ -313,41 +449,93 @@ export class TTSSpeechProcessor {
       endStream: () => Promise<void>;
     } | null = null;
 
+    let streamingStarted = false;
+    let streamingTerminated = false;
+    let streamingFailed = false;
+    let afplayTerminated = false;
+
+    let totalChunksReceived = 0;
+    const startTime = performance.now();
+
+    console.log(`[${this.instanceId}] Session start time:`, startTime);
+
     try {
+      // PHASE 1 OPTIMIZATION: Start streaming session before chunk loop
+      if (this.useStreaming && !streamingPlayback) {
+        console.log(`[${this.instanceId}] Starting streaming playback session`);
+
+        try {
+          streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
+          streamingStarted = true;
+          console.log(`[${this.instanceId}] Streaming session started successfully`);
+        } catch (streamingError) {
+          console.error(`[${this.instanceId}] Failed to start streaming session:`, streamingError);
+          streamingFailed = true;
+          throw streamingError;
+        }
+      }
+
+      console.log(`[${this.instanceId}] Processing text...`);
       this.onStatusUpdate({ message: "Processing text...", isPlaying: true, isPaused: false });
+
       const processedText = this.textProcessor.preprocessText(text);
-      // Use the actual maximum text length (1800) instead of maxSentenceLength (100)
-      // This prevents word-by-word processing and allows for proper sentence/paragraph segmentation
+      console.log(`[${this.instanceId}] Text preprocessing complete:`, {
+        originalLength: text.length,
+        processedLength: processedText.length,
+        preview: processedText.substring(0, 100) + (processedText.length > 100 ? "..." : ""),
+      });
+
+      // Segment text for streaming optimization
       this.textParagraphs = this.textProcessor.segmentText(
         processedText,
+        // Use the actual maximum text length (1800) instead of maxSentenceLength (100)
+        // This allows for longer segments and better streaming performance
         TTS_CONSTANTS.MAX_TEXT_LENGTH
       );
 
-      // PHASE 1 OPTIMIZATION: Don't start afplay until first chunk arrives
-      let streamingPlayback: {
-        writeChunk: (chunk: Uint8Array) => Promise<void>;
-        endStream: () => Promise<void>;
-      } | null = null;
-      let streamingStarted = false;
-      let streamingTerminated = false;
+      console.log(`[${this.instanceId}] Text segmentation complete:`, {
+        totalSegments: this.textParagraphs.length,
+        segments: this.textParagraphs.map((seg, idx) => ({
+          index: idx,
+          length: seg.text.length,
+          preview: seg.text.substring(0, 50) + (seg.text.length > 50 ? "..." : ""),
+        })),
+      });
 
-      let totalChunksReceived = 0;
-      const startTime = performance.now();
+      // Stream audio for each text segment
+      console.log(`[${this.instanceId}] Starting audio streaming for segments`);
 
       for (const segment of this.textParagraphs) {
-        if (signal.aborted) break;
+        console.log(
+          `[${this.instanceId}] Processing segment ${segment.index + 1}/${this.textParagraphs.length}`
+        );
 
+        if (signal.aborted) {
+          console.log(`[${this.instanceId}] Signal aborted, stopping segment processing`);
+          break;
+        }
+
+        // Stream audio chunks for this segment
         const requestParams: TTSRequestParams = {
           text: segment.text,
           voice: this.voice,
           speed: this.speed,
           lang: "en-us",
           stream: this.useStreaming,
-          format: this.useStreaming ? "pcm" : this.format, // Use PCM for streaming, WAV for non-streaming
+          format: this.useStreaming ? "pcm" : this.format,
         };
 
+        console.log(`[${this.instanceId}] Creating server request:`, {
+          segmentIndex: segment.index,
+          textLength: segment.text.length,
+          voice: requestParams.voice,
+          speed: requestParams.speed,
+          stream: requestParams.stream,
+          format: requestParams.format,
+        });
+
         const streamingContext: StreamingContext = {
-          requestId,
+          requestId: `segment-${segment.index}-${Date.now()}`,
           segments: this.textParagraphs.map((s) => s.text),
           currentSegmentIndex: segment.index,
           totalSegments: this.textParagraphs.length,
@@ -355,153 +543,130 @@ export class TTSSpeechProcessor {
           startTime: performance.now(),
         };
 
-        await this.retryManager.executeWithRetry(
-          () =>
-            this.audioStreamer.streamAudio(requestParams, streamingContext, async (chunk) => {
-              totalChunksReceived++;
-              const currentTime = performance.now();
-              const elapsedTime = currentTime - startTime;
+        console.log(`[${this.instanceId}] Sending request to audio streamer`);
 
-              // PHASE 1 OPTIMIZATION: Start afplay only when first chunk arrives
-              if (totalChunksReceived === 1 && this.useStreaming) {
-                console.log("🚀 PHASE 1 OPTIMIZATION: First chunk received - starting afplay now");
-                streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
-                streamingStarted = true;
-                this.onStatusUpdate({
-                  message: "Starting streaming playback...",
-                  isPlaying: true,
-                  isPaused: false,
-                });
+        await this.audioStreamer.streamAudio(requestParams, streamingContext, async (chunk) => {
+          totalChunksReceived++;
+          const elapsedTime = performance.now() - startTime;
+
+          // Log every 10th chunk to reduce verbosity
+          if (totalChunksReceived % 10 === 0 || totalChunksReceived <= 3) {
+            console.log(`[${this.instanceId}] Received audio chunk:`, {
+              chunkNumber: totalChunksReceived,
+              segmentIndex: segment.index,
+              chunkSize: chunk.data.length,
+              elapsedTime: elapsedTime.toFixed(2) + "ms",
+            });
+          }
+
+          if (
+            this.useStreaming &&
+            streamingStarted &&
+            !streamingTerminated &&
+            !streamingFailed &&
+            streamingPlayback
+          ) {
+            try {
+              await streamingPlayback.writeChunk(chunk.data);
+              if (totalChunksReceived % 10 === 0 || totalChunksReceived <= 3) {
+                console.log(
+                  `[${this.instanceId}] Streamed chunk ${totalChunksReceived} (${chunk.data.length} bytes) in ${elapsedTime}ms`
+                );
               }
+            } catch (streamError) {
+              console.error(`[${this.instanceId}] Failed to stream chunk:`, streamError);
 
-              // PHASE 1 OPTIMIZATION: Log TTFA for first chunk
-              if (totalChunksReceived === 1) {
-                logger.info("PHASE 1 OPTIMIZATION: First chunk received in TTS processor", {
-                  component: this.audioStreamer.name,
-                  method: "speak",
-                  requestId,
-                  ttfa: `${elapsedTime}ms`,
-                  targetTTFA: "800ms",
-                  achieved: elapsedTime < 800 ? "✅" : "❌",
-                });
-              }
+              // Check if this is a normal termination
+              const isNormalTermination =
+                streamError instanceof Error &&
+                (streamError.name === "NormalTermination" ||
+                  streamError.message.includes("SIGTERM") ||
+                  streamError.message.includes("normal termination") ||
+                  streamError.message.includes("process ended") ||
+                  streamError.message.includes("Ignoring write attempt after normal termination"));
 
-              this.onStatusUpdate({
-                message: `Streaming audio... (${totalChunksReceived} chunks)`,
-                style: Toast.Style.Success,
-                isPlaying: true,
-                isPaused: false,
-              });
-
-              if (
-                this.useStreaming &&
-                streamingStarted &&
-                !streamingTerminated &&
-                streamingPlayback
-              ) {
-                // PHASE 1 OPTIMIZATION: Stream properly formatted audio directly to afplay
-                console.log(`Received audio chunk: ${chunk.data.length} bytes`);
-
-                try {
-                  await streamingPlayback.writeChunk(chunk.data);
-                  console.log(
-                    `PHASE 1 OPTIMIZATION: Streamed chunk ${totalChunksReceived} (${chunk.data.length} bytes) in ${elapsedTime}ms`
-                  );
-                } catch (streamError) {
-                  console.error("PHASE 1 OPTIMIZATION: Failed to stream chunk:", streamError);
-
-                  // Check if this is a normal termination (SIGTERM) vs actual error
-                  const errorMessage =
-                    streamError instanceof Error ? streamError.message : String(streamError);
-                  const isNormalTermination =
-                    errorMessage.includes("SIGTERM") ||
-                    errorMessage.includes("normal termination") ||
-                    errorMessage.includes("process ended");
-
-                  if (isNormalTermination) {
-                    console.log("✅ Normal termination detected - marking streaming as complete");
-                    streamingTerminated = true;
-                    // Don't abort or fallback for normal termination
-                    return;
-                  } else {
-                    console.error("🚨 TRIGGERING ABORT due to streaming error");
-                    this.abortController?.abort();
-                    throw streamError;
-                  }
-                }
-              } else if (this.useStreaming && streamingTerminated) {
-                // Streaming completed normally - skip remaining chunks
-                console.log(`✅ Skipping chunk ${totalChunksReceived} - streaming completed`);
+              if (isNormalTermination) {
+                console.log(
+                  `[${this.instanceId}] Normal termination detected - marking streaming as complete`
+                );
+                streamingTerminated = true;
+                afplayTerminated = true;
+                // Don't abort or fallback for normal termination
                 return;
               } else {
-                // LEGACY: Sequential playback for non-streaming mode
-                console.log("🔍 DEBUGGING: Using legacy playback mode (non-streaming)");
-                const playbackContext = {
-                  audioData: chunk.data,
-                  format: {
-                    format: this.format,
-                    sampleRate: TTS_CONSTANTS.SAMPLE_RATE,
-                    channels: TTS_CONSTANTS.CHANNELS,
-                    bitDepth: TTS_CONSTANTS.BIT_DEPTH,
-                    bytesPerSample: TTS_CONSTANTS.BYTES_PER_SAMPLE,
-                    bytesPerSecond:
-                      TTS_CONSTANTS.SAMPLE_RATE *
-                      TTS_CONSTANTS.CHANNELS *
-                      TTS_CONSTANTS.BYTES_PER_SAMPLE,
-                  },
-                  metadata: {
-                    voice: this.voice,
-                    speed: this.speed,
-                    size: chunk.data.length,
-                  },
-                  playbackOptions: {
-                    useHardwareAcceleration: true,
-                    backgroundPlayback: true,
-                  },
-                };
-
-                try {
-                  await this.playbackManager.playAudio(playbackContext, signal);
-                  await new Promise((resolve) => setTimeout(resolve, 50));
-                } catch (playbackError) {
-                  console.error("Legacy playback failed:", playbackError);
-                  throw playbackError;
-                }
+                console.error(
+                  `[${this.instanceId}] Streaming failed - marking as failed to prevent fallback`
+                );
+                streamingFailed = true;
+                this.abortController?.abort();
+                throw streamError;
               }
-            }),
-          "tts-audio-streaming"
-        );
+            }
+          } else if (this.useStreaming && streamingTerminated) {
+            // Streaming completed normally - skip remaining chunks
+            return;
+          } else if (this.useStreaming && streamingFailed) {
+            // Streaming failed - skip remaining chunks to prevent fallback
+            return;
+          } else if (this.useStreaming && afplayTerminated) {
+            // afplay has terminated but we're still receiving chunks - skip them
+            return;
+          } else if (this.useStreaming && !streamingStarted) {
+            // Streaming mode but streaming hasn't started yet - this can happen if afplay terminated before first chunk
+            return;
+          } else if (this.useStreaming && !streamingPlayback) {
+            // Streaming mode but no streaming playback available - this can happen if afplay terminated
+            return;
+          }
+        });
+
+        console.log(`[${this.instanceId}] Segment ${segment.index + 1} processing complete`);
       }
 
+      console.log(`[${this.instanceId}] All segments processed, ending streaming playback`);
+
       // PHASE 1 OPTIMIZATION: End streaming playback
-      if (streamingPlayback && streamingStarted) {
+      if (streamingPlayback && streamingStarted && !streamingFailed) {
+        console.log(`[${this.instanceId}] Ending streaming playback`);
         try {
           await streamingPlayback.endStream();
-          console.log("✅ Streaming playback ended gracefully");
+          console.log(`[${this.instanceId}] Streaming playback ended gracefully`);
         } catch (endStreamError) {
+          console.error(`[${this.instanceId}] Error ending streaming playback:`, endStreamError);
           // Check if this is a normal termination
           const errorMessage =
             endStreamError instanceof Error ? endStreamError.message : String(endStreamError);
           const isNormalTermination =
             errorMessage.includes("SIGTERM") ||
             errorMessage.includes("normal termination") ||
-            errorMessage.includes("process ended");
+            errorMessage.includes("process ended") ||
+            errorMessage.includes("Stream ended normally despite timeout");
 
           if (isNormalTermination) {
-            console.log("✅ Normal termination during endStream - continuing");
+            console.log(`[${this.instanceId}] Normal termination during endStream - continuing`);
           } else {
-            console.error("Failed to end streaming playback:", endStreamError);
+            console.error(`[${this.instanceId}] Failed to end streaming playback:`, endStreamError);
             // Don't throw for endStream errors - they're not critical
           }
         }
       } else if (streamingTerminated) {
-        console.log("✅ Streaming already terminated normally - no need to end stream");
+        console.log(
+          `[${this.instanceId}] Streaming already terminated normally - no need to end stream`
+        );
+      } else if (streamingFailed) {
+        console.log(`[${this.instanceId}] Streaming failed - no need to end stream`);
       }
 
       if (!signal.aborted) {
         const totalTime = performance.now() - startTime;
+        console.log(` [${this.instanceId}]  Speech processing complete:`, {
+          totalChunks: totalChunksReceived,
+          totalTime: totalTime.toFixed(2) + "ms",
+          averageChunkTime:
+            totalChunksReceived > 0 ? (totalTime / totalChunksReceived).toFixed(2) + "ms" : "N/A",
+        });
         console.log(
-          `PHASE 1 OPTIMIZATION: All ${totalChunksReceived} chunks processed in ${totalTime}ms`
+          ` [${this.instanceId}] PHASE 1 OPTIMIZATION: All ${totalChunksReceived} chunks processed in ${totalTime}ms`
         );
         this.onStatusUpdate({
           message: "Speech completed",
@@ -511,26 +676,56 @@ export class TTSSpeechProcessor {
         });
       }
     } catch (error) {
-      // PHASE 1 OPTIMIZATION: Clean up streaming playback on error
-      if (streamingPlayback) {
+      console.error(` [${this.instanceId}]  Speech processing failed:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      console.error(` [${this.instanceId}] Error details:`, {
+        message: errorMessage,
+        stack: errorStack,
+        useStreaming: this.useStreaming,
+        streamingStarted,
+        streamingFailed,
+        totalChunksReceived,
+      });
+
+      if (streamingPlayback && !streamingFailed) {
+        console.log(` [${this.instanceId}]  Cleaning up streaming playback after error`);
         try {
           await streamingPlayback.endStream();
         } catch (cleanupError) {
-          console.error("Failed to clean up streaming playback:", cleanupError);
+          console.error(
+            ` [${this.instanceId}]  Failed to clean up streaming playback:`,
+            cleanupError
+          );
+          console.error(
+            ` [${this.instanceId}] Failed to clean up streaming playback:`,
+            cleanupError
+          );
         }
       }
 
       if (!this.playbackManager.isStopped() && !signal.aborted) {
-        console.error("TTS Error:", error);
+        console.error(` [${this.instanceId}] TTS Error:`, error);
+        console.error(` [${this.instanceId}] TTS Error:`, error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
         showToast({ style: Toast.Style.Failure, title: "TTS Error", message: errorMessage });
         throw error;
       }
     } finally {
+      console.log(` [${this.instanceId}]  Cleaning up resources`);
+      const finalTime = performance.now() - startTime;
+      console.log(
+        ` [${this.instanceId}]  Final session duration:`,
+        finalTime.toFixed(2) + "ms"
+      );
+
       this.performanceMonitor.endTracking(requestId);
       this.performanceMonitor.logPerformanceReport();
       await this.cleanup();
       this.abortController = null;
+
+      console.log(` [${this.instanceId}] === SPEAK METHOD END ===`);
     }
   }
 
@@ -630,12 +825,27 @@ export class TTSSpeechProcessor {
       voice: this.voice,
       speed: this.speed,
       serverUrl: this.serverUrl,
+      daemonUrl: `http://localhost:${this.daemonPort ?? 8081}`,
       useStreaming: this.useStreaming,
       sentencePauses: this.sentencePauses,
       maxSentenceLength: this.maxSentenceLength,
       format: this.format,
       developmentMode: this.developmentMode,
       onStatusUpdate: this.onStatusUpdate,
+      performanceProfile: "balanced",
+      autoSelectProfile: false,
+      showPerformanceMetrics: false,
     };
   }
+}
+
+// Conditional import or mock for @raycast/api
+let showToast: any, Toast: any;
+try {
+  // Try to import Raycast API (works in Raycast extension runtime)
+  ({ showToast, Toast } = require("@raycast/api"));
+} catch (e) {
+  // Fallback mock for Node.js/testing
+  showToast = async () => {};
+  Toast = { Style: { Success: "success", Failure: "failure" } };
 }

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { TextProcessor } from "./text-processor";
-// import { TTSLogger } from "../core/logger";
-// import { ValidationUtils } from "../validation/validation";
-import type { TextProcessingConfig } from "../validation/tts-types";
+import { TextProcessor } from "./text-processor.js";
+// import { TTSLogger } from "../core/logger.js";
+// import { ValidationUtils } from "../validation/validation.js";
+import type { TextProcessingConfig } from "../validation/tts-types.js";
 
 // Mock logger to prevent console output and allow for spying
 vi.mock("../core/logger", () => {

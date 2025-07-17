@@ -17,8 +17,8 @@
  */
 
 import { showToast, Toast } from "@raycast/api";
-import type { VoiceOption, TTSProcessorConfig } from "./tts-types";
-import { VOICES } from "../tts/voices";
+import type { VoiceOption, TTSProcessorConfig } from "./tts-types.js";
+import { VOICES } from "../tts/voices.js";
 
 /**
  * Validation result with error information
@@ -37,11 +37,15 @@ export const DEFAULT_TTS_CONFIG: TTSProcessorConfig = {
   voice: "af_heart",
   speed: 1.0,
   serverUrl: "http://localhost:8000",
+  daemonUrl: "http://localhost:8081",
   useStreaming: true,
   sentencePauses: false,
   maxSentenceLength: 0,
   format: "wav",
   developmentMode: false,
+  performanceProfile: "balanced",
+  autoSelectProfile: true,
+  showPerformanceMetrics: false,
   onStatusUpdate: () => {},
 };
 
@@ -161,6 +165,31 @@ export const validateSpeed = (speed: unknown): ValidationResult<number> => {
   };
 };
 
+/**
+ * Validate daemon URL
+ */
+export const validateDaemonUrl = (url: unknown): ValidationResult<string> => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!url || typeof url !== "string") {
+    errors.push("Daemon URL must be a string");
+    return {
+      isValid: false,
+      value: DEFAULT_TTS_CONFIG.daemonUrl,
+      errors,
+      warnings,
+    };
+  }
+
+  let cleanUrl = url.trim();
+
+  // Add protocol if missing
+  if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+    cleanUrl = `http://${cleanUrl}`;
+    warnings.push("Added http:// protocol to daemon URL");
+  }
+};
 /**
  * Validate server URL
  */
@@ -345,6 +374,112 @@ export const validateMaxSentenceLength = (length: unknown): ValidationResult<num
 };
 
 /**
+ * Validate Node.js executable path
+ */
+export const validateNodePath = (path: unknown): ValidationResult<string> => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!path || typeof path !== "string") {
+    errors.push("Node.js path must be a string");
+    return {
+      isValid: false,
+      value: "node", // Default to system PATH
+      errors,
+      warnings,
+    };
+  }
+
+  const cleanPath = path.trim();
+
+  if (cleanPath.length === 0) {
+    errors.push("Node.js path cannot be empty");
+    return {
+      isValid: false,
+      value: "node",
+      errors,
+      warnings,
+    };
+  }
+
+  // Basic path validation
+  if (cleanPath.includes("..") || cleanPath.includes("~")) {
+    warnings.push("Node.js path contains potentially unsafe characters");
+  }
+
+  // Check if path looks like a valid Node.js executable
+  const nodePatterns = [/node$/, /node\.exe$/, /nodejs$/, /nodejs\.exe$/];
+
+  const isValidNodePath = nodePatterns.some((pattern) => pattern.test(cleanPath));
+
+  if (!isValidNodePath) {
+    warnings.push("Path may not be a valid Node.js executable");
+  }
+
+  return {
+    isValid: true,
+    value: cleanPath,
+    errors,
+    warnings,
+  };
+};
+
+/**
+ * Validate performance profile
+ */
+export const validatePerformanceProfile = (profile: unknown): ValidationResult<string> => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!profile || typeof profile !== "string") {
+    errors.push("Performance profile must be a string");
+    return {
+      isValid: false,
+      value: DEFAULT_TTS_CONFIG.performanceProfile,
+      errors,
+      warnings,
+    };
+  }
+
+  const validProfiles = ["conservative", "balanced", "aggressive", "network-optimized"];
+
+  if (!validProfiles.includes(profile)) {
+    errors.push(`Invalid performance profile: ${profile}. Using default profile.`);
+    return {
+      isValid: false,
+      value: DEFAULT_TTS_CONFIG.performanceProfile,
+      errors,
+      warnings,
+    };
+  }
+
+  return {
+    isValid: true,
+    value: profile,
+    errors,
+    warnings,
+  };
+};
+
+/**
+ * Validate auto-select profile setting
+ */
+export const validateAutoSelectProfile = (autoSelect: unknown): ValidationResult<boolean> => {
+  return validateBoolean(autoSelect, DEFAULT_TTS_CONFIG.autoSelectProfile, "Auto-select profile");
+};
+
+/**
+ * Validate show performance metrics setting
+ */
+export const validateShowPerformanceMetrics = (showMetrics: unknown): ValidationResult<boolean> => {
+  return validateBoolean(
+    showMetrics,
+    DEFAULT_TTS_CONFIG.showPerformanceMetrics,
+    "Show performance metrics"
+  );
+};
+
+/**
  * Validate complete TTS configuration
  */
 export const validateTTSConfig = (
@@ -357,6 +492,7 @@ export const validateTTSConfig = (
   const voiceResult = validateVoice(config.voice);
   const speedResult = validateSpeed(config.speed);
   const serverUrlResult = validateServerUrl(config.serverUrl);
+  const daemonUrlResult = validateDaemonUrl(config.daemonUrl);
   const streamingResult = validateBoolean(
     config.useStreaming,
     DEFAULT_TTS_CONFIG.useStreaming,
@@ -368,34 +504,51 @@ export const validateTTSConfig = (
     "sentencePauses"
   );
   const maxLengthResult = validateMaxSentenceLength(config.maxSentenceLength);
+  const performanceProfileResult = validatePerformanceProfile(config.performanceProfile);
+  const autoSelectProfileResult = validateAutoSelectProfile(config.autoSelectProfile);
+  const showPerformanceMetricsResult = validateShowPerformanceMetrics(
+    config.showPerformanceMetrics
+  );
 
   // Collect all errors and warnings
   errors.push(
     ...voiceResult.errors,
     ...speedResult.errors,
     ...serverUrlResult.errors,
+    ...daemonUrlResult.errors,
     ...streamingResult.errors,
     ...pausesResult.errors,
-    ...maxLengthResult.errors
+    ...maxLengthResult.errors,
+    ...performanceProfileResult.errors,
+    ...autoSelectProfileResult.errors,
+    ...showPerformanceMetricsResult.errors
   );
   warnings.push(
     ...voiceResult.warnings,
     ...speedResult.warnings,
     ...serverUrlResult.warnings,
+    ...daemonUrlResult.warnings,
     ...streamingResult.warnings,
     ...pausesResult.warnings,
-    ...maxLengthResult.warnings
+    ...maxLengthResult.warnings,
+    ...performanceProfileResult.warnings,
+    ...autoSelectProfileResult.warnings,
+    ...showPerformanceMetricsResult.warnings
   );
 
   const validatedConfig: TTSProcessorConfig = {
     voice: voiceResult.value,
     speed: speedResult.value,
     serverUrl: serverUrlResult.value,
+    daemonUrl: daemonUrlResult.value,
     useStreaming: streamingResult.value,
     sentencePauses: pausesResult.value,
     maxSentenceLength: maxLengthResult.value,
     format: config.format ?? DEFAULT_TTS_CONFIG.format,
     developmentMode: config.developmentMode ?? DEFAULT_TTS_CONFIG.developmentMode,
+    performanceProfile: performanceProfileResult.value,
+    autoSelectProfile: autoSelectProfileResult.value,
+    showPerformanceMetrics: showPerformanceMetricsResult.value,
     onStatusUpdate: config.onStatusUpdate ?? DEFAULT_TTS_CONFIG.onStatusUpdate,
   };
 

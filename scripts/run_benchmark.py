@@ -275,7 +275,7 @@ def configure_benchmark_settings(args):
     logger.info(f" Benchmark configuration applied:")
     logger.info(f"   • Warmup runs: {TTSConfig.BENCHMARK_WARMUP_RUNS}")
     logger.info(f"   • Consistency runs: {TTSConfig.BENCHMARK_CONSISTENCY_RUNS}")
-    logger.info(f"   • Long text testing: {'✅ Enabled' if TTSConfig.BENCHMARK_ENABLE_LONG_TEXT else '❌ Disabled'}")
+    logger.info(f"   • Long text testing: {'✅ Enabled' if TTSConfig.BENCHMARK_ENABLE_LONG_TEXT else ' Disabled'}")
 
 
 def display_benchmark_info(args):
@@ -295,12 +295,12 @@ def display_benchmark_info(args):
     print(f" Configuration:")
     print(f"   • Warmup runs: {TTSConfig.BENCHMARK_WARMUP_RUNS}")
     print(f"   • Consistency runs: {TTSConfig.BENCHMARK_CONSISTENCY_RUNS}")
-    print(f"   • Long text testing: {'✅ Enabled' if TTSConfig.BENCHMARK_ENABLE_LONG_TEXT else '❌ Disabled'}")
+    print(f"   • Long text testing: {'✅ Enabled' if TTSConfig.BENCHMARK_ENABLE_LONG_TEXT else ' Disabled'}")
     print(f"   • Min improvement threshold: {TTSConfig.BENCHMARK_MIN_IMPROVEMENT_PERCENT}%")
     print(f"   • Output file: {args.output_file}")
-    print(f"   • Continue on error: {'✅ Yes' if args.continue_on_error else '❌ No'}")
-    print(f"   • Validation only: {'✅ Yes' if args.validate_only else '❌ No'}")
-    print(f"   • Comprehensive mode: {'✅ Yes' if args.comprehensive else '❌ No'}")
+    print(f"   • Continue on error: {'✅ Yes' if args.continue_on_error else ' No'}")
+    print(f"   • Validation only: {'✅ Yes' if args.validate_only else ' No'}")
+    print(f"   • Comprehensive mode: {'✅ Yes' if args.comprehensive else ' No'}")
     print("\n")
 
 
@@ -410,7 +410,7 @@ def validate_dependencies():
             logger.debug(f"✅ {package_name} available")
         except ImportError:
             missing_deps.append(package_name)
-            logger.error(f"❌ {package_name} not found")
+            logger.error(f" {package_name} not found")
     
     # Check optional dependencies
     optional_packages = [
@@ -438,7 +438,7 @@ def validate_dependencies():
     
     # Report results
     if missing_deps:
-        logger.error(f"❌ Missing required dependencies: {', '.join(missing_deps)}")
+        logger.error(f" Missing required dependencies: {', '.join(missing_deps)}")
         logger.error(" Install missing packages with: pip install " + " ".join(missing_deps))
         return False
     
@@ -461,7 +461,7 @@ def run_extended_benchmark_analysis(benchmark_results: Dict[str, float]):
     logger = logging.getLogger(__name__)
     
     if not benchmark_results:
-        logger.error("❌ No benchmark results to analyze")
+        logger.error(" No benchmark results to analyze")
         return
     
     print("\n Extended Performance Analysis")
@@ -543,7 +543,7 @@ async def run_comprehensive_benchmark(args):
             all_results.append(scenario_results)
             
         except Exception as e:
-            logger.error(f"❌ Scenario '{scenario['name']}' failed: {e}")
+            logger.error(f" Scenario '{scenario['name']}' failed: {e}")
         finally:
             if server_process:
                 logger.info("Stopping server...")
@@ -689,7 +689,7 @@ async def main():
             validate_arguments(args)
             configure_benchmark_settings(args)
         except ValueError as e:
-            logger.error(f"❌ Invalid configuration: {e}")
+            logger.error(f" Invalid configuration: {e}")
             return 1
         
         # Display benchmark information
@@ -697,7 +697,7 @@ async def main():
         
         # Validate dependencies
         if not validate_dependencies():
-            logger.error("❌ Dependency validation failed")
+            logger.error(" Dependency validation failed")
             return 1
         
         # Check patch status
@@ -727,7 +727,7 @@ async def main():
             init_time = time.perf_counter() - start_init
             logger.info(f"✅ Model initialized in {init_time:.3f}s")
         except Exception as e:
-            logger.error(f"❌ Model initialization failed: {e}")
+            logger.error(f" Model initialization failed: {e}")
             if not args.continue_on_error:
                 return 1
             logger.warning("⚠️ Continuing with benchmark despite initialization failure")
@@ -745,7 +745,7 @@ async def main():
             benchmark_time = time.perf_counter() - start_benchmark
             logger.info(f"✅ Benchmark completed in {benchmark_time:.3f}s")
         except Exception as e:
-            logger.error(f"❌ Benchmark execution failed: {e}")
+            logger.error(f" Benchmark execution failed: {e}")
             if args.verbose:
                 logger.debug(f" Full traceback:\n{traceback.format_exc()}")
             if not args.continue_on_error:
@@ -767,12 +767,12 @@ async def main():
                 save_benchmark_report(system_info, benchmark_results, optimal_provider, args.output_file)
                 logger.info(f"✅ Report saved to: {args.output_file}")
             except Exception as e:
-                logger.error(f"❌ Failed to save benchmark report: {e}")
+                logger.error(f" Failed to save benchmark report: {e}")
                 if not args.continue_on_error:
                     return 1
             
         else:
-            logger.error("❌ Benchmark failed - no results obtained")
+            logger.error(" Benchmark failed - no results obtained")
             if not args.continue_on_error:
                 return 1
 
@@ -783,7 +783,7 @@ async def main():
         logger.warning("\n⚠️ Benchmark interrupted by user")
         return 1
     except Exception as e:
-        logger.error(f"❌ Benchmark failed with unexpected error: {e}")
+        logger.error(f" Benchmark failed with unexpected error: {e}")
         if args.verbose:
             logger.debug(f" Full traceback:\n{traceback.format_exc()}")
         return 1

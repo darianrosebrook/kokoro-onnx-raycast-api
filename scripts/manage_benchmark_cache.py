@@ -103,7 +103,7 @@ def save_cache_data(data: Dict[str, Any]) -> bool:
             json.dump(data, f, indent=2)
         return True
     except IOError as e:
-        print(f"❌ Error saving cache file: {e}")
+        print(f" Error saving cache file: {e}")
         return False
 
 
@@ -126,7 +126,7 @@ def clear_cache() -> bool:
         print("   • This will add 20-30 seconds to startup time")
         return True
     except IOError as e:
-        print(f"❌ Error clearing cache: {e}")
+        print(f" Error clearing cache: {e}")
         return False
 
 
@@ -151,7 +151,7 @@ def show_cache_status() -> None:
     cache_data = load_cache_data()
     
     if not cache_data:
-        print("Cache Status: ❌ No cache file found")
+        print("Cache Status:  No cache file found")
         print("  • Next startup will benchmark hardware")
         print("  • Expected startup delay: 20-30 seconds")
         print("  • This is normal for first-time setup")
@@ -221,7 +221,7 @@ def inspect_cache() -> None:
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
-        print("❌ No cache file found")
+        print(" No cache file found")
         return
     
     try:
@@ -253,7 +253,7 @@ def inspect_cache() -> None:
                     print(f"  • {key}: {value}")
         
     except Exception as e:
-        print(f"❌ Error inspecting cache: {e}")
+        print(f" Error inspecting cache: {e}")
 
 
 def force_benchmark() -> bool:
@@ -277,7 +277,7 @@ def force_benchmark() -> bool:
             initialize_model()
             print("✅ Model initialized successfully")
         except Exception as e:
-            print(f"❌ Model initialization failed: {e}")
+            print(f" Model initialization failed: {e}")
             return False
     
     # Run benchmark
@@ -315,11 +315,11 @@ def force_benchmark() -> bool:
             
             return True
         else:
-            print("❌ Failed to save benchmark results")
+            print(" Failed to save benchmark results")
             return False
             
     except Exception as e:
-        print(f"❌ Benchmark failed: {e}")
+        print(f" Benchmark failed: {e}")
         return False
 
 

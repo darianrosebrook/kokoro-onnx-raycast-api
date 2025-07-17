@@ -87,15 +87,15 @@ export async function getValidatedVoice(
 
     if (similarVoices.length > 0) {
       const fallbackVoice = similarVoices[0];
-      console.log(`🔄 Using similar voice: ${fallbackVoice}`);
+      console.log(` Using similar voice: ${fallbackVoice}`);
       return fallbackVoice;
     }
 
     // Default fallback - use first available voice
     const fallbackVoice = availableVoices[0];
-    console.log(`🔄 Using fallback voice: ${fallbackVoice}`);
+    console.log(` Using fallback voice: ${fallbackVoice}`);
     console.log(
-      `📋 Available voices: ${availableVoices.slice(0, 5).join(", ")}${availableVoices.length > 5 ? "..." : ""}`
+      ` Available voices: ${availableVoices.slice(0, 5).join(", ")}${availableVoices.length > 5 ? "..." : ""}`
     );
 
     return fallbackVoice;
@@ -135,22 +135,22 @@ export function categorizeVoice(name: string): { flag: string; category: string 
 
   // American English
   if (prefix.startsWith("af") || prefix.startsWith("am")) {
-    return { flag: "🇺🇸", category: "American English" };
+    return { flag: "", category: "American English" };
   }
   // British English
   if (prefix.startsWith("bf") || prefix.startsWith("bm")) {
-    return { flag: "🇬🇧", category: "British English" };
+    return { flag: "", category: "British English" };
   }
   // Chinese
   if (prefix.startsWith("cf") || prefix.startsWith("cm")) {
-    return { flag: "🇨🇳", category: "Chinese" };
+    return { flag: "", category: "Chinese" };
   }
   // French
   if (prefix.startsWith("df") || prefix.startsWith("dm")) {
-    return { flag: "🇫🇷", category: "French" };
+    return { flag: "", category: "French" };
   }
   // Other patterns - default to US English
-  return { flag: "🇺🇸", category: "English" };
+  return { flag: "", category: "English" };
 }
 
 /**

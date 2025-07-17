@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { AdaptiveBufferManager } from "./adaptive-buffer-manager";
-import type { BufferConfig, PerformanceMetrics } from "../../validation/tts-types";
+import { AdaptiveBufferManager } from "./adaptive-buffer-manager.js";
+import type { BufferConfig, PerformanceMetrics } from "../../validation/tts-types.js";
 
 vi.mock("../../core/logger", () => ({
   logger: {
@@ -59,14 +59,14 @@ describe("AdaptiveBufferManager", () => {
     });
 
     it("should not adapt if interval has not passed", () => {
-      bufferManager.updateBuffer(mockMetrics);
+      bufferManager.updateBuffer(mockMetrics, false);
       const newConfig = bufferManager.getBufferConfig();
       expect(newConfig.targetBufferMs).toBe(initialConfig.targetBufferMs);
     });
 
     it("should adapt after interval has passed", () => {
       vi.advanceTimersByTime(5001); // Default interval is 5000ms
-      bufferManager.updateBuffer(mockMetrics);
+      bufferManager.updateBuffer(mockMetrics, true);
       const newConfig = bufferManager.getBufferConfig();
       // An adaptation should have occurred, let's just check it's not the same
       expect(newConfig.targetBufferMs).not.toBe(initialConfig.targetBufferMs);

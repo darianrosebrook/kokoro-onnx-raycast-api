@@ -1,3 +1,4 @@
+/* global process */
 /**
  * Structured Logging Utility for Raycast Kokoro TTS
  *
@@ -39,7 +40,7 @@ interface LogContext {
   userId?: string;
   voice?: string;
   textLength?: number;
-  duration?: number;
+  duration?: number | string;
   [key: string]: unknown;
 }
 
@@ -121,7 +122,10 @@ export class TTSLogger {
   constructor(config: Partial<LoggerConfig> = {}) {
     const defaultConfig: LoggerConfig = {
       level: LogLevel.INFO,
-      developmentMode: process.env.NODE_ENV !== "production",
+      developmentMode:
+        typeof process !== "undefined" && process.env
+          ? process.env.NODE_ENV !== "production"
+          : true,
       enableConsole: true,
       enableFile: false,
     };
@@ -334,7 +338,8 @@ export class TTSLogger {
 // Create default logger instance
 const defaultLogger = new TTSLogger({
   level: LogLevel.INFO,
-  developmentMode: process.env.NODE_ENV !== "production",
+  developmentMode:
+    typeof process !== "undefined" && process.env ? process.env.NODE_ENV !== "production" : true,
 });
 
 // Export default logger and class

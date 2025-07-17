@@ -411,7 +411,10 @@ class TTSConfig:
     
     # Text processing limits for optimal performance
     MAX_TEXT_LENGTH = 4500  # OpenAI API compatibility limit
-    MAX_SEGMENT_LENGTH = 200  # Optimal segment size for parallel processing
+    # PHASE 1 OPTIMIZATION: Increased from 200 to 800 for better TTFA performance
+    # This allows moderately long texts to be processed as single segments,
+    # reducing server-side processing overhead and improving time-to-first-audio
+    MAX_SEGMENT_LENGTH = 800  # Optimal segment size for Phase 1 streaming performance
     
     # ORT (ONNX Runtime) optimization settings
     ORT_OPTIMIZATION_ENABLED = os.environ.get("KOKORO_ORT_OPTIMIZATION", "auto").lower()
@@ -422,6 +425,28 @@ class TTSConfig:
     # Apple Silicon specific ORT settings
     APPLE_SILICON_ORT_PREFERRED = os.environ.get("KOKORO_APPLE_SILICON_ORT_PREFERRED", "true").lower() == "true"
     ORT_COMPUTE_UNITS = ["CPUAndNeuralEngine", "CPUAndGPU", "CPUOnly", "ALL"]
+    
+    # Misaki G2P Configuration - Kokoro-specific phonemization
+    MISAKI_ENABLED = os.environ.get("KOKORO_MISAKI_ENABLED", "true").lower() == "true"
+    MISAKI_DEFAULT_LANG = os.environ.get("KOKORO_MISAKI_LANG", "en")
+    MISAKI_USE_TRANSFORMER = os.environ.get("KOKORO_MISAKI_TRANSFORMER", "false").lower() == "true"
+    MISAKI_FALLBACK_ENABLED = os.environ.get("KOKORO_MISAKI_FALLBACK", "true").lower() == "true"
+    MISAKI_CACHE_SIZE = int(os.environ.get("KOKORO_MISAKI_CACHE_SIZE", "1000"))
+    MISAKI_QUALITY_THRESHOLD = float(os.environ.get("KOKORO_MISAKI_QUALITY_THRESHOLD", "0.8"))
+    
+    # Misaki supported languages for multi-language processing
+    MISAKI_SUPPORTED_LANGUAGES = {
+        "en": {"name": "English", "variants": ["en-us", "en-gb"]},
+        "ja": {"name": "Japanese", "variants": ["ja-jp"]},
+        "zh": {"name": "Chinese", "variants": ["zh-cn", "zh-tw"]},
+        "ko": {"name": "Korean", "variants": ["ko-kr"]},
+        "vi": {"name": "Vietnamese", "variants": ["vi-vn"]},
+        "es": {"name": "Spanish", "variants": ["es-es", "es-mx"]},
+        "fr": {"name": "French", "variants": ["fr-fr"]},
+        "hi": {"name": "Hindi", "variants": ["hi-in"]},
+        "it": {"name": "Italian", "variants": ["it-it"]},
+        "pt": {"name": "Portuguese", "variants": ["pt-br", "pt-pt"]}
+    }
     
     @classmethod
     def verify_config(cls):
@@ -472,7 +497,7 @@ class TTSConfig:
             TTSConfig.verify_config()
             print("✅ Configuration verified successfully")
         except ValueError as e:
-            print(f"❌ Configuration error: {e}")
+            print(f" Configuration error: {e}")
             sys.exit(1)
         ```
         """
@@ -516,6 +541,40 @@ class TTSConfig:
             logger.warning("⚠️ MAX_SEGMENT_LENGTH cannot exceed MAX_TEXT_LENGTH")
             cls.MAX_SEGMENT_LENGTH = min(cls.MAX_SEGMENT_LENGTH, cls.MAX_TEXT_LENGTH)
         
+        # Validate Misaki G2P configuration
+        if cls.MISAKI_ENABLED:
+            logger.info(" Verifying Misaki G2P configuration...")
+            
+            # Validate language configuration
+            if cls.MISAKI_DEFAULT_LANG not in cls.MISAKI_SUPPORTED_LANGUAGES:
+                logger.warning(f"⚠️ MISAKI_DEFAULT_LANG '{cls.MISAKI_DEFAULT_LANG}' not supported, using 'en'")
+                cls.MISAKI_DEFAULT_LANG = "en"
+            
+            # Validate cache size
+            if cls.MISAKI_CACHE_SIZE < 100:
+                logger.warning("⚠️ MISAKI_CACHE_SIZE too small, may impact performance")
+            elif cls.MISAKI_CACHE_SIZE > 10000:
+                logger.warning(f"⚠️ MISAKI_CACHE_SIZE ({cls.MISAKI_CACHE_SIZE}) may consume excessive memory")
+            
+            # Validate quality threshold
+            if cls.MISAKI_QUALITY_THRESHOLD < 0.5:
+                logger.warning("⚠️ MISAKI_QUALITY_THRESHOLD too low, may reduce phonemization quality")
+            elif cls.MISAKI_QUALITY_THRESHOLD > 1.0:
+                logger.warning("⚠️ MISAKI_QUALITY_THRESHOLD too high, correcting to 1.0")
+                cls.MISAKI_QUALITY_THRESHOLD = 1.0
+            
+            # Check fallback configuration
+            if not cls.MISAKI_FALLBACK_ENABLED:
+                logger.warning("⚠️ MISAKI_FALLBACK_ENABLED is False, may cause failures for unsupported text")
+            
+            logger.info(f"✅ Misaki G2P configuration validated")
+            logger.info(f"   - Default language: {cls.MISAKI_DEFAULT_LANG}")
+            logger.info(f"   - Cache size: {cls.MISAKI_CACHE_SIZE}")
+            logger.info(f"   - Quality threshold: {cls.MISAKI_QUALITY_THRESHOLD}")
+            logger.info(f"   - Fallback enabled: {cls.MISAKI_FALLBACK_ENABLED}")
+        else:
+            logger.info(" Misaki G2P is disabled, using fallback phonemizer")
+        
         # Log successful validation
         logger.info("✅ Configuration validation completed successfully")
         
@@ -526,6 +585,7 @@ class TTSConfig:
         logger.info(f"   - Max concurrent segments: {cls.MAX_CONCURRENT_SEGMENTS}")
         logger.info(f"   - Max text length: {cls.MAX_TEXT_LENGTH} characters")
         logger.info(f"   - Max segment length: {cls.MAX_SEGMENT_LENGTH} characters")
+        logger.info(f"   - Misaki G2P: {'Enabled' if cls.MISAKI_ENABLED else 'Disabled'}")
         
         return True
 
@@ -595,3 +655,15 @@ class TTSConfig:
                 return base_duration
         
         return base_duration
+
+# Logging configuration
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+LOG_VERBOSE = os.environ.get("LOG_VERBOSE", "false").lower() == "true"
+
+# Development vs Production logging
+if LOG_VERBOSE:
+    CONSOLE_LOG_LEVEL = "DEBUG"
+    FILE_LOG_LEVEL = "DEBUG"
+else:
+    CONSOLE_LOG_LEVEL = "INFO"
+    FILE_LOG_LEVEL = "DEBUG"  # Always log everything to file

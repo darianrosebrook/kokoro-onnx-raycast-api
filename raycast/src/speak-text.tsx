@@ -22,9 +22,14 @@ import {
   useTTSRequestState,
   useErrorHandler,
   usePerformanceMonitor,
+  useDaemonHealth,
 } from "./utils/core/state-management";
 import { ttsBenchmark } from "./utils/performance/performance-benchmark";
 import { generateVoiceOptions as generateDynamicVoiceOptions } from "./utils/tts/voice-manager";
+import {
+  performanceProfileManager,
+  PERFORMANCE_PROFILES,
+} from "./utils/performance/performance-profiles";
 import {
   VOICES,
   getAmericanEnglishVoices,
@@ -120,15 +125,15 @@ const generateHardcodedVoiceOptions = (): { value: VoiceOption; title: string }[
   };
 
   // Add languages in order of preference/quality
-  addLanguageGroup(getAmericanEnglishVoices(), "🇺🇸");
-  addLanguageGroup(getBritishEnglishVoices(), "🇬🇧");
-  addLanguageGroup(getFrenchVoices(), "🇫🇷");
-  addLanguageGroup(getJapaneseVoices(), "🇯🇵");
-  addLanguageGroup(getHindiVoices(), "🇮🇳");
-  addLanguageGroup(getItalianVoices(), "🇮🇹");
-  addLanguageGroup(getMandarinChineseVoices(), "🇨🇳");
-  addLanguageGroup(getSpanishVoices(), "🇪🇸");
-  addLanguageGroup(getBrazilianPortugueseVoices(), "🇧🇷");
+  addLanguageGroup(getAmericanEnglishVoices(), "");
+  addLanguageGroup(getBritishEnglishVoices(), "");
+  addLanguageGroup(getFrenchVoices(), "");
+  addLanguageGroup(getJapaneseVoices(), "");
+  addLanguageGroup(getHindiVoices(), "");
+  addLanguageGroup(getItalianVoices(), "");
+  addLanguageGroup(getMandarinChineseVoices(), "");
+  addLanguageGroup(getSpanishVoices(), "");
+  addLanguageGroup(getBrazilianPortugueseVoices(), "");
 
   return voiceOptions;
 };
@@ -151,6 +156,12 @@ export default function SpeakTextSimple() {
     revalidate: _revalidate,
   } = useServerHealth(preferences.serverUrl);
   const {
+    daemonHealth,
+    isHealthy: daemonHealthy,
+    latency: daemonLatency,
+    revalidate: _revalidateDaemon,
+  } = useDaemonHealth();
+  const {
     voices: _voices,
     isLoading: _voicesLoading,
     hasVoices: _hasVoices,
@@ -168,6 +179,12 @@ export default function SpeakTextSimple() {
   const [voiceOptions, setVoiceOptions] =
     useState<{ value: VoiceOption; title: string }[]>(_VOICE_OPTIONS);
   const [_isLoadingVoices, setIsLoadingVoices] = useState(true);
+  const [profileRecommendations, setProfileRecommendations] = useState<{
+    recommended: string;
+    alternatives: string[];
+    reasoning: string;
+  } | null>(null);
+  const [_isLoadingProfiles, setIsLoadingProfiles] = useState(false);
   const processorRef = useRef<TTSSpeechProcessor | null>(null);
   const toastRef = useRef<Toast | null>(null);
 
@@ -175,6 +192,9 @@ export default function SpeakTextSimple() {
   const voice = preferences.voice;
   const speed = preferences.speed.toString();
   const useStreaming = preferences.useStreaming;
+  const performanceProfile = preferences.performanceProfile;
+  const autoSelectProfile = preferences.autoSelectProfile;
+  const showPerformanceMetrics = preferences.showPerformanceMetrics;
 
   // Load voice options on component mount and when server URL changes
   useEffect(() => {
@@ -195,6 +215,30 @@ export default function SpeakTextSimple() {
 
     loadVoices();
   }, [preferences.serverUrl]);
+
+  // Load performance profile recommendations
+  useEffect(() => {
+    const loadProfileRecommendations = async () => {
+      if (autoSelectProfile) {
+        setIsLoadingProfiles(true);
+        try {
+          const recommendations = await performanceProfileManager.getProfileRecommendations();
+          setProfileRecommendations(recommendations);
+
+          // Auto-select the recommended profile if different from current
+          if (recommendations.recommended !== performanceProfile) {
+            updatePreferences({ performanceProfile: recommendations.recommended });
+          }
+        } catch (error) {
+          console.error("Failed to load profile recommendations:", error);
+        } finally {
+          setIsLoadingProfiles(false);
+        }
+      }
+    };
+
+    loadProfileRecommendations();
+  }, [autoSelectProfile, performanceProfile, updatePreferences]);
 
   // Auto-populate with clipboard text
   useEffect(() => {
@@ -225,13 +269,29 @@ export default function SpeakTextSimple() {
   }, [isProcessing]);
 
   const handleStart = async () => {
+    console.log(" [SPEAK-TEXT] === TTS SESSION START ===");
+    console.log(" [SPEAK-TEXT] User initiated speech");
+    console.log(" [SPEAK-TEXT] Current state:", {
+      isProcessing,
+      isPaused,
+      textLength: text.length,
+      voice,
+      speed,
+      useStreaming,
+      serverUrl: preferences.serverUrl,
+    });
+
+    // Log environment info for debugging
+    console.log(" [SPEAK-TEXT] Starting speech processing");
+
     if (isProcessing) {
-      // Restart logic
+      console.log(" [SPEAK-TEXT] Restarting - stopping existing processor");
       await processorRef.current?.stop();
     }
 
     const trimmedText = text.trim();
     if (!trimmedText) {
+      console.log(" [SPEAK-TEXT]  No text provided");
       await showToast({
         style: Toast.Style.Failure,
         title: "Text required",
@@ -240,8 +300,14 @@ export default function SpeakTextSimple() {
       return;
     }
 
+    console.log(" [SPEAK-TEXT] Text to speak:", {
+      length: trimmedText.length,
+      preview: trimmedText.substring(0, 100) + (trimmedText.length > 100 ? "..." : ""),
+    });
+
     // Check server health before processing
     if (!isHealthy) {
+      console.log(" [SPEAK-TEXT]  Server health check failed");
       await showToast({
         style: Toast.Style.Failure,
         title: "Server unavailable",
@@ -250,13 +316,26 @@ export default function SpeakTextSimple() {
       return;
     }
 
+    console.log(" [SPEAK-TEXT] ✅ Server health check passed");
+    console.log(" [SPEAK-TEXT] Server latency:", latency + "ms");
+
     setIsProcessing(true);
     setIsPaused(false);
 
     // Add to request history
     addToHistory(trimmedText, voice);
+    console.log(" [SPEAK-TEXT] Added to request history");
 
-    console.log("useStreaming", useStreaming, "server latency:", latency);
+    console.log(" [SPEAK-TEXT] Creating TTS processor with config:", {
+      voice,
+      speed,
+      serverUrl: preferences.serverUrl,
+      useStreaming,
+      sentencePauses: preferences.sentencePauses,
+      maxSentenceLength: preferences.maxSentenceLength,
+    });
+
+    console.log(" [SPEAK-TEXT] About to create TTSSpeechProcessor...");
     const newProcessor = new TTSSpeechProcessor({
       voice,
       speed,
@@ -266,15 +345,43 @@ export default function SpeakTextSimple() {
       maxSentenceLength: preferences.maxSentenceLength.toString(),
       onStatusUpdate,
     });
+    console.log(" [SPEAK-TEXT] TTSSpeechProcessor created successfully");
     processorRef.current = newProcessor;
+
+    console.log(" [SPEAK-TEXT] TTS processor created, starting speech...");
+
     showToast({
       style: Toast.Style.Animated,
       title: "Speaking...",
       message: "Processing text for speech...",
     });
+
+    const startTime = performance.now();
+    console.log(" [SPEAK-TEXT]  Speech start time:", startTime);
+
     newProcessor
       .speak(trimmedText)
+      .then(() => {
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(" [SPEAK-TEXT] ✅ Speech completed successfully");
+        console.log(" [SPEAK-TEXT]  Total duration:", duration.toFixed(2) + "ms");
+        console.log(" [SPEAK-TEXT] === TTS SESSION END ===");
+      })
       .catch((error) => {
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        console.log(" [SPEAK-TEXT]  Speech failed");
+        console.log(" [SPEAK-TEXT]  Failed after:", duration.toFixed(2) + "ms");
+        console.log(" [SPEAK-TEXT] Error:", error);
+        console.log(" [SPEAK-TEXT] Error details:", {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          code: error.code,
+        });
+        console.log(" [SPEAK-TEXT] === TTS SESSION END (ERROR) ===");
+
         if (!newProcessor.paused && !processorRef.current?.playing) {
           handleError(
             error instanceof Error ? error : new Error("Unknown error"),
@@ -284,11 +391,13 @@ export default function SpeakTextSimple() {
       })
       .finally(() => {
         if (processorRef.current === newProcessor) {
+          console.log(" [SPEAK-TEXT] Cleaning up processor state");
           setIsProcessing(false);
           setIsPaused(false);
           // Clear processor reference after a delay to allow natural cleanup
           setTimeout(() => {
             if (processorRef.current === newProcessor) {
+              console.log(" [SPEAK-TEXT] Clearing processor reference");
               processorRef.current = null;
             }
           }, 100);
@@ -299,27 +408,42 @@ export default function SpeakTextSimple() {
   };
 
   const handleStop = async () => {
+    console.log(" [SPEAK-TEXT]  User requested stop");
     if (processorRef.current) {
+      console.log(" [SPEAK-TEXT] Stopping processor");
       await processorRef.current.stop();
       setIsProcessing(false);
       setIsPaused(false);
       processorRef.current = null;
       toastRef.current?.hide();
       toastRef.current = null;
+      console.log(" [SPEAK-TEXT] ✅ Stop completed");
+    } else {
+      console.log(" [SPEAK-TEXT] No processor to stop");
     }
   };
 
   const handlePause = () => {
+    console.log(" [SPEAK-TEXT] ⏸️ User requested pause");
     if (processorRef.current?.playing && !processorRef.current?.paused) {
+      console.log(" [SPEAK-TEXT] Pausing processor");
       processorRef.current.pause();
       setIsPaused(true);
+      console.log(" [SPEAK-TEXT] ✅ Pause completed");
+    } else {
+      console.log(" [SPEAK-TEXT] Cannot pause - processor not playing or already paused");
     }
   };
 
   const handleResume = () => {
+    console.log(" [SPEAK-TEXT] ▶️ User requested resume");
     if (processorRef.current?.paused) {
+      console.log(" [SPEAK-TEXT] Resuming processor");
       processorRef.current.resume();
       setIsPaused(false);
+      console.log(" [SPEAK-TEXT] ✅ Resume completed");
+    } else {
+      console.log(" [SPEAK-TEXT] Cannot resume - processor not paused");
     }
   };
 
@@ -335,7 +459,7 @@ export default function SpeakTextSimple() {
       // Show summary toast
       await showToast({
         style: Toast.Style.Success,
-        title: "📊 Benchmark Results",
+        title: " Benchmark Results",
         message: `Avg: ${stats.averageTotalTime.toFixed(0)}ms | Cache: ${(stats.cacheSpeedup || 1).toFixed(1)}x faster`,
       });
     } catch (error) {
@@ -370,7 +494,7 @@ export default function SpeakTextSimple() {
         format: "wav" as const,
       };
 
-      console.log("\n🎯 Single Request Benchmark:");
+      console.log("\n Single Request Benchmark:");
       console.log(`Text: "${trimmedText.substring(0, 50)}${trimmedText.length > 50 ? "..." : ""}"`);
       console.log(`Voice: ${voice}, Speed: ${preferences.speed}, Streaming: ${useStreaming}`);
 
@@ -378,12 +502,12 @@ export default function SpeakTextSimple() {
         request,
         preferences.serverUrl,
         (stage, elapsed) => {
-          console.log(`📊 ${stage}: ${elapsed.toFixed(2)}ms`);
+          console.log(` ${stage}: ${elapsed.toFixed(2)}ms`);
         }
       );
 
       // Show detailed results
-      const cacheStatus = metrics.cacheHit ? "🎯 Cache Hit" : "🌐 Network Request";
+      const cacheStatus = metrics.cacheHit ? " Cache Hit" : " Network Request";
       const responseTime = metrics.totalResponseTime.toFixed(0);
       const audioSize = (metrics.audioDataSize / 1024).toFixed(1);
 
@@ -394,9 +518,9 @@ export default function SpeakTextSimple() {
       });
 
       // Log detailed metrics
-      console.log("\n📋 Detailed Metrics:");
+      console.log("\n Detailed Metrics:");
       console.log(`   Request ID: ${metrics.requestId}`);
-      console.log(`   Cache Hit: ${metrics.cacheHit ? "✅" : "❌"}`);
+      console.log(`   Cache Hit: ${metrics.cacheHit ? "✅" : ""}`);
       console.log(`   Network Latency: ${metrics.networkLatency.toFixed(2)}ms`);
       console.log(`   Time to First Byte: ${metrics.timeToFirstByte.toFixed(2)}ms`);
       console.log(`   Time to First Audio: ${metrics.timeToFirstAudioChunk.toFixed(2)}ms`);
@@ -414,6 +538,14 @@ export default function SpeakTextSimple() {
   };
 
   const onStatusUpdate = async (status: StatusUpdate) => {
+    console.log(" [SPEAK-TEXT]  Status update:", {
+      message: status.message,
+      style: status.style,
+      isPlaying: status.isPlaying,
+      isPaused: status.isPaused,
+      hasActions: !!(status.primaryAction || status.secondaryAction),
+    });
+
     const { message, style = Toast.Style.Animated, primaryAction, secondaryAction } = status;
 
     const options: Toast.Options = {
@@ -458,12 +590,12 @@ export default function SpeakTextSimple() {
 
           <ActionPanel.Section title="Utilities">
             <Action
-              title="📊 Run Performance Benchmark"
+              title=" Run Performance Benchmark"
               onAction={handleBenchmark}
               shortcut={{ modifiers: ["cmd", "shift"], key: "b" }}
             />
             <Action
-              title="🎯 Benchmark Current Text"
+              title=" Benchmark Current Text"
               onAction={handleSingleBenchmark}
               shortcut={{ modifiers: ["cmd", "shift"], key: "t" }}
             />
@@ -525,10 +657,60 @@ export default function SpeakTextSimple() {
         onChange={(value) => updatePreferences({ useStreaming: value })}
       />
 
+      <Form.Separator />
+
+      <Form.Dropdown
+        id="performanceProfile"
+        title="Performance Profile"
+        value={performanceProfile}
+        onChange={(value) => updatePreferences({ performanceProfile: value })}
+        info={
+          profileRecommendations?.reasoning || "Select optimal performance settings for your system"
+        }
+      >
+        {Object.entries(PERFORMANCE_PROFILES).map(([key, profile]) => (
+          <Form.Dropdown.Item
+            key={key}
+            value={key}
+            title={`${profile.name}${profileRecommendations?.recommended === key ? " (Recommended)" : ""}`}
+          />
+        ))}
+      </Form.Dropdown>
+
+      <Form.Checkbox
+        id="autoSelectProfile"
+        label="Auto-select Optimal Profile"
+        value={autoSelectProfile}
+        onChange={(value) => updatePreferences({ autoSelectProfile: value })}
+        info="Automatically select the best performance profile based on your system"
+      />
+
+      <Form.Checkbox
+        id="showPerformanceMetrics"
+        label="Show Performance Metrics"
+        value={showPerformanceMetrics}
+        onChange={(value) => updatePreferences({ showPerformanceMetrics: value })}
+        info="Display real-time performance metrics during TTS processing"
+      />
+
+      {profileRecommendations && (
+        <Form.Description
+          title="Profile Recommendation"
+          text={`${profileRecommendations.reasoning} Alternatives: ${profileRecommendations.alternatives.join(", ")}`}
+        />
+      )}
+
       {serverHealth && (
         <Form.Description
           title="Server Status"
-          text={`${isHealthy ? "✅ Online" : "❌ Offline"} (${latency}ms)`}
+          text={`${isHealthy ? "✅ Online" : " Offline"} (${latency}ms)`}
+        />
+      )}
+
+      {daemonHealth && (
+        <Form.Description
+          title="Daemon Status"
+          text={`${daemonHealthy ? "✅ Online" : " Offline"} (${daemonLatency}ms)`}
         />
       )}
 

@@ -101,7 +101,7 @@ class CacheCleanupManager:
                 'needs_cleanup': self._needs_cleanup(total_size, temp_dirs)
             }
         except Exception as e:
-            logger.error(f"❌ Error getting cache stats: {e}")
+            logger.error(f" Error getting cache stats: {e}")
             return {'error': str(e)}
     
     def _needs_cleanup(self, total_size: int, temp_dirs: int) -> bool:
@@ -220,7 +220,7 @@ class CacheCleanupManager:
                 if item.is_file():
                     files_by_age.append((item.stat().st_mtime, item))
         except Exception as e:
-            logger.error(f"❌ Error collecting files for size cleanup: {e}")
+            logger.error(f" Error collecting files for size cleanup: {e}")
             return {'error': str(e)}
         
         files_by_age.sort()  # Oldest first

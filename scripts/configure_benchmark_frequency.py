@@ -178,7 +178,7 @@ def save_configuration(frequency: str) -> bool:
         return True
         
     except Exception as e:
-        print(f"❌ Error saving configuration: {e}")
+        print(f" Error saving configuration: {e}")
         return False
 
 
@@ -323,7 +323,7 @@ def main():
             print(f"   Cache duration: {descriptions[args.frequency]['duration']}")
             print(f"   Configuration saved to .env file")
         else:
-            print("❌ Failed to save configuration")
+            print(" Failed to save configuration")
             sys.exit(1)
         return
     
@@ -346,7 +346,7 @@ def main():
             print("   • The system will use cached results until the next benchmark")
             print("   • You can run this script again anytime to change settings")
         else:
-            print("❌ Failed to save configuration")
+            print(" Failed to save configuration")
             sys.exit(1)
 
 

@@ -17,15 +17,15 @@
  * @since 2025-01-20
  */
 
-import { logger } from "../core/logger";
-import { ValidationUtils } from "../validation/validation";
+import { logger } from "../core/logger.js";
+import { ValidationUtils } from "../validation/validation.js";
 import type {
   IPerformanceMonitor,
   PerformanceMetrics,
   TTSProcessorConfig,
   TTSEventData,
-} from "../validation/tts-types";
-import { TTS_CONSTANTS, TTSEvent } from "../validation/tts-types";
+} from "../validation/tts-types.js";
+import { TTS_CONSTANTS, TTSEvent } from "../validation/tts-types.js";
 
 /**
  * Performance tracking session

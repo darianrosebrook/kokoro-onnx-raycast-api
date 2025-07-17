@@ -102,7 +102,7 @@ def check_required_packages():
         except ImportError:
             package_status[pip_name] = {'installed': False, 'version': None, 'required': True}
             missing_packages.append(pip_name)
-            print(f"❌ {pip_name}: Missing")
+            print(f" {pip_name}: Missing")
     
     # Check optional packages
     for pip_name, import_name in optional_packages:
@@ -137,7 +137,7 @@ def check_required_packages():
 def check_system_compatibility():
     """Check system compatibility for CoreML and hardware acceleration."""
     
-    print("🖥️  System Compatibility")
+    print(" System Compatibility")
     print("=" * 50)
     
     compatibility = {
@@ -260,7 +260,7 @@ def check_project_structure():
         if exists:
             print(f"✅ {file_path}")
         else:
-            print(f"❌ {file_path}")
+            print(f" {file_path}")
             missing_files.append(file_path)
     
     if missing_files:
@@ -336,7 +336,7 @@ def main():
         return 0 if report['overall_status'] == 'ready' else 1
         
     except Exception as e:
-        print(f"❌ Diagnostic failed: {e}")
+        print(f" Diagnostic failed: {e}")
         return 1
 
 if __name__ == "__main__":

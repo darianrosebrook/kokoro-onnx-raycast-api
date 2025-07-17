@@ -2,6 +2,8 @@
 logs/
 .cache/
 reports/
+plans/
+archive/
 
 # Temporary files and cache artifacts
 .cache/tmp*
@@ -72,4 +74,7 @@ Thumbs.db
 .env
 .env.local
 .env.production
-.env.development 
+.env.development
+
+# Backup files from emoji cleanup script
+*.backup 

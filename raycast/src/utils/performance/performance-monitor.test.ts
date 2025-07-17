@@ -32,9 +32,13 @@ describe("PerformanceMonitor", () => {
       voice: "af_heart",
       speed: 1.0,
       serverUrl: "https://api.tts.com",
+      daemonUrl: "http://localhost:8081",
       useStreaming: true,
       sentencePauses: true,
       maxSentenceLength: 100,
+      performanceProfile: "balanced",
+      autoSelectProfile: false,
+      showPerformanceMetrics: false,
     };
     monitor = new PerformanceMonitor(mockConfig);
   });

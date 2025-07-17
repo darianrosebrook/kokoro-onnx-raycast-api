@@ -224,7 +224,7 @@ class BaselineComparator:
     
     def run_performance_test(self, test_name: str = "baseline") -> Dict[str, any]:
         """Run performance test for current state."""
-        self.logger.info(f"🔬 Running {test_name} performance test...")
+        self.logger.info(f" Running {test_name} performance test...")
         
         try:
             # Import here to avoid issues with different commit states
@@ -256,7 +256,7 @@ class BaselineComparator:
             return results
             
         except Exception as e:
-            self.logger.error(f"❌ {test_name} test failed: {e}")
+            self.logger.error(f" {test_name} test failed: {e}")
             return {
                 'test_name': test_name,
                 'error': str(e),
@@ -265,7 +265,7 @@ class BaselineComparator:
     
     def compare_results(self, baseline_results: Dict, current_results: Dict) -> Dict[str, any]:
         """Compare baseline and current results."""
-        self.logger.info("📊 Comparing performance results...")
+        self.logger.info(" Comparing performance results...")
         
         comparison = {
             'baseline_info': {
@@ -354,7 +354,7 @@ class BaselineComparator:
             if avg_improvement > 0:
                 report_lines.append(f"**Overall Performance**: ✅ {avg_improvement:.1f}% improvement")
             else:
-                report_lines.append(f"**Overall Performance**: ❌ {abs(avg_improvement):.1f}% regression")
+                report_lines.append(f"**Overall Performance**:  {abs(avg_improvement):.1f}% regression")
         
         report_lines.append("")
         
@@ -383,7 +383,7 @@ class BaselineComparator:
                     baseline_str = str(baseline_val)
                     current_str = str(current_val)
                 
-                status = "✅" if improvement > 0 else "❌"
+                status = "✅" if improvement > 0 else ""
                 report_lines.append(
                     f"| {metric_name.replace('_', ' ').title()} | {baseline_str} | {current_str} | "
                     f"{status} {improvement:+.1f}% |"
@@ -411,9 +411,9 @@ class BaselineComparator:
             elif avg_inference_improvement > 0:
                 report_lines.append(f"⚠️ **Inference Time Reduction**: {avg_inference_improvement:.1f}% improvement (claim: 50-70%)")
             else:
-                report_lines.append("❌ **Inference Time Reduction**: No improvement detected")
+                report_lines.append(" **Inference Time Reduction**: No improvement detected")
         else:
-            report_lines.append("❓ **Inference Time Reduction**: Could not validate (no data)")
+            report_lines.append(" **Inference Time Reduction**: Could not validate (no data)")
         
         # Claim 2: 30% memory reduction
         if 'memory_usage' in improvements:
@@ -424,14 +424,14 @@ class BaselineComparator:
             elif mem_improvement > 0:
                 report_lines.append(f"⚠️ **Memory Usage Reduction**: {mem_improvement:.1f}% improvement (claim: 30%)")
             else:
-                report_lines.append("❌ **Memory Usage Reduction**: No improvement detected")
+                report_lines.append(" **Memory Usage Reduction**: No improvement detected")
         else:
-            report_lines.append("❓ **Memory Usage Reduction**: Could not validate (no data)")
+            report_lines.append(" **Memory Usage Reduction**: Could not validate (no data)")
         
         # Add remaining claims (would need throughput/latency data)
         report_lines.extend([
-            "❓ **Throughput Increase**: 2x claim (requires API throughput test)",
-            "❓ **P95 Latency Reduction**: 70% claim (requires latency distribution test)",
+            " **Throughput Increase**: 2x claim (requires API throughput test)",
+            " **P95 Latency Reduction**: 70% claim (requires latency distribution test)",
             "",
             f"**Claims Validated**: {claims_validated}/{total_claims}",
             "",
@@ -448,7 +448,7 @@ class BaselineComparator:
         elif claims_validated >= 1:
             report_lines.append("⚠️ **Partial Success**: Some optimizations working, others need attention")
         else:
-            report_lines.append("❌ **Needs Work**: Optimization claims not validated by testing")
+            report_lines.append(" **Needs Work**: Optimization claims not validated by testing")
         
         report_lines.extend([
             "",
@@ -509,7 +509,7 @@ def main():
     setup_logging(args.verbose)
     logger = logging.getLogger('main')
     
-    logger.info("🔍 Starting TTS Baseline Performance Comparison")
+    logger.info(" Starting TTS Baseline Performance Comparison")
     
     try:
         # Initialize comparator
@@ -538,7 +538,7 @@ def main():
             baseline_commit = comparator.find_baseline_commit(args.days_ago)
         
         if not baseline_commit:
-            logger.error("❌ No baseline commit specified or found")
+            logger.error(" No baseline commit specified or found")
             return 1
         
         logger.info(f"Baseline commit: {baseline_commit[:8]}")
@@ -556,7 +556,7 @@ def main():
                 # Always restore current branch
                 comparator.restore_current_branch()
         else:
-            logger.error("❌ Failed to checkout baseline commit")
+            logger.error(" Failed to checkout baseline commit")
             return 1
         
         # Compare results
@@ -568,7 +568,7 @@ def main():
         
         # Show summary
         logger.info("=" * 60)
-        logger.info("🎉 COMPARISON COMPLETE")
+        logger.info(" COMPARISON COMPLETE")
         
         summary = comparison.get('summary', {})
         if 'average_improvement' in summary:
@@ -576,14 +576,14 @@ def main():
             if avg_improvement > 0:
                 logger.info(f"✅ Overall Performance: {avg_improvement:.1f}% improvement")
             else:
-                logger.info(f"❌ Overall Performance: {abs(avg_improvement):.1f}% regression")
+                logger.info(f" Overall Performance: {abs(avg_improvement):.1f}% regression")
         
-        logger.info(f"📄 Detailed Report: {report_file}")
+        logger.info(f" Detailed Report: {report_file}")
         
         return 0
         
     except Exception as e:
-        logger.error(f"❌ Comparison failed: {e}")
+        logger.error(f" Comparison failed: {e}")
         if args.verbose:
             import traceback
             logger.error(traceback.format_exc())

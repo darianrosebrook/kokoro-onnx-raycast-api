@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { RetryManager } from "./retry-manager";
+import { RetryManager } from "./retry-manager.js";
 
 // Mock logger
 vi.mock("../core/logger", () => ({

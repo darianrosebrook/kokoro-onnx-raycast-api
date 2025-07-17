@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { PlaybackManager } from "./playback-manager";
-import type { PlaybackContext } from "../validation/tts-types";
+import { PlaybackManager } from "./playback-manager.js";
+import type { PlaybackContext } from "../validation/tts-types.js";
 import { EventEmitter } from "events";
 import { Writable } from "stream";
 import { ChildProcess, spawn } from "child_process";

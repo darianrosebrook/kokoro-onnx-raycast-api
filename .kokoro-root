@@ -1,0 +1,2 @@
+# Marker file for Kokoro-ONNX project root
+# Used for auto-detecting the project root from Raycast extension environments 

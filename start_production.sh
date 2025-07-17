@@ -51,7 +51,7 @@ if [[ "$(uname -m)" == "arm64" ]]; then
     export KOKORO_COREML_SPECIALIZATION=${KOKORO_COREML_SPECIALIZATION:-"FastPrediction"}
 fi
 
-echo "🚀 Production optimizations enabled:"
+echo "Production optimizations enabled:"
 echo "   • ORJSON serialization: ✅"
 echo "   • GZip compression: ✅"
 echo "   • Security headers: ✅"

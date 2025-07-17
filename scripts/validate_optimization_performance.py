@@ -145,7 +145,7 @@ class PerformanceValidator:
     
     def detect_system_capabilities(self) -> Dict[str, Any]:
         """Detect and validate system capabilities."""
-        self.logger.info("🔍 Detecting system capabilities...")
+        self.logger.info(" Detecting system capabilities...")
         
         capabilities = detect_apple_silicon_capabilities()
         
@@ -211,14 +211,14 @@ class PerformanceValidator:
         
         # Log feature status
         for feature, status in features.items():
-            status_symbol = "✅" if status else "❌"
+            status_symbol = "✅" if status else ""
             self.logger.info(f"{status_symbol} {feature}: {status}")
         
         return features
     
     def measure_inference_performance(self) -> Dict[str, Any]:
         """Measure detailed inference performance across different text lengths."""
-        self.logger.info("⚡ Measuring inference performance...")
+        self.logger.info(" Measuring inference performance...")
         
         if not get_model_status():
             raise RuntimeError("Model not loaded - cannot measure inference performance")
@@ -276,7 +276,7 @@ class PerformanceValidator:
                 self.logger.info(f"✅ {text_type}: {performance_results[text_type]['mean_time']:.3f}s avg, "
                                f"{performance_results[text_type]['p95_time']:.3f}s p95")
             else:
-                self.logger.error(f"❌ No successful {text_type} text runs")
+                self.logger.error(f" No successful {text_type} text runs")
                 performance_results[text_type] = {
                     'successful_runs': 0,
                     'total_runs': self.test_iterations,
@@ -289,7 +289,7 @@ class PerformanceValidator:
     
     def measure_memory_usage(self) -> Dict[str, Any]:
         """Measure memory usage during TTS operations."""
-        self.logger.info("💾 Measuring memory usage...")
+        self.logger.info(" Measuring memory usage...")
         
         if not PSUTIL_AVAILABLE:
             self.logger.warning("psutil not available - limited memory profiling")
@@ -345,7 +345,7 @@ class PerformanceValidator:
     
     async def measure_api_throughput(self) -> Dict[str, Any]:
         """Measure API throughput and latency through HTTP requests."""
-        self.logger.info("🚀 Measuring API throughput...")
+        self.logger.info(" Measuring API throughput...")
         
         if not AIOHTTP_AVAILABLE:
             self.logger.warning("aiohttp not available - skipping API throughput test")
@@ -486,7 +486,7 @@ class PerformanceValidator:
     
     def validate_optimization_claims(self) -> Dict[str, Any]:
         """Validate the specific optimization claims against measured performance."""
-        self.logger.info("📊 Validating optimization claims...")
+        self.logger.info(" Validating optimization claims...")
         
         validation_results = {
             'claims_tested': 0,
@@ -616,7 +616,7 @@ class PerformanceValidator:
         validation = self.results.get('validation_results', {})
         if validation:
             score = validation.get('validation_score', 0)
-            status = "✅ PASS" if score >= 0.7 else "⚠️ PARTIAL" if score >= 0.5 else "❌ FAIL"
+            status = "✅ PASS" if score >= 0.7 else "⚠️ PARTIAL" if score >= 0.5 else " FAIL"
             
             report_lines.extend([
                 f"**Validation Status**: {status}",
@@ -633,8 +633,8 @@ class PerformanceValidator:
                 "## System Information",
                 "",
                 f"- **Platform**: {system_info.get('platform', 'Unknown')}",
-                f"- **Apple Silicon**: {'✅ Yes' if system_info.get('is_apple_silicon') else '❌ No'}",
-                f"- **Neural Engine**: {'✅ Available' if system_info.get('has_neural_engine') else '❌ Not Available'}",
+                f"- **Apple Silicon**: {'✅ Yes' if system_info.get('is_apple_silicon') else ' No'}",
+                f"- **Neural Engine**: {'✅ Available' if system_info.get('has_neural_engine') else ' Not Available'}",
                 f"- **CPU Cores**: {system_info.get('cpu_cores', 'Unknown')}",
                 f"- **Memory**: {system_info.get('memory_total_gb', 'Unknown')}GB",
                 "",
@@ -650,7 +650,7 @@ class PerformanceValidator:
             
             for feature, status in features.items():
                 if isinstance(status, bool):
-                    status_symbol = "✅" if status else "❌"
+                    status_symbol = "✅" if status else ""
                     report_lines.append(f"- **{feature.replace('_', ' ').title()}**: {status_symbol}")
                 else:
                     report_lines.append(f"- **{feature.replace('_', ' ').title()}**: {status}")
@@ -720,8 +720,8 @@ class PerformanceValidator:
                     'reasonable_throughput': '✅',
                     'reasonable_latency': '✅',
                     'partial': '⚠️',
-                    'failed': '❌'
-                }.get(claim_data.get('status', 'unknown'), '❓')
+                    'failed': ''
+                }.get(claim_data.get('status', 'unknown'), '')
                 
                 report_lines.extend([
                     f"### {claim_name.replace('_', ' ').title()} {status_symbol}",
@@ -743,7 +743,7 @@ class PerformanceValidator:
         elif score >= 0.6:
             report_lines.append("⚠️ **Good**: Most optimizations are working, consider fine-tuning for better performance.")
         else:
-            report_lines.append("❌ **Needs Attention**: Several optimizations may not be working as expected.")
+            report_lines.append(" **Needs Attention**: Several optimizations may not be working as expected.")
         
         report_lines.extend([
             "",
@@ -806,9 +806,9 @@ async def main():
     setup_logging(args.verbose)
     logger = logging.getLogger('main')
     
-    logger.info("🚀 Starting TTS Optimization Performance Validation")
+    logger.info(" Starting TTS Optimization Performance Validation")
     if args.quick:
-        logger.info("⚡ Quick mode enabled - running shorter tests")
+        logger.info(" Quick mode enabled - running shorter tests")
     
     try:
         # Initialize validator
@@ -843,9 +843,9 @@ async def main():
         score = validation.get('validation_score', 0)
         
         logger.info("=" * 60)
-        logger.info("🎉 VALIDATION COMPLETE")
-        logger.info(f"📊 Validation Score: {score:.1%}")
-        logger.info(f"📄 Detailed Report: {report_file}")
+        logger.info(" VALIDATION COMPLETE")
+        logger.info(f" Validation Score: {score:.1%}")
+        logger.info(f" Detailed Report: {report_file}")
         
         if score >= 0.7:
             logger.info("✅ RESULT: Optimizations are working well!")
@@ -854,11 +854,11 @@ async def main():
             logger.info("⚠️ RESULT: Most optimizations working, some improvements possible")
             return 0
         else:
-            logger.info("❌ RESULT: Several optimization issues detected")
+            logger.info(" RESULT: Several optimization issues detected")
             return 1
             
     except Exception as e:
-        logger.error(f"❌ Validation failed: {e}")
+        logger.error(f" Validation failed: {e}")
         if args.verbose:
             logger.error(traceback.format_exc())
         return 1

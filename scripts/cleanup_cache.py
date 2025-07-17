@@ -117,7 +117,7 @@ Examples:
         if args.json:
             print(json.dumps({"error": str(e)}, indent=2))
         else:
-            print(f"❌ Error: {e}")
+            print(f" Error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -20,8 +20,8 @@ import { useCachedState, useFetch, useCachedPromise } from "@raycast/utils";
 import { showToast, Toast, getPreferenceValues } from "@raycast/api";
 import { useCallback, useMemo } from "react";
 import isEqual from "fast-deep-equal";
-import type { TTSProcessorConfig, VoiceOption } from "../validation/tts-types";
-import { cacheManager, type CachedServerHealth } from "./cache";
+import type { TTSProcessorConfig, VoiceOption } from "../validation/tts-types.js";
+import { cacheManager, type CachedServerHealth } from "./cache.js";
 
 /**
  * Default TTS configuration with safe defaults
@@ -30,11 +30,15 @@ const DEFAULT_TTS_CONFIG: TTSProcessorConfig = {
   voice: "af_heart",
   speed: 1.0,
   serverUrl: "http://localhost:8000",
+  daemonUrl: "http://localhost:8081",
   useStreaming: true,
   sentencePauses: false,
   maxSentenceLength: 0,
   format: "wav",
   developmentMode: false,
+  performanceProfile: "balanced",
+  autoSelectProfile: true,
+  showPerformanceMetrics: false,
   onStatusUpdate: () => {},
 };
 
@@ -49,6 +53,7 @@ const validatePreferences = (prefs: Partial<TTSProcessorConfig>): TTSProcessorCo
       Math.min(3.0, parseFloat(String(prefs.speed)) || DEFAULT_TTS_CONFIG.speed)
     ),
     serverUrl: prefs.serverUrl?.replace(/\/+$/, "") ?? DEFAULT_TTS_CONFIG.serverUrl,
+    daemonUrl: prefs.daemonUrl?.replace(/\/+$/, "") ?? DEFAULT_TTS_CONFIG.daemonUrl,
     useStreaming: prefs.useStreaming ?? DEFAULT_TTS_CONFIG.useStreaming,
     sentencePauses: prefs.sentencePauses ?? DEFAULT_TTS_CONFIG.sentencePauses,
     maxSentenceLength: Math.max(
@@ -57,6 +62,10 @@ const validatePreferences = (prefs: Partial<TTSProcessorConfig>): TTSProcessorCo
     ),
     format: prefs.format ?? DEFAULT_TTS_CONFIG.format,
     developmentMode: prefs.developmentMode ?? DEFAULT_TTS_CONFIG.developmentMode,
+    performanceProfile: prefs.performanceProfile ?? DEFAULT_TTS_CONFIG.performanceProfile,
+    autoSelectProfile: prefs.autoSelectProfile ?? DEFAULT_TTS_CONFIG.autoSelectProfile,
+    showPerformanceMetrics:
+      prefs.showPerformanceMetrics ?? DEFAULT_TTS_CONFIG.showPerformanceMetrics,
     onStatusUpdate: prefs.onStatusUpdate ?? DEFAULT_TTS_CONFIG.onStatusUpdate,
   };
 
@@ -113,6 +122,82 @@ export const useTTSPreferences = () => {
     updatePreferences,
     resetPreferences,
     isValid: true, // Always valid due to validation
+  };
+};
+
+export const useDaemonHealth = () => {
+  const { preferences } = useTTSPreferences();
+
+  const healthCheckFn = useCallback(async (): Promise<CachedServerHealth> => {
+    // Check cache first
+    const cachedHealth = cacheManager.getCachedServerHealth(preferences.daemonUrl);
+    if (cachedHealth) {
+      return cachedHealth;
+    }
+
+    const startTime = Date.now();
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout for daemon
+
+      // Try to connect to the daemon's health endpoint
+      const response = await fetch(`${preferences.daemonUrl}/health`, {
+        signal: controller.signal,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+
+      clearTimeout(timeoutId);
+
+      const latency = Date.now() - startTime;
+      const health: CachedServerHealth = {
+        status: response.ok ? "healthy" : "unhealthy",
+        latency,
+        timestamp: Date.now(),
+        version: response.headers.get("X-Daemon-Version") || undefined,
+      };
+
+      // Cache the result
+      cacheManager.cacheServerHealth(preferences.daemonUrl, health);
+
+      return health;
+    } catch (error) {
+      // Don't log errors for daemon health checks - they're expected when daemon isn't running
+      const health: CachedServerHealth = {
+        status: "unhealthy",
+        latency: Date.now() - startTime,
+        timestamp: Date.now(),
+      };
+
+      // Cache the error result too (with shorter TTL)
+      cacheManager.cacheServerHealth(preferences.daemonUrl, health);
+
+      return health;
+    }
+  }, [preferences.daemonUrl]);
+
+  const {
+    data: daemonHealth,
+    isLoading: daemonLoading,
+    error: daemonError,
+    revalidate: daemonRevalidate,
+  } = useCachedPromise(healthCheckFn, [], {
+    initialData: null,
+    keepPreviousData: true,
+    // Delay the initial health check to avoid running it immediately
+    execute: false,
+  });
+
+  return {
+    daemonHealth,
+    isLoading: daemonLoading,
+    error: daemonError,
+    revalidate: daemonRevalidate,
+    isHealthy: daemonHealth?.status === "healthy",
+    latency: daemonHealth?.latency ?? 0,
   };
 };
 

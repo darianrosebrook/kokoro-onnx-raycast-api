@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { TTSLogger, LogLevel } from "./logger";
+import { TTSLogger, LogLevel } from "./logger.js";
 import { Logger as WinstonLogger } from "winston";
 
 // Mock the core winston logger to avoid actual console/file output

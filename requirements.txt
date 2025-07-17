@@ -8,7 +8,8 @@ starlette>=0.27.0
 kokoro-onnx>=0.4.9
 soundfile>=0.12.0
 pyaudio>=0.2.11
-phonemizer-fork>=0.1.0  # Required for kokoro-onnx compatibility
+misaki[en]>=0.1.0  # Kokoro-specific G2P engine (replaces phonemizer-fork)
+phonemizer-fork>=0.1.0  # Fallback compatibility
 espeakng-loader>=0.1.0  # Required for eSpeak integration
 
 # Machine learning and optimization

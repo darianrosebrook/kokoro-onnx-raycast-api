@@ -1,13 +1,13 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
-import { TTSSpeechProcessor } from "./tts-processor";
-import { TextProcessor } from "./text-processor";
-import { AudioStreamer } from "./streaming/audio-streamer";
-import { PlaybackManager } from "./playback-manager";
-import { RetryManager } from "../api/retry-manager";
-import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager";
-import { PerformanceMonitor } from "../performance/performance-monitor";
+import { TTSSpeechProcessor } from "./tts-processor.js";
+import { TextProcessor } from "./text-processor.js";
+import { AudioStreamer } from "./streaming/audio-streamer.js";
+import { PlaybackManager } from "./playback-manager.js";
+import { RetryManager } from "../api/retry-manager.js";
+import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager.js";
+import { PerformanceMonitor } from "../performance/performance-monitor.js";
 import { StatusUpdate } from "../../types";
-import { TextSegment } from "../validation/tts-types";
+import { TextSegment } from "../validation/tts-types.js";
 
 // Mock all dependencies
 vi.mock("./text-processor");
@@ -33,6 +33,10 @@ const mockAudioStreamer = {
 const mockPlaybackManager = {
   initialize: vi.fn().mockResolvedValue(undefined),
   playAudio: vi.fn().mockResolvedValue(undefined),
+  startStreamingPlayback: vi.fn().mockResolvedValue({
+    writeChunk: vi.fn().mockResolvedValue(undefined),
+    endStream: vi.fn().mockResolvedValue(undefined),
+  }),
   pause: vi.fn(),
   resume: vi.fn(),
   stop: vi.fn(),

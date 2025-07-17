@@ -1,25 +1,28 @@
 {
   "compilerOptions": {
-    "target": "es2022",
-    "lib": ["es2022", "dom", "dom.iterable"],
+    "target": "ES2022",
+    "lib": ["es2022", "es2015", "dom", "dom.iterable"],
+    "module": "ES2022",
+    "moduleResolution": "node",
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": false,
     "forceConsistentCasingInFileNames": true,
-    "module": "esnext",
-    "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
+    "noEmit": false,
     "jsx": "react-jsx",
     "noErrorTruncation": false,
     "noImplicitAny": false,
+    "downlevelIteration": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+    "outDir": "dist"
   },
-  "include": ["src/**/*", "raycast-env.d.ts"]
+  "include": ["src/**/*", "raycast-env.d.ts", "test-*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

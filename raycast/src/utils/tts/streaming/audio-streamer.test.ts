@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AudioStreamer } from "./audio-streamer";
-import { CachedTTSResponse, cacheManager } from "../../core/cache";
-import type { TTSRequestParams, StreamingContext } from "../../validation/tts-types";
+import { AudioStreamer } from "./audio-streamer.js";
+import { CachedTTSResponse, cacheManager } from "../../core/cache.js";
+import type { TTSRequestParams, StreamingContext } from "../../validation/tts-types.js";
 import { Readable } from "stream";
 
 // Mock dependencies

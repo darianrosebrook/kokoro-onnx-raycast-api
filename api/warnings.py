@@ -660,7 +660,7 @@ def setup_coreml_warning_handler():
                 original_showwarning(message, category, filename, lineno, file, line)
             except Exception as fallback_e:
                 # Even fallback failed - log the issue
-                logger.error(f"❌ Critical warning handler failure: {fallback_e}")
+                logger.error(f" Critical warning handler failure: {fallback_e}")
                 
     # Register the custom warning handler
     warnings.showwarning = custom_warning_handler

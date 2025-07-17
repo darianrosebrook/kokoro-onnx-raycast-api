@@ -241,8 +241,8 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ### Hardware Capabilities
 - **Platform**: {platform.system()} {platform.machine()}
-- **Apple Silicon**: {'✅ Yes' if capabilities.get('is_apple_silicon') else '❌ No'}
-- **Neural Engine**: {'✅ Available' if capabilities.get('has_neural_engine') else '❌ Not Available'}
+- **Apple Silicon**: {'✅ Yes' if capabilities.get('is_apple_silicon') else ' No'}
+- **Neural Engine**: {'✅ Available' if capabilities.get('has_neural_engine') else ' Not Available'}
 - **CPU Cores**: {capabilities.get('cpu_cores', 'Unknown')}
 - **Memory**: {capabilities.get('memory_gb', 'Unknown')} GB
 

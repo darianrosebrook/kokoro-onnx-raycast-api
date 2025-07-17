@@ -18,7 +18,7 @@
  */
 
 import { z } from "zod";
-import { logger } from "../core/logger";
+import { logger } from "../core/logger.js";
 
 /**
  * Voice option validation schema

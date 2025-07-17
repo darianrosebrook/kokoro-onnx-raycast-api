@@ -109,12 +109,19 @@ export interface TTSProcessorConfig {
   voice: VoiceOption;
   speed: number;
   serverUrl: string;
+  daemonUrl: string;
   useStreaming: boolean;
   sentencePauses: boolean;
   maxSentenceLength: number;
   format: "wav" | "pcm";
   developmentMode: boolean;
+  performanceProfile: string;
+  autoSelectProfile: boolean;
+  showPerformanceMetrics: boolean;
   onStatusUpdate: (status: StatusUpdate) => void;
+  daemonPort?: number;
+  daemonScriptPath?: string;
+  bufferSize?: number;
 }
 
 /**
@@ -154,7 +161,7 @@ export interface StreamingContext {
 /**
  * Performance metrics for individual operations
  */
-export interface PerformanceMetrics {
+export interface PerformanceMetrics extends Record<string, unknown> {
   sessionStart: number;
   requestStart: number;
   timeToFirstByte: number;
@@ -175,15 +182,29 @@ export interface PerformanceMetrics {
 }
 
 /**
+ * Performance profile configuration
+ */
+export interface PerformanceProfile {
+  name: string;
+  description: string;
+  bufferConfig: BufferConfig;
+  priority: "conservative" | "balanced" | "aggressive" | "network-optimized";
+  autoSelect: boolean;
+}
+
+/**
  * Buffer management configuration
  */
 export interface BufferConfig {
-  minBufferMs: number;
   targetBufferMs: number;
+  bufferSize: number;
+  chunkSize: number;
+  deliveryRate: number;
+  minBufferChunks: number;
+  maxLatency: number;
+  targetUtilization: number;
+  minBufferMs: number;
   maxBufferMs: number;
-  sampleRate: number;
-  channels: number;
-  bytesPerSample: number;
 }
 
 /**
@@ -551,6 +572,7 @@ export const TTS_CONSTANTS = {
   MIN_BUFFER_MS: 200,
   TARGET_BUFFER_MS: 400,
   MAX_BUFFER_MS: 1000,
+  DEFAULT_BUFFER_SIZE: 4800, // 50ms at 24kHz, 16-bit, mono
 
   // Performance targets
   TARGET_TTFA_MS: 800,

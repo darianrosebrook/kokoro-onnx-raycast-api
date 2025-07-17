@@ -177,55 +177,55 @@ describe("VoiceManager", () => {
   describe("categorizeVoice", () => {
     it("should categorize American English voices", () => {
       expect(categorizeVoice("af_heart")).toEqual({
-        flag: "🇺🇸",
+        flag: "",
         category: "American English",
       });
       expect(categorizeVoice("am_joe")).toEqual({
-        flag: "🇺🇸",
+        flag: "",
         category: "American English",
       });
     });
 
     it("should categorize British English voices", () => {
       expect(categorizeVoice("bf_sarah")).toEqual({
-        flag: "🇬🇧",
+        flag: "",
         category: "British English",
       });
       expect(categorizeVoice("bm_james")).toEqual({
-        flag: "🇬🇧",
+        flag: "",
         category: "British English",
       });
     });
 
     it("should categorize Chinese voices", () => {
       expect(categorizeVoice("cf_mei")).toEqual({
-        flag: "🇨🇳",
+        flag: "",
         category: "Chinese",
       });
       expect(categorizeVoice("cm_wei")).toEqual({
-        flag: "🇨🇳",
+        flag: "",
         category: "Chinese",
       });
     });
 
     it("should categorize French voices", () => {
       expect(categorizeVoice("df_marie")).toEqual({
-        flag: "🇫🇷",
+        flag: "",
         category: "French",
       });
       expect(categorizeVoice("dm_pierre")).toEqual({
-        flag: "🇫🇷",
+        flag: "",
         category: "French",
       });
     });
 
     it("should default to US English for unknown patterns", () => {
       expect(categorizeVoice("unknown_voice")).toEqual({
-        flag: "🇺🇸",
+        flag: "",
         category: "English",
       });
       expect(categorizeVoice("test")).toEqual({
-        flag: "🇺🇸",
+        flag: "",
         category: "English",
       });
     });
@@ -244,10 +244,10 @@ describe("VoiceManager", () => {
       const result = await generateVoiceOptions("http://localhost:8000");
 
       expect(result).toEqual([
-        { value: "af_bella", title: "🇺🇸 Bella (Female)" },
-        { value: "af_heart", title: "🇺🇸 Heart (Female)" },
-        { value: "am_joe", title: "🇺🇸 Joe (Male)" },
-        { value: "bf_sarah", title: "🇬🇧 Sarah (Female)" },
+        { value: "af_bella", title: " Bella (Female)" },
+        { value: "af_heart", title: " Heart (Female)" },
+        { value: "am_joe", title: " Joe (Male)" },
+        { value: "bf_sarah", title: " Sarah (Female)" },
       ]);
     });
 

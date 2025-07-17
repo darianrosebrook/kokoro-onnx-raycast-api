@@ -2,6 +2,60 @@
 
 A production-ready Text-to-Speech extension for Raycast that leverages the Kokoro ONNX model through a sophisticated client-server architecture optimized for real-time audio streaming and macOS integration.
 
+---
+
+## Audio Playback Architecture (2024)
+
+**Current Playback Flow:**
+- The extension uses **sox** as the primary audio playback tool, with **ffplay** as a fallback.
+- Both are invoked via child processes, and the extension attempts multiple absolute paths (e.g., `/opt/homebrew/bin/sox`, `/usr/local/bin/sox`) to work around Raycast's restricted PATH environment.
+- If neither sox nor ffplay is found, playback will fail with a clear error message.
+- **Node-native playback** (using the `speaker` module) is **not supported in Raycast** due to native module resolution and sandboxing limitations, but works in standard Node.js CLI tools.
+
+**Why not afplay?**
+- afplay does not support real-time streaming PCM audio via stdin, and is unreliable for our streaming use case.
+- sox and ffplay are more robust for both file and streaming playback, and are widely available via Homebrew.
+
+---
+
+## Test WAV Playback Results
+
+You can run the `Test WAV Playback` command in Raycast to verify playback compatibility:
+- **Sox Playback:** Should succeed if sox is installed and accessible via an absolute path.
+- **Ffplay Playback:** Should succeed if ffplay is installed and accessible via an absolute path.
+- **Speaker Playback:** Will fail in Raycast ("Could not find module root" or similar error), but works in CLI tools.
+- **PATH:** Will show as undefined in Raycast; this is expected due to sandboxing.
+
+**If both sox and ffplay fail:**
+- Ensure you have sox and/or ffplay installed via Homebrew:
+  ```sh
+  brew install sox ffmpeg
+  ```
+- If installed, check their absolute paths (e.g., `/opt/homebrew/bin/sox`).
+- The extension will try these paths automatically, but you can add symlinks if needed.
+
+---
+
+## Troubleshooting Playback in Raycast
+
+- **Playback fails with ENOENT:**
+  - sox/ffplay is not found. Install via Homebrew and ensure they are in `/opt/homebrew/bin` or `/usr/local/bin`.
+- **Speaker playback fails with module root error:**
+  - This is expected in Raycast. Node-native playback is not supported in the extension environment.
+- **No audio output:**
+  - Check your system audio settings and permissions.
+  - Try running sox/ffplay directly from the terminal to verify they work.
+- **Test WAV Playback command:**
+  - Use this command to debug playback issues and see detailed logs in the Raycast extension console.
+
+---
+
+## Note on CLI vs Raycast
+- The Node.js `speaker` module can be used for playback in CLI tools, but not in Raycast extensions.
+- For Raycast, rely on sox/ffplay for robust playback.
+
+---
+
 ## Architecture Overview
 
 This extension implements a **multi-layered architecture** designed for performance, reliability, and user experience:

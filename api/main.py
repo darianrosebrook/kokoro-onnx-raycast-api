@@ -207,13 +207,12 @@ from api.warnings import setup_coreml_warning_handler
 from api.model.patch import apply_all_patches, get_patch_status
 from api.model.loader import initialize_model as initialize_model_sync, detect_apple_silicon_capabilities
 from api.performance.stats import get_performance_stats
-from api.tts.core import _generate_audio_segment, stream_tts_audio
+from api.tts.core import _generate_audio_segment, stream_tts_audio, get_tts_processing_stats
 from api.utils.cache_cleanup import cleanup_cache, get_cache_info
 from api.tts.text_processing import segment_text
 from api.model.loader import get_model_status, initialize_model, detect_apple_silicon_capabilities
 from api.model.patch import apply_all_patches, get_patch_status
 from api.performance.stats import get_performance_stats
-from api.tts.core import _generate_audio_segment, stream_tts_audio
 from api.tts.text_processing import segment_text
 from api.warnings import setup_coreml_warning_handler, suppress_phonemizer_warnings, configure_onnx_runtime_logging
 from functools import lru_cache
@@ -334,6 +333,10 @@ def setup_application_logging():
     if hasattr(setup_application_logging, '_configured'):
         return
     setup_application_logging._configured = True
+    
+    # Import config here to avoid circular imports
+    from api.config import CONSOLE_LOG_LEVEL, FILE_LOG_LEVEL
+    
     # Create formatters
     detailed_formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
@@ -344,14 +347,14 @@ def setup_application_logging():
 
     # Configure root logger
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG)  # Set to DEBUG to allow all levels
 
     # Clear existing handlers to prevent duplicates
     root_logger.handlers.clear()
 
     # Console handler with immediate flushing
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(getattr(logging, CONSOLE_LOG_LEVEL))
     console_handler.setFormatter(simple_formatter)
     # Ensure immediate flushing
     console_handler.flush = lambda: console_handler.stream.flush()
@@ -364,9 +367,15 @@ def setup_application_logging():
     logs_dir = "logs"
     os.makedirs(logs_dir, exist_ok=True)
 
+    # File handler for detailed logging
+    file_handler = logging.FileHandler("logs/api_server.log")
+    file_handler.setLevel(getattr(logging, FILE_LOG_LEVEL))
+    file_handler.setFormatter(detailed_formatter)
+    root_logger.addHandler(file_handler)
+
     logger = logging.getLogger(__name__)
-    logger.info(f" Application logging configured")
-    logger.info(f" Detailed logs will be written to: logs/api_server.log")
+    logger.info("Application logging configured")
+    logger.debug("Detailed logs will be written to: logs/api_server.log")
 
     # Configure immediate flushing for console handler
     for handler in root_logger.handlers:
@@ -388,11 +397,8 @@ def setup_application_logging():
         sys.stdout.reconfigure(line_buffering=True)
 
     # Test logging to ensure it's working immediately
-    logger.info(" Logging system initialized and ready")
+    logger.debug("Logging system initialized and ready")
     sys.stdout.flush()  # Force immediate output
-
-    # Also print directly to ensure immediate output
-    print(" Direct output test - logging system ready", flush=True)
 
 
 def validate_dependencies():
@@ -426,7 +432,7 @@ def validate_dependencies():
             logger.debug(f"✅ {package_name} available")
         except ImportError:
             missing_deps.append(package_name)
-            logger.error(f"❌ {package_name} not found")
+            logger.error(f" {package_name} not found")
 
     # Check optional dependencies
     optional_packages = [
@@ -456,7 +462,7 @@ def validate_dependencies():
     # Report results
     if missing_deps:
         error_msg = f"Missing required dependencies: {', '.join(missing_deps)}"
-        logger.error(f"❌ {error_msg}")
+        logger.error(f" {error_msg}")
         logger.error(
             " Install missing packages with: pip install " + " ".join(missing_deps))
         raise RuntimeError(error_msg)
@@ -490,7 +496,7 @@ def validate_model_files():
     for file_type, file_path in model_files.items():
         if not os.path.exists(file_path):
             missing_files.append(f"{file_type} ({file_path})")
-            logger.error(f"❌ {file_type} file not found: {file_path}")
+            logger.error(f" {file_type} file not found: {file_path}")
         else:
             # Check if file is readable
             try:
@@ -501,11 +507,11 @@ def validate_model_files():
                 missing_files.append(
                     f"{file_type} ({file_path}) - access error: {e}")
                 logger.error(
-                    f"❌ {file_type} file not accessible: {file_path} - {e}")
+                    f" {file_type} file not accessible: {file_path} - {e}")
 
     if missing_files:
         error_msg = f"Missing or inaccessible model files: {', '.join(missing_files)}"
-        logger.error(f"❌ {error_msg}")
+        logger.error(f" {error_msg}")
         raise RuntimeError(error_msg)
 
     logger.info("✅ All model files validated successfully")
@@ -535,7 +541,7 @@ def validate_environment():
             raise RuntimeError("CPU provider not available - critical error")
 
     except Exception as e:
-        logger.error(f"❌ ONNX Runtime provider validation failed: {e}")
+        logger.error(f" ONNX Runtime provider validation failed: {e}")
         raise RuntimeError(f"ONNX Runtime validation failed: {e}")
 
     # Check environment variables
@@ -577,11 +583,11 @@ def validate_patch_status():
         # Log patch guard status
         guard_status = patch_status.get('patch_guard_status', {})
         for method, is_patched in guard_status.items():
-            status = "✅ Patched" if is_patched else "❌ Not Patched"
+            status = "✅ Patched" if is_patched else " Not Patched"
             logger.debug(f"   • {method}: {status}")
 
     except Exception as e:
-        logger.error(f"❌ Patch status validation failed: {e}")
+        logger.error(f" Patch status validation failed: {e}")
         raise RuntimeError(f"Patch validation failed: {e}")
 
 
@@ -591,7 +597,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize warning handlers for various noise sources
 # This must be called before any ONNX Runtime operations
-logger.info(" Initializing warning management systems...")
+logger.debug("Initializing warning management systems...")
 configure_onnx_runtime_logging()
 setup_coreml_warning_handler()
 suppress_phonemizer_warnings()
@@ -601,7 +607,7 @@ suppress_phonemizer_warnings()
 
 # Apply monkey patches for eSpeak integration and Kokoro model fixes
 # These patches fix known issues with the upstream kokoro-onnx library
-logger.info(" Applying production patches to kokoro-onnx library...")
+logger.debug("Applying production patches to kokoro-onnx library...")
 apply_all_patches()
 
 # Global variables for application state
@@ -687,18 +693,16 @@ async def initialize_model():
         # Set TMPDIR to local cache to avoid CoreML permission issues
         local_cache_dir = os.path.abspath(".cache")
         os.environ['TMPDIR'] = local_cache_dir
-        logger.info(f" Set TMPDIR to local cache: {local_cache_dir}")
+        logger.debug(f"Set TMPDIR to local cache: {local_cache_dir}")
 
         update_startup_progress(8, "Cleaning up cache files...")
         try:
             cache_info = get_cache_info()
             if cache_info.get('needs_cleanup', False):
                 cleanup_result = cleanup_cache(aggressive=False)
-                logger.info(
-                    f" Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
+                logger.info(f"Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
             else:
-                logger.info(
-                    f" Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
+                logger.debug(f"Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
         except Exception as e:
             logger.warning(f"⚠️ Cache cleanup failed: {e}")
 
@@ -751,7 +755,7 @@ async def initialize_model():
                 initialize_model_sync()
             except Exception as e:
                 logger.error(
-                    f"❌ Synchronous model initialization failed: {e}", exc_info=True)
+                    f" Synchronous model initialization failed: {e}", exc_info=True)
 
         try:
             # Show progress and handle timeouts
@@ -776,7 +780,7 @@ async def initialize_model():
                 model_initialization_complete = False  # Ensure flag is set
                 update_startup_progress(
                     100, "Model initialization failed.", "error")
-                logger.error("❌ Model initialization failed.")
+                logger.error(" Model initialization failed.")
 
         except Exception as e:
             logger.error(
@@ -785,7 +789,7 @@ async def initialize_model():
                 100, f"Initialization failed: {e}", "error")
 
     except Exception as e:
-        logger.error(f"❌ Model initialization failed: {e}", exc_info=True)
+        logger.error(f" Model initialization failed: {e}", exc_info=True)
         update_startup_progress(
             100, f"Initialization failed: {e}", "error")
 
@@ -937,6 +941,207 @@ async def trigger_cache_cleanup(aggressive: bool = False):
         return {"success": False, "error": str(e)}
 
 
+@app.get("/phase4-optimization")
+async def get_phase4_optimization_status():
+    """
+    Get comprehensive Phase 4 optimization status and insights.
+    
+    This endpoint provides detailed information about Phase 4 advanced optimization
+    features including dynamic memory management, pipeline warming, and real-time
+    optimization capabilities.
+    
+    **Response Format**:
+    ```json
+    {
+        "dynamic_memory_optimization": {
+            "enabled": boolean,
+            "current_arena_size_mb": number,
+            "optimization_stats": object,
+            "workload_insights": object
+        },
+        "pipeline_warming": {
+            "warm_up_complete": boolean,
+            "warm_up_duration": number,
+            "patterns_cached": number,
+            "warm_up_results": object
+        },
+        "real_time_optimization": {
+            "status": string,
+            "auto_optimization_enabled": boolean,
+            "optimization_interval": number,
+            "trend_analysis": object,
+            "parameter_tuning": object
+        }
+    }
+    ```
+    
+    **Use Cases**:
+    - Monitor Phase 4 optimization effectiveness
+    - Debug advanced optimization features
+    - Analyze performance trends and patterns
+    - Validate optimization configurations
+    
+    @returns JSON object with Phase 4 optimization status
+    """
+    try:
+        phase4_status = {
+            "phase4_enabled": True,
+            "optimization_components": {}
+        }
+        
+        # Dynamic Memory Optimization
+        try:
+            from api.model.loader import get_dynamic_memory_manager
+            
+            dynamic_memory_manager = get_dynamic_memory_manager()
+            if dynamic_memory_manager:
+                optimization_stats = dynamic_memory_manager.get_optimization_stats()
+                workload_insights = dynamic_memory_manager.get_workload_insights()
+                
+                phase4_status["optimization_components"]["dynamic_memory"] = {
+                    "enabled": True,
+                    "current_arena_size_mb": optimization_stats.get("current_arena_size_mb", 0),
+                    "optimization_stats": optimization_stats,
+                    "workload_insights": workload_insights
+                }
+            else:
+                phase4_status["optimization_components"]["dynamic_memory"] = {
+                    "enabled": False,
+                    "error": "Dynamic memory manager not available"
+                }
+        except Exception as e:
+            phase4_status["optimization_components"]["dynamic_memory"] = {
+                "enabled": False,
+                "error": str(e)
+            }
+        
+        # Pipeline Warming
+        try:
+            from api.model.loader import get_pipeline_warmer
+            
+            pipeline_warmer = get_pipeline_warmer()
+            if pipeline_warmer:
+                warm_up_status = pipeline_warmer.get_warm_up_status()
+                
+                phase4_status["optimization_components"]["pipeline_warming"] = {
+                    "enabled": True,
+                    "warm_up_complete": warm_up_status.get("warm_up_complete", False),
+                    "warm_up_duration": warm_up_status.get("warm_up_duration", 0),
+                    "patterns_cached": warm_up_status.get("common_patterns_count", 0),
+                    "warm_up_results": warm_up_status.get("warm_up_results", {})
+                }
+            else:
+                phase4_status["optimization_components"]["pipeline_warming"] = {
+                    "enabled": False,
+                    "error": "Pipeline warmer not available"
+                }
+        except Exception as e:
+            phase4_status["optimization_components"]["pipeline_warming"] = {
+                "enabled": False,
+                "error": str(e)
+            }
+        
+        # Real-time Optimization
+        try:
+            from api.performance.optimization import get_optimization_status
+            
+            optimization_status = get_optimization_status()
+            
+            phase4_status["optimization_components"]["real_time_optimization"] = {
+                "enabled": optimization_status.get("status", "unknown") != "optimizer_not_available",
+                "status": optimization_status.get("status", "unknown"),
+                "auto_optimization_enabled": optimization_status.get("auto_optimization_enabled", False),
+                "optimization_interval": optimization_status.get("optimization_interval", 0),
+                "trend_analysis": optimization_status.get("trend_analyzer_summary", {}),
+                "parameter_tuning": optimization_status.get("parameter_tuner_summary", {})
+            }
+        except Exception as e:
+            phase4_status["optimization_components"]["real_time_optimization"] = {
+                "enabled": False,
+                "error": str(e)
+            }
+        
+        # Overall Phase 4 Status
+        enabled_components = sum(1 for comp in phase4_status["optimization_components"].values() if comp.get("enabled", False))
+        total_components = len(phase4_status["optimization_components"])
+        
+        phase4_status["summary"] = {
+            "total_components": total_components,
+            "enabled_components": enabled_components,
+            "optimization_coverage": (enabled_components / total_components * 100) if total_components > 0 else 0,
+            "fully_operational": enabled_components == total_components
+        }
+        
+        return phase4_status
+        
+    except Exception as e:
+        logger.error(f" Phase 4 optimization status endpoint error: {e}")
+        return {
+            "error": "Phase 4 optimization status endpoint failed",
+            "details": str(e)
+        }
+
+
+@app.post("/phase4-optimization/trigger")
+async def trigger_phase4_optimization():
+    """
+    Trigger immediate Phase 4 optimization.
+    
+    This endpoint allows manual triggering of Phase 4 optimization processes
+    including pipeline warming and real-time optimization.
+    
+    @returns JSON object with optimization trigger results
+    """
+    try:
+        results = {
+            "triggered": True,
+            "optimization_results": {}
+        }
+        
+        # Trigger pipeline warming
+        try:
+            from api.model.loader import get_pipeline_warmer
+            
+            pipeline_warmer = get_pipeline_warmer()
+            if pipeline_warmer:
+                warm_up_triggered = await pipeline_warmer.trigger_warm_up_if_needed()
+                results["optimization_results"]["pipeline_warming"] = {
+                    "triggered": warm_up_triggered,
+                    "status": "completed" if warm_up_triggered else "already_complete"
+                }
+            else:
+                results["optimization_results"]["pipeline_warming"] = {
+                    "triggered": False,
+                    "error": "Pipeline warmer not available"
+                }
+        except Exception as e:
+            results["optimization_results"]["pipeline_warming"] = {
+                "triggered": False,
+                "error": str(e)
+            }
+        
+        # Trigger real-time optimization
+        try:
+            from api.performance.optimization import optimize_system_now
+            
+            optimization_result = await optimize_system_now()
+            results["optimization_results"]["real_time_optimization"] = optimization_result
+        except Exception as e:
+            results["optimization_results"]["real_time_optimization"] = {
+                "triggered": False,
+                "error": str(e)
+            }
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f" Phase 4 optimization trigger endpoint error: {e}")
+        return {
+            "error": "Phase 4 optimization trigger failed",
+            "details": str(e)
+        }
+
+
 @app.get("/warning-stats")
 async def get_warning_statistics():
     """
@@ -995,7 +1200,7 @@ async def get_warning_statistics():
         return stats
 
     except Exception as e:
-        logger.error(f"❌ Warning statistics endpoint error: {e}")
+        logger.error(f" Warning statistics endpoint error: {e}")
         return {
             "error": "Warning statistics endpoint failed",
             "details": str(e)
@@ -1102,10 +1307,118 @@ async def get_status():
             logger.warning(f"⚠️ Could not get warning suppression info: {e}")
             status["warning_suppression"] = {"error": str(e)}
 
+        # PHASE 2 OPTIMIZATION: Add TTS processing statistics including phoneme cache performance
+        try:
+            tts_stats = get_tts_processing_stats()
+            status["tts_processing"] = {
+                "phoneme_preprocessing_enabled": tts_stats.get("phoneme_preprocessing_enabled", False),
+                "active_provider": tts_stats.get("active_provider", "Unknown"),
+                "phoneme_cache": tts_stats.get("phoneme_cache", {}),
+                "inference_cache": tts_stats.get("inference_cache", {})
+            }
+        except Exception as e:
+            logger.warning(f"⚠️ Could not get TTS processing stats: {e}")
+            status["tts_processing"] = {"error": str(e)}
+
+        # PHASE 3 OPTIMIZATION: Add dual session utilization statistics
+        try:
+            from api.performance.stats import get_session_utilization_stats, get_memory_fragmentation_stats
+            
+            session_stats = get_session_utilization_stats()
+            status["session_utilization"] = {
+                "dual_session_available": session_stats.get("dual_session_available", False),
+                "total_requests": session_stats.get("total_requests", 0),
+                "session_distribution": {
+                    "ane_requests": session_stats.get("ane_requests", 0),
+                    "gpu_requests": session_stats.get("gpu_requests", 0),
+                    "cpu_requests": session_stats.get("cpu_requests", 0),
+                    "ane_percentage": session_stats.get("ane_percentage", 0.0),
+                    "gpu_percentage": session_stats.get("gpu_percentage", 0.0),
+                    "cpu_percentage": session_stats.get("cpu_percentage", 0.0)
+                },
+                "concurrent_processing": {
+                    "active_segments": session_stats.get("concurrent_segments_active", 0),
+                    "max_segments": session_stats.get("max_concurrent_segments", 0),
+                    "efficiency": session_stats.get("concurrent_efficiency", 0.0),
+                    "load_balancing": session_stats.get("load_balancing_efficiency", 0.0)
+                },
+                "sessions_available": session_stats.get("sessions_available", {
+                    "ane": False,
+                    "gpu": False,
+                    "cpu": False
+                })
+            }
+            
+            # Add memory fragmentation statistics
+            memory_stats = get_memory_fragmentation_stats()
+            status["memory_fragmentation"] = {
+                "watchdog_active": memory_stats.get("dual_session_available", False),
+                "current_memory_mb": memory_stats.get("current_memory_mb", 0.0),
+                "memory_trend": memory_stats.get("memory_trend", "unknown"),
+                "fragmentation_score": memory_stats.get("fragmentation_score", 0),
+                "memory_health": memory_stats.get("memory_health", "unknown"),
+                "cleanup_count": memory_stats.get("memory_cleanup_count", 0),
+                "request_count": memory_stats.get("request_count", 0)
+            }
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Could not get session utilization stats: {e}")
+            status["session_utilization"] = {"error": str(e)}
+            status["memory_fragmentation"] = {"error": str(e)}
+
+        # PHASE 4 OPTIMIZATION: Add dynamic memory optimization statistics
+        try:
+            from api.performance.stats import get_dynamic_memory_optimization_stats
+            
+            dynamic_memory_stats = get_dynamic_memory_optimization_stats()
+            status['dynamic_memory_optimization'] = dynamic_memory_stats
+            
+        except Exception as e:
+            logger.debug(f"Could not get dynamic memory optimization stats: {e}")
+            status['dynamic_memory_optimization'] = {
+                'dynamic_memory_manager_available': False,
+                'error': str(e)
+            }
+        
+        # PHASE 4 OPTIMIZATION: Add pipeline warmer status
+        try:
+            from api.model.loader import get_pipeline_warmer
+            
+            pipeline_warmer = get_pipeline_warmer()
+            if pipeline_warmer:
+                pipeline_warmer_status = pipeline_warmer.get_warm_up_status()
+                status['pipeline_warmer'] = pipeline_warmer_status
+            else:
+                status['pipeline_warmer'] = {
+                    'pipeline_warmer_available': False,
+                    'error': 'Pipeline warmer not initialized'
+                }
+                
+        except Exception as e:
+            logger.debug(f"Could not get pipeline warmer status: {e}")
+            status['pipeline_warmer'] = {
+                'pipeline_warmer_available': False,
+                'error': str(e)
+            }
+        
+        # PHASE 4 OPTIMIZATION: Add real-time optimizer status
+        try:
+            from api.performance.optimization import get_optimization_status
+            
+            optimization_status = get_optimization_status()
+            status['real_time_optimization'] = optimization_status
+            
+        except Exception as e:
+            logger.debug(f"Could not get real-time optimization status: {e}")
+            status['real_time_optimization'] = {
+                'real_time_optimizer_available': False,
+                'error': str(e)
+            }
+
         return status
 
     except Exception as e:
-        logger.error(f"❌ Status endpoint error: {e}")
+        logger.error(f" Status endpoint error: {e}")
         return {
             "error": "Status endpoint failed",
             "details": str(e)
@@ -1214,7 +1527,7 @@ async def get_voices():
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        logger.error(f"❌ Voices endpoint error: {e}")
+        logger.error(f" Voices endpoint error: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve voice information: {str(e)}"

@@ -288,7 +288,7 @@ def apply_all_patches():
     except Exception as e:
         # Log the error and attempt rollback
         error_msg = f"Critical patch application failed: {e}"
-        logger.error(f"❌ {error_msg}")
+        logger.error(f" {error_msg}")
         _patch_state['patch_errors'].append(error_msg)
         
         # Attempt rollback of any applied patches
@@ -330,7 +330,7 @@ def _rollback_patches():
         logger.info("✅ Patch rollback completed successfully")
         
     except Exception as e:
-        logger.error(f"❌ Patch rollback failed: {e}")
+        logger.error(f" Patch rollback failed: {e}")
         # Don't re-raise - we want to continue even if rollback fails
 
 def _apply_espeak_wrapper_patch():
@@ -588,7 +588,7 @@ def _apply_kokoro_model_patch():
             original_kokoro_init(self, model_path, voices_path, espeak_config, vocab_config)
             logger.info("✅ Kokoro model initialized successfully")
         except Exception as e:
-            logger.error(f"❌ Kokoro initialization failed: {e}")
+            logger.error(f" Kokoro initialization failed: {e}")
             raise RuntimeError(f"Failed to initialize Kokoro model: {e}")
     
     # Apply the patch

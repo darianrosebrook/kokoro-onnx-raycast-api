@@ -17,7 +17,7 @@
  * @since 2025-01-20
  */
 
-import { logger } from "../core/logger";
+import { logger } from "../core/logger.js";
 import type {
   RetryConfig,
   RetryStrategy,
@@ -25,7 +25,7 @@ import type {
   RetryError,
   RetryMetrics,
   TTSProcessorConfig,
-} from "../validation/tts-types";
+} from "../validation/tts-types.js";
 
 /**
  * Retry attempt information

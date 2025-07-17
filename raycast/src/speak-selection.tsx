@@ -89,11 +89,16 @@ export default async function SpeakSelection() {
       onStatusUpdate,
     });
 
-    console.log("Starting TTS processing...");
-    console.log({ text });
+    console.log(" [SPEAK-SELECTION] === START TTS ===");
+    console.log(" [SPEAK-SELECTION] Selected text:", {
+      length: text.length,
+      preview: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
+    });
+    console.log(" [SPEAK-SELECTION] TTS processor config:", processor.config);
+
     // This will await until playback is completely finished
     await processor.speak(text);
-    console.log("TTS processing completed successfully");
+    console.log(" [SPEAK-SELECTION] ✅ TTS processing completed successfully");
 
     // The 'speak' method now resolves when finished, paused, or stopped.
     // We only show "Finished" if it wasn't stopped.
@@ -105,7 +110,7 @@ export default async function SpeakSelection() {
       });
     }
   } catch (error) {
-    console.error("TTS processing failed:", error);
+    console.error(" [SPEAK-SELECTION]  TTS processing failed:", error);
 
     await showToast({
       style: Toast.Style.Failure,
@@ -115,6 +120,6 @@ export default async function SpeakSelection() {
   } finally {
     // The processor will handle its own cleanup when playback completes naturally
     // Calling processor.stop() here would prematurely terminate ongoing playback
-    console.log("Speak selection command completed");
+    console.log(" [SPEAK-SELECTION] === END TTS ===");
   }
 }
