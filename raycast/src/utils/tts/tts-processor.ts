@@ -53,7 +53,7 @@
  *
  * @author @darianrosebrook
  * @version 2.0.0
- * @since 2025-01-20
+ * @since 2025-07-17
  * @license MIT
  *
  * @example

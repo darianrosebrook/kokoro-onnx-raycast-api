@@ -8,6 +8,10 @@ vi.mock("../core/logger", () => ({
     warn: vi.fn(),
     debug: vi.fn(),
     error: vi.fn(),
+    consoleInfo: vi.fn(),
+    consoleDebug: vi.fn(),
+    consoleWarn: vi.fn(),
+    consoleError: vi.fn(),
   },
 }));
 

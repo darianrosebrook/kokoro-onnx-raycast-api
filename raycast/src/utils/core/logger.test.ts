@@ -12,7 +12,11 @@ vi.mock("winston", async (importOriginal) => {
     debug: vi.fn(),
     log: vi.fn(),
     level: "info",
-    // We may need to mock other methods if the tests get more complex
+    // Add console methods that are used throughout the codebase
+    consoleInfo: vi.fn(),
+    consoleDebug: vi.fn(),
+    consoleWarn: vi.fn(),
+    consoleError: vi.fn(),
   };
 
   return {
@@ -62,5 +66,13 @@ describe("TTSLogger", () => {
     // How to check this? We need access to the mock.
     // Let's defer this kind of check for now.
     expect(true).toBe(true);
+  });
+
+  it("should have console methods available", () => {
+    const logger = new TTSLogger();
+    expect(typeof logger.consoleInfo).toBe("function");
+    expect(typeof logger.consoleDebug).toBe("function");
+    expect(typeof logger.consoleWarn).toBe("function");
+    expect(typeof logger.consoleError).toBe("function");
   });
 });

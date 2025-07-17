@@ -16,7 +16,7 @@
  *
  * @author @darianrosebrook
  * @version 1.1.0
- * @since 2025-01-20
+ * @since 2025-07-17
  */
 
 import { createLogger, format, transports, Logger, transport } from "winston";

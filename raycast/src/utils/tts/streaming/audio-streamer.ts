@@ -14,7 +14,7 @@
  *
  * @author @darianrosebrook
  * @version 1.0.0
- * @since 2025-01-20
+ * @since 2025-07-17
  */
 
 import { ChildProcess } from "child_process";
@@ -201,6 +201,20 @@ export class AudioStreamer implements IAudioStreamer {
   ): Promise<void> {
     logger.consoleInfo(`[${this.instanceID}] streamAudio() called with request:`, request);
     try {
+      // Check cache first
+      const cachedAudio = this.checkCache(request);
+      if (cachedAudio) {
+        logger.consoleInfo(`[${this.instanceID}] Using cached audio data`);
+        // Return cached data as a single chunk
+        onChunk({
+          data: new Uint8Array(cachedAudio),
+          index: 0,
+          timestamp: Date.now(),
+        });
+        return;
+      }
+
+      // If not in cache, stream from server
       await this.streamFromServerWithImmediatePlayback(request, context, (chunk) => {
         // logger.consoleInfo(
         //   `[${this.instanceID}] onChunk callback invoked with chunk:`,

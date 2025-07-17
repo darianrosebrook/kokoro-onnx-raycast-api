@@ -14,7 +14,7 @@
  *
  * @author @darianrosebrook
  * @version 1.0.0
- * @since 2025-01-20
+ * @since 2025-07-17
  */
 
 import { logger } from "../core/logger.js";
@@ -701,6 +701,138 @@ export class PerformanceMonitor implements IPerformanceMonitor {
       component: this.name,
       method: "clearSessions",
       clearedCount: count,
+    });
+  }
+
+  /**
+   * Get buffer-specific metrics for adaptive buffer manager
+   */
+  getBufferMetrics(): {
+    timeToFirstAudio: number;
+    underrunCount: number;
+    streamingEfficiency: number;
+    averageLatency: number;
+    bufferAdjustments: number;
+  } {
+    return {
+      timeToFirstAudio: this.globalMetrics.timeToFirstAudio,
+      underrunCount: this.globalMetrics.underrunCount,
+      streamingEfficiency: this.globalMetrics.streamingEfficiency,
+      averageLatency: this.globalMetrics.averageLatency,
+      bufferAdjustments: this.globalMetrics.bufferAdjustments,
+    };
+  }
+
+  /**
+   * Record buffer adjustment event
+   */
+  recordBufferAdjustment(oldBufferMs: number, newBufferMs: number, reason: string): void {
+    this.recordMetric("bufferAdjustments", 1);
+
+    this.emitEvent(TTSEvent.BUFFER_ADJUSTMENT, {
+      oldBufferMs,
+      newBufferMs,
+      reason,
+      timestamp: performance.now(),
+    });
+
+    logger.debug("Buffer adjustment recorded", {
+      component: this.name,
+      method: "recordBufferAdjustment",
+      oldBufferMs,
+      newBufferMs,
+      reason,
+    });
+  }
+
+  /**
+   * Get performance recommendations for adaptive buffer manager
+   */
+  getBufferRecommendations(): {
+    shouldIncreaseBuffer: boolean;
+    shouldDecreaseBuffer: boolean;
+    recommendedBufferMs: number;
+    confidence: number;
+    reasoning: string[];
+  } {
+    const metrics = this.getMetrics();
+    const recommendations: string[] = [];
+    let shouldIncreaseBuffer = false;
+    let shouldDecreaseBuffer = false;
+    let recommendedBufferMs = metrics.adaptiveBufferMs;
+    let confidence = 0.5;
+
+    // Check for high latency
+    if (metrics.timeToFirstAudio > this.thresholds.targetTTFA) {
+      shouldIncreaseBuffer = true;
+      confidence += 0.2;
+      recommendations.push(
+        `High latency (${metrics.timeToFirstAudio.toFixed(0)}ms) suggests increasing buffer`
+      );
+      recommendedBufferMs += 100;
+    }
+
+    // Check for underruns
+    if (metrics.underrunCount > this.thresholds.maxUnderruns) {
+      shouldIncreaseBuffer = true;
+      confidence += 0.3;
+      recommendations.push(
+        `Buffer underruns (${metrics.underrunCount}) indicate insufficient buffer size`
+      );
+      recommendedBufferMs += 200;
+    }
+
+    // Check for low efficiency
+    if (metrics.streamingEfficiency < this.thresholds.targetEfficiency) {
+      shouldIncreaseBuffer = true;
+      confidence += 0.1;
+      recommendations.push(
+        `Low streaming efficiency (${(metrics.streamingEfficiency * 100).toFixed(1)}%) suggests buffer optimization`
+      );
+      recommendedBufferMs += 50;
+    }
+
+    // Check for good performance (opportunity to decrease)
+    if (
+      metrics.timeToFirstAudio < this.thresholds.targetTTFA * 0.5 &&
+      metrics.underrunCount === 0 &&
+      metrics.streamingEfficiency > this.thresholds.targetEfficiency
+    ) {
+      shouldDecreaseBuffer = true;
+      confidence += 0.2;
+      recommendations.push("Excellent performance suggests buffer can be reduced for efficiency");
+      recommendedBufferMs = Math.max(200, recommendedBufferMs - 50);
+    }
+
+    return {
+      shouldIncreaseBuffer,
+      shouldDecreaseBuffer,
+      recommendedBufferMs,
+      confidence: Math.min(1.0, confidence),
+      reasoning: recommendations,
+    };
+  }
+
+  /**
+   * Update adaptive buffer configuration from performance data
+   */
+  updateAdaptiveBufferConfig(bufferConfig: {
+    targetBufferMs: number;
+    bufferSize: number;
+    chunkSize: number;
+    deliveryRate: number;
+  }): void {
+    this.globalMetrics.adaptiveBufferMs = bufferConfig.targetBufferMs;
+
+    this.emitEvent(TTSEvent.BUFFER_ADJUSTMENT, {
+      newConfig: bufferConfig,
+      timestamp: performance.now(),
+    });
+
+    logger.consoleInfo("Adaptive buffer configuration updated", {
+      component: this.name,
+      method: "updateAdaptiveBufferConfig",
+      newConfig: bufferConfig,
     });
   }
 }

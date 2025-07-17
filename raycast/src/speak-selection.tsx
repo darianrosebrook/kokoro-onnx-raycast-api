@@ -68,7 +68,6 @@ export default async function SpeakSelection() {
     }
 
     await showToast({
-      style: Toast.Style.Animated,
       title: "Processing text for speech...",
     });
 

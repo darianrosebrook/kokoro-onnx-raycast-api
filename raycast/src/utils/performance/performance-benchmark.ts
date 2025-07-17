@@ -14,7 +14,7 @@
  *
  * @author @darianrosebrook
  * @version 1.0.0
- * @since 2025-01-20
+ * @since 2025-07-17
  */
 
 import { showToast, Toast } from "@raycast/api";
@@ -126,6 +126,24 @@ class PrecisionTimer {
 class TTSBenchmark {
   private metrics: TTSPerformanceMetrics[] = [];
   private isCollecting = false;
+  private adaptiveBufferManager: any = null; // Will be set via integration
+  private performanceMonitor: any = null; // Will be set via integration
+
+  /**
+   * Set adaptive buffer manager for integration
+   */
+  setAdaptiveBufferManager(bufferManager: any): void {
+    this.adaptiveBufferManager = bufferManager;
+    logger.consoleInfo("Adaptive buffer manager integrated with benchmark system");
+  }
+
+  /**
+   * Set performance monitor for integration
+   */
+  setPerformanceMonitor(monitor: any): void {
+    this.performanceMonitor = monitor;
+    logger.consoleInfo("Performance monitor integrated with benchmark system");
+  }
 
   /**
    * Start collecting performance metrics
@@ -194,6 +212,22 @@ class TTSBenchmark {
 
         if (this.isCollecting) {
           this.metrics.push(metrics as TTSPerformanceMetrics);
+        }
+
+        // Feed results to adaptive buffer manager if available
+        if (this.adaptiveBufferManager) {
+          this.adaptiveBufferManager.updateBuffer({
+            timeToFirstAudio: metrics.timeToFirstAudioChunk,
+            underrunCount: 0, // Cached responses don't have underruns
+            streamingEfficiency: 1.0, // Cached responses are 100% efficient
+          });
+        }
+
+        // Feed results to performance monitor if available
+        if (this.performanceMonitor) {
+          this.performanceMonitor.recordMetric("timeToFirstAudio", metrics.timeToFirstAudioChunk);
+          this.performanceMonitor.recordMetric("streamingEfficiency", 1.0);
+          this.performanceMonitor.recordMetric("cacheHits", 1);
         }
 
         return metrics as TTSPerformanceMetrics;
@@ -296,6 +330,31 @@ class TTSBenchmark {
       cacheManager.cacheTTSResponse(request, audioBuffer);
 
       onProgress?.("complete", timer.getElapsed());
+
+      if (this.isCollecting) {
+        this.metrics.push(metrics as TTSPerformanceMetrics);
+      }
+
+      // Feed results to adaptive buffer manager if available
+      if (this.adaptiveBufferManager) {
+        this.adaptiveBufferManager.updateBuffer({
+          timeToFirstAudio: metrics.timeToFirstAudioChunk,
+          underrunCount: 0, // We don't track underruns in benchmark
+          streamingEfficiency: metrics.useStreaming ? 0.95 : 1.0, // Estimate streaming efficiency
+        });
+      }
+
+      // Feed results to performance monitor if available
+      if (this.performanceMonitor) {
+        this.performanceMonitor.recordMetric("timeToFirstAudio", metrics.timeToFirstAudioChunk);
+        this.performanceMonitor.recordMetric(
+          "streamingEfficiency",
+          metrics.useStreaming ? 0.95 : 1.0
+        );
+        this.performanceMonitor.recordMetric("cacheMisses", 1);
+      }
+
+      return metrics as TTSPerformanceMetrics;
     } catch (error) {
       metrics.success = false;
       metrics.errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -318,6 +377,22 @@ class TTSBenchmark {
 
     if (this.isCollecting) {
       this.metrics.push(finalMetrics);
+    }
+
+    // Feed results to adaptive buffer manager if available
+    if (this.adaptiveBufferManager) {
+      this.adaptiveBufferManager.updateBuffer({
+        timeToFirstAudio: finalMetrics.timeToFirstAudioChunk,
+        underrunCount: 0, // Cached responses don't have underruns
+        streamingEfficiency: 1.0, // Cached responses are 100% efficient
+      });
+    }
+
+    // Feed results to performance monitor if available
+    if (this.performanceMonitor) {
+      this.performanceMonitor.recordMetric("timeToFirstAudio", finalMetrics.timeToFirstAudioChunk);
+      this.performanceMonitor.recordMetric("streamingEfficiency", 1.0);
+      this.performanceMonitor.recordMetric("cacheHits", 1);
     }
 
     return finalMetrics;
@@ -664,6 +739,105 @@ class TTSBenchmark {
     });
 
     return stats;
+  }
+
+  /**
+   * Generate optimal buffer configuration from benchmark results
+   */
+  generateOptimalBufferConfig(): {
+    targetBufferMs: number;
+    bufferSize: number;
+    chunkSize: number;
+    deliveryRate: number;
+    confidence: number;
+    reasoning: string[];
+  } {
+    if (this.metrics.length === 0) {
+      return {
+        targetBufferMs: 400,
+        bufferSize: 2 * 1024 * 1024,
+        chunkSize: 2400,
+        deliveryRate: 40,
+        confidence: 0,
+        reasoning: ["No benchmark data available"],
+      };
+    }
+
+    const avgTTFA = this.average(this.metrics.map((m) => m.timeToFirstAudioChunk));
+    const avgLatency = this.average(this.metrics.map((m) => m.networkLatency));
+    const successRate = this.metrics.filter((m) => m.success).length / this.metrics.length;
+
+    let targetBufferMs = 400;
+    let bufferSize = 2 * 1024 * 1024;
+    let chunkSize = 2400;
+    let deliveryRate = 40;
+    const reasoning: string[] = [];
+    let confidence = 0.5;
+
+    // Adjust based on Time to First Audio
+    if (avgTTFA > 1000) {
+      targetBufferMs += 200;
+      bufferSize = Math.min(bufferSize * 1.5, 8 * 1024 * 1024);
+      reasoning.push(`High TTFB (${avgTTFA.toFixed(0)}ms) - increasing buffer`);
+      confidence += 0.2;
+    } else if (avgTTFA < 300) {
+      targetBufferMs = Math.max(targetBufferMs - 100, 200);
+      bufferSize = Math.max(bufferSize * 0.8, 1024 * 1024);
+      reasoning.push(`Low TTFB (${avgTTFA.toFixed(0)}ms) - reducing buffer for efficiency`);
+      confidence += 0.1;
+    }
+
+    // Adjust based on network latency
+    if (avgLatency > 200) {
+      deliveryRate = Math.min(deliveryRate * 1.5, 100);
+      reasoning.push(
+        `High network latency (${avgLatency.toFixed(0)}ms) - increasing delivery rate`
+      );
+      confidence += 0.15;
+    } else if (avgLatency < 50) {
+      deliveryRate = Math.max(deliveryRate * 0.7, 10);
+      reasoning.push(`Low network latency (${avgLatency.toFixed(0)}ms) - reducing delivery rate`);
+      confidence += 0.1;
+    }
+
+    // Adjust based on success rate
+    if (successRate < 0.9) {
+      targetBufferMs += 100;
+      bufferSize = Math.min(bufferSize * 1.2, 8 * 1024 * 1024);
+      reasoning.push(
+        `Low success rate (${(successRate * 100).toFixed(1)}%) - increasing buffer for reliability`
+      );
+      confidence += 0.25;
+    } else if (successRate > 0.98) {
+      reasoning.push(
+        `High success rate (${(successRate * 100).toFixed(1)}%) - maintaining current settings`
+      );
+      confidence += 0.1;
+    }
+
+    // Update adaptive buffer manager if available
+    if (this.adaptiveBufferManager) {
+      this.adaptiveBufferManager.updateFromBenchmark({
+        targetBufferMs,
+        bufferSize,
+        chunkSize,
+        deliveryRate,
+        minBufferChunks: 4,
+        maxLatency: 100,
+        targetUtilization: 0.7,
+        minBufferMs: 200,
+        maxBufferMs: 1000,
+      });
+    }
+
+    return {
+      targetBufferMs,
+      bufferSize,
+      chunkSize,
+      deliveryRate,
+      confidence: Math.min(1.0, confidence),
+      reasoning,
+    };
   }
 
   /**

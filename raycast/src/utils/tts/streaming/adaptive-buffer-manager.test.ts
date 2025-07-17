@@ -9,6 +9,11 @@ vi.mock("../../core/logger", () => ({
     debug: vi.fn(),
     error: vi.fn(),
     logBufferAdjustment: vi.fn(),
+    // Add console methods that are used in the adaptive buffer manager
+    consoleInfo: vi.fn(),
+    consoleDebug: vi.fn(),
+    consoleWarn: vi.fn(),
+    consoleError: vi.fn(),
   },
 }));
 
