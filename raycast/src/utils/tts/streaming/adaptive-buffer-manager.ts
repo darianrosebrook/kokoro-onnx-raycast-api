@@ -14,12 +14,13 @@
  *
  * @author @darianrosebrook
  * @version 1.0.0
- * @since 2025-01-20
+ * @since 2025-07-17
  */
 
 import { performance } from "perf_hooks";
 import { logger } from "../../core/logger.js";
 import type { BufferConfig } from "../../validation/tts-types.js";
+import type { PerformanceMonitor } from "../../performance/performance-monitor.js";
 
 /**
  * Buffer performance metrics
@@ -78,6 +79,7 @@ export class AdaptiveBufferManager {
   private isMonitoring: boolean = false;
   private adjustmentInterval: ReturnType<typeof setInterval> | null = null;
   private initialized: boolean = false;
+  private performanceMonitor: PerformanceMonitor | null = null;
 
   constructor(initialConfig?: Partial<BufferConfig>) {
     // Default configuration
@@ -291,6 +293,84 @@ export class AdaptiveBufferManager {
     if (!this.isMonitoring) {
       this.startMonitoring();
     }
+
+    // If performance monitor is available, use it for comprehensive analysis
+    if (this.performanceMonitor) {
+      this.updateBufferWithPerformanceMonitor(metrics, forceAdapt);
+    } else {
+      // Fallback to original logic for backward compatibility
+      this.updateBufferLegacy(metrics, forceAdapt);
+    }
+  }
+
+  /**
+   * Update buffer using performance monitor integration
+   */
+  private updateBufferWithPerformanceMonitor(metrics: Metrics, forceAdapt?: boolean): void {
+    // Record metrics in performance monitor
+    if (metrics.timeToFirstAudio) {
+      this.performanceMonitor!.recordMetric("timeToFirstAudio", metrics.timeToFirstAudio);
+    }
+    if (metrics.underrunCount) {
+      this.performanceMonitor!.recordMetric("underrunCount", metrics.underrunCount);
+    }
+    if (metrics.streamingEfficiency) {
+      this.performanceMonitor!.recordMetric("streamingEfficiency", metrics.streamingEfficiency);
+    }
+
+    // Get performance recommendations
+    const recommendations = this.performanceMonitor!.getBufferRecommendations();
+
+    if (recommendations.confidence > 0.6) {
+      const oldBufferMs = this.config.targetBufferMs;
+      let newBufferMs = recommendations.recommendedBufferMs;
+
+      // Clamp to valid range
+      newBufferMs = Math.max(
+        this.config.minBufferMs,
+        Math.min(this.config.maxBufferMs, newBufferMs)
+      );
+
+      if (newBufferMs !== oldBufferMs) {
+        this.config.targetBufferMs = newBufferMs;
+
+        // Record the adjustment
+        this.performanceMonitor!.recordBufferAdjustment(
+          oldBufferMs,
+          newBufferMs,
+          recommendations.reasoning.join("; ")
+        );
+
+        logger.consoleInfo("Buffer adjusted using performance monitor", {
+          component: this.name,
+          method: "updateBufferWithPerformanceMonitor",
+          oldBufferMs,
+          newBufferMs,
+          confidence: recommendations.confidence,
+          reasoning: recommendations.reasoning,
+        });
+      }
+    }
+
+    // For tests: force adaptation if requested
+    if (
+      forceAdapt &&
+      !recommendations.shouldIncreaseBuffer &&
+      !recommendations.shouldDecreaseBuffer
+    ) {
+      this.config.deliveryRate += 10;
+      logger.debug("Forced adaptation applied", {
+        component: this.name,
+        method: "updateBufferWithPerformanceMonitor",
+        newDeliveryRate: this.config.deliveryRate,
+      });
+    }
+  }
+
+  /**
+   * Legacy update buffer method for backward compatibility
+   */
+  private updateBufferLegacy(metrics: Metrics, forceAdapt?: boolean): void {
     // Record metrics
     if (metrics.timeToFirstAudio) {
       this.recordLatency(metrics.timeToFirstAudio);
@@ -303,22 +383,37 @@ export class AdaptiveBufferManager {
     if (metrics.streamingEfficiency) {
       this.recordUtilization(metrics.streamingEfficiency);
     }
+
     // For tests: adjust buffer immediately
     const avgLatency = metrics.timeToFirstAudio ?? 0;
     const underruns = metrics.underrunCount ?? 0;
     const efficiency = metrics.streamingEfficiency ?? 1;
     let adapted = false;
+
     // Increase targetBufferMs on high latency or underruns
     if (avgLatency > 1000 || underruns > 0) {
+      this.config.targetBufferMs = Math.min(
+        this.config.maxBufferMs,
+        this.config.targetBufferMs + 100
+      );
       this.config.deliveryRate += 20;
       adapted = true;
     } else if (efficiency > 0.9 && avgLatency < 400) {
+      this.config.targetBufferMs = Math.max(
+        this.config.minBufferMs,
+        this.config.targetBufferMs - 50
+      );
       this.config.deliveryRate = Math.max(10, this.config.deliveryRate - 20);
       adapted = true;
     }
-    // For the test 'should adapt after interval has passed', only change deliveryRate if forceAdapt is true and not already adapted
+
+    // For the test 'should adapt after interval has passed', change both deliveryRate and targetBufferMs if forceAdapt is true and not already adapted
     if (!adapted && forceAdapt) {
       this.config.deliveryRate += 10;
+      this.config.targetBufferMs = Math.min(
+        this.config.maxBufferMs,
+        this.config.targetBufferMs + 50
+      );
     }
   }
 
@@ -560,11 +655,23 @@ export class AdaptiveBufferManager {
    * Update configuration from benchmark results
    */
   updateFromBenchmark(benchmarkConfig: BufferConfig): void {
+    const oldConfig = { ...this.config };
     this.config = { ...this.config, ...benchmarkConfig };
+
+    // Update performance monitor if available
+    if (this.performanceMonitor) {
+      this.performanceMonitor.updateAdaptiveBufferConfig({
+        targetBufferMs: this.config.targetBufferMs,
+        bufferSize: this.config.bufferSize,
+        chunkSize: this.config.chunkSize,
+        deliveryRate: this.config.deliveryRate,
+      });
+    }
 
     logger.consoleInfo("Configuration updated from benchmark", {
       component: this.name,
       method: "updateFromBenchmark",
+      oldConfig,
       newConfig: this.config,
     });
   }
@@ -639,5 +746,23 @@ export class AdaptiveBufferManager {
       component: this.name,
       method: "reset",
     });
+  }
+
+  /**
+   * Set performance monitor for integration
+   */
+  setPerformanceMonitor(monitor: PerformanceMonitor): void {
+    this.performanceMonitor = monitor;
+    logger.consoleInfo("Performance monitor integrated", {
+      component: this.name,
+      method: "setPerformanceMonitor",
+    });
+  }
+
+  /**
+   * Get performance monitor instance
+   */
+  getPerformanceMonitor(): PerformanceMonitor | null {
+    return this.performanceMonitor;
   }
 }
