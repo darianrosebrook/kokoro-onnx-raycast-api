@@ -15,7 +15,7 @@
  *
  * @author @darianrosebrook
  * @version 2.0.0
- * @since 2025-01-20
+ * @since 2025-07-17
  * @license MIT
  */
 
@@ -24,30 +24,65 @@ import http from "http";
 import { spawn } from "child_process";
 import { EventEmitter } from "events";
 
-import { logger } from "../src/utils/core/logger";
-
 /**
- * Debug mode detection
+ * Simple logger for the audio daemon
  */
-function isDebugMode() {
-  // Check command line arguments for --debug flag
-  const hasDebugFlag = process.argv.includes("--debug") || process.argv.includes("-d");
+class SimpleLogger {
+  constructor() {
+    this.isDebugMode = this.checkDebugMode();
+  }
 
-  // Check environment variables
-  const envDebug = process.env.DEBUG === "true" || process.env.DEBUG === "1";
-  const nodeEnvDebug = process.env.NODE_ENV === "development";
-  const hasKokoroDebug = process.env.KOKORO_DEBUG === "true" || process.env.KOKORO_DEBUG === "1";
+  checkDebugMode() {
+    const hasDebugFlag = process.argv.includes("--debug") || process.argv.includes("-d");
+    const envDebug = process.env.DEBUG === "true" || process.env.DEBUG === "1";
+    const nodeEnvDebug = process.env.NODE_ENV === "development";
+    const hasKokoroDebug = process.env.KOKORO_DEBUG === "true" || process.env.KOKORO_DEBUG === "1";
 
-  return hasDebugFlag || envDebug || nodeEnvDebug || hasKokoroDebug;
+    return hasDebugFlag || envDebug || nodeEnvDebug || hasKokoroDebug;
+  }
+
+  info(message, ...args) {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`${timestamp} [INFO]: ${message}`, ...args);
+  }
+
+  warn(message, ...args) {
+    const timestamp = new Date().toLocaleTimeString();
+    console.warn(`${timestamp} [WARN]: ${message}`, ...args);
+  }
+
+  error(message, ...args) {
+    const timestamp = new Date().toLocaleTimeString();
+    console.error(`${timestamp} [ERROR]: ${message}`, ...args);
+  }
+
+  debug(message, ...args) {
+    if (this.isDebugMode) {
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(`${timestamp} [DEBUG]: ${message}`, ...args);
+    }
+  }
+
+  consoleInfo(message, ...args) {
+    console.log(message, ...args);
+  }
+
+  consoleWarn(message, ...args) {
+    console.warn(message, ...args);
+  }
+
+  consoleError(message, ...args) {
+    console.error(message, ...args);
+  }
 }
+
+const logger = new SimpleLogger();
 
 /**
  * Debug logging function
  */
 function debugLog(message, ...args) {
-  if (isDebugMode()) {
-    logger.consoleInfo(`[DEBUG] ${message}`, ...args);
-  }
+  logger.debug(message, ...args);
 }
 
 /**
@@ -214,6 +249,13 @@ class AudioProcessor extends EventEmitter {
       actualDuration: 0,
       playbackStartTime: 0,
       playbackEndTime: 0,
+      // Enhanced timing metrics
+      firstChunkTime: 0,
+      lastChunkTime: 0,
+      totalChunksReceived: 0,
+      averageChunkSize: 0,
+      processingOverhead: 0,
+      timingAccuracy: 0,
     };
     this.lastHeartbeat = Date.now();
     this.isEndingStream = false; // New flag for ending stream
@@ -247,6 +289,12 @@ class AudioProcessor extends EventEmitter {
     this.stats.playbackEndTime = 0;
     this.stats.actualDuration = 0;
     this.stats.expectedDuration = 0;
+    this.stats.firstChunkTime = 0;
+    this.stats.lastChunkTime = 0;
+    this.stats.totalChunksReceived = 0;
+    this.stats.averageChunkSize = 0;
+    this.stats.processingOverhead = 0;
+    this.stats.timingAccuracy = 0;
 
     debugLog(`Starting audio playback with format:`, this.format);
 
@@ -335,14 +383,23 @@ class AudioProcessor extends EventEmitter {
         this.stats.playbackEndTime = performance.now();
         this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
 
+        // Calculate timing accuracy and processing overhead
+        this.stats.timingAccuracy =
+          this.stats.actualDuration > 0
+            ? (this.stats.expectedDuration / this.stats.actualDuration) * 100
+            : 0;
+        this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
+
         logger.consoleInfo(`[${this.instanceId}] Playback timing:`, {
           startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
           endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
           actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
           expectedDuration: this.stats.expectedDuration.toFixed(2) + "ms",
           difference: (this.stats.actualDuration - this.stats.expectedDuration).toFixed(2) + "ms",
-          accuracy:
-            ((this.stats.expectedDuration / this.stats.actualDuration) * 100).toFixed(1) + "%",
+          accuracy: this.stats.timingAccuracy.toFixed(1) + "%",
+          processingOverhead: this.stats.processingOverhead.toFixed(2) + "ms",
+          totalChunks: this.stats.totalChunksReceived,
+          averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
         });
 
         // If process exited normally (code 0), it finished playing successfully
@@ -371,14 +428,23 @@ class AudioProcessor extends EventEmitter {
           this.stats.playbackEndTime = performance.now();
           this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
 
+          // Calculate timing accuracy and processing overhead
+          this.stats.timingAccuracy =
+            this.stats.actualDuration > 0
+              ? (this.stats.expectedDuration / this.stats.actualDuration) * 100
+              : 0;
+          this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
+
           logger.info(`[${this.instanceId}] Playback timing (close):`, {
             startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
             endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
             actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
             expectedDuration: this.stats.expectedDuration.toFixed(2) + "ms",
             difference: (this.stats.actualDuration - this.stats.expectedDuration).toFixed(2) + "ms",
-            accuracy:
-              ((this.stats.expectedDuration / this.stats.actualDuration) * 100).toFixed(1) + "%",
+            accuracy: this.stats.timingAccuracy.toFixed(1) + "%",
+            processingOverhead: this.stats.processingOverhead.toFixed(2) + "ms",
+            totalChunks: this.stats.totalChunksReceived,
+            averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
           });
         }
 
@@ -676,6 +742,13 @@ class AudioProcessor extends EventEmitter {
             this.stats.playbackEndTime = performance.now();
             this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
 
+            // Calculate timing accuracy and processing overhead
+            this.stats.timingAccuracy =
+              this.stats.actualDuration > 0
+                ? (this.stats.expectedDuration / this.stats.actualDuration) * 100
+                : 0;
+            this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
+
             logger.info(`[${this.instanceId}] Final playback timing:`, {
               startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
               endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
@@ -683,9 +756,11 @@ class AudioProcessor extends EventEmitter {
               expectedDuration: this.stats.expectedDuration.toFixed(2) + "ms",
               difference:
                 (this.stats.actualDuration - this.stats.expectedDuration).toFixed(2) + "ms",
-              accuracy:
-                ((this.stats.expectedDuration / this.stats.actualDuration) * 100).toFixed(1) + "%",
+              accuracy: this.stats.timingAccuracy.toFixed(1) + "%",
+              processingOverhead: this.stats.processingOverhead.toFixed(2) + "ms",
               totalBytesProcessed: this.stats.bytesProcessed,
+              totalChunks: this.stats.totalChunksReceived,
+              averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
             });
           }
 
@@ -705,6 +780,13 @@ class AudioProcessor extends EventEmitter {
             this.stats.playbackEndTime = performance.now();
             this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
 
+            // Calculate timing accuracy and processing overhead
+            this.stats.timingAccuracy =
+              this.stats.actualDuration > 0
+                ? (this.stats.expectedDuration / this.stats.actualDuration) * 100
+                : 0;
+            this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
+
             logger.info(`[${this.instanceId}] Natural completion timing:`, {
               startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
               endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
@@ -712,9 +794,11 @@ class AudioProcessor extends EventEmitter {
               expectedDuration: this.stats.expectedDuration.toFixed(2) + "ms",
               difference:
                 (this.stats.actualDuration - this.stats.expectedDuration).toFixed(2) + "ms",
-              accuracy:
-                ((this.stats.expectedDuration / this.stats.actualDuration) * 100).toFixed(1) + "%",
+              accuracy: this.stats.timingAccuracy.toFixed(1) + "%",
+              processingOverhead: this.stats.processingOverhead.toFixed(2) + "ms",
               totalBytesProcessed: this.stats.bytesProcessed,
+              totalChunks: this.stats.totalChunksReceived,
+              averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
             });
           }
 
@@ -751,20 +835,27 @@ class AudioProcessor extends EventEmitter {
 
   /**
    * Calculate expected duration based on audio format and data size
+   * Improved timing calculation with better accuracy
    */
   calculateExpectedDuration(totalBytes) {
     // Duration = (bytes) / (bytes per second)
     const durationSeconds = totalBytes / this.format.bytesPerSecond;
     const durationMs = durationSeconds * 1000;
 
+    // Add small buffer for processing overhead (typically 10-50ms)
+    const processingBuffer = Math.min(durationMs * 0.01, 50); // 1% or 50ms max
+    const adjustedDurationMs = durationMs + processingBuffer;
+
     logger.info(`[${this.instanceId}] Duration calculation:`, {
       totalBytes,
       bytesPerSecond: this.format.bytesPerSecond,
       durationSeconds: durationSeconds.toFixed(3),
       durationMs: durationMs.toFixed(1),
+      processingBuffer: processingBuffer.toFixed(1),
+      adjustedDurationMs: adjustedDurationMs.toFixed(1),
     });
 
-    return durationMs;
+    return adjustedDurationMs;
   }
 
   /**
@@ -866,15 +957,29 @@ class AudioProcessor extends EventEmitter {
 
   /**
    * Write audio chunk to buffer
+   * Enhanced with better timing tracking and accuracy measurement
    */
   async writeChunk(chunk) {
     // Dump PCM chunk to file for manual testing
     const fs = await import("fs");
     fs.appendFileSync("/tmp/test.raw", chunk);
 
+    const chunkTime = performance.now();
     const written = this.ringBuffer.write(chunk);
+
+    // Track timing metrics
+    if (this.stats.firstChunkTime === 0) {
+      this.stats.firstChunkTime = chunkTime;
+    }
+    this.stats.lastChunkTime = chunkTime;
+    this.stats.totalChunksReceived++;
+    this.stats.chunksReceived++;
+
+    // Calculate average chunk size
+    this.stats.averageChunkSize = this.stats.bytesProcessed / this.stats.totalChunksReceived;
+
     logger.info(
-      `[${this.instanceId}] writeChunk: wrote ${written} bytes, buffer size: ${this.ringBuffer.size}`
+      `[${this.instanceId}] writeChunk: wrote ${written} bytes, buffer size: ${this.ringBuffer.size}, chunk #${this.stats.totalChunksReceived}`
     );
 
     // Update expected duration based on total bytes received
@@ -889,6 +994,12 @@ class AudioProcessor extends EventEmitter {
       bufferUtilization: this.ringBuffer.utilization,
       audioPosition: this.stats.audioPosition,
       expectedDuration: this.stats.expectedDuration,
+      timingMetrics: {
+        firstChunkTime: this.stats.firstChunkTime,
+        lastChunkTime: this.stats.lastChunkTime,
+        totalChunksReceived: this.stats.totalChunksReceived,
+        averageChunkSize: this.stats.averageChunkSize,
+      },
     });
     return written;
   }
@@ -953,12 +1064,61 @@ class AudioProcessor extends EventEmitter {
         actualDuration: this.stats.actualDuration,
         playbackStartTime: this.stats.playbackStartTime,
         playbackEndTime: this.stats.playbackEndTime,
-        accuracy:
-          this.stats.actualDuration > 0
-            ? ((this.stats.expectedDuration / this.stats.actualDuration) * 100).toFixed(1) + "%"
-            : "N/A",
+        accuracy: this.stats.timingAccuracy.toFixed(1) + "%",
+        processingOverhead: this.stats.processingOverhead.toFixed(2) + "ms",
+        totalChunks: this.stats.totalChunksReceived,
+        averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
+        firstChunkTime: this.stats.firstChunkTime,
+        lastChunkTime: this.stats.lastChunkTime,
       },
     };
+  }
+
+  /**
+   * Get detailed timing analysis
+   */
+  getTimingAnalysis() {
+    const analysis = {
+      basic: {
+        expectedDuration: this.stats.expectedDuration,
+        actualDuration: this.stats.actualDuration,
+        accuracy: this.stats.timingAccuracy,
+        processingOverhead: this.stats.processingOverhead,
+      },
+      chunkAnalysis: {
+        totalChunks: this.stats.totalChunksReceived,
+        averageChunkSize: this.stats.averageChunkSize,
+        firstChunkTime: this.stats.firstChunkTime,
+        lastChunkTime: this.stats.lastChunkTime,
+        chunkDeliveryTime: this.stats.lastChunkTime - this.stats.firstChunkTime,
+      },
+      playbackAnalysis: {
+        playbackStartTime: this.stats.playbackStartTime,
+        playbackEndTime: this.stats.playbackEndTime,
+        playbackDuration: this.stats.actualDuration,
+        bufferUtilization: this.ringBuffer.utilization,
+        underruns: this.stats.underruns,
+      },
+      performance: {
+        bytesPerSecond: this.format.bytesPerSecond,
+        totalBytesProcessed: this.stats.bytesProcessed,
+        bufferCapacity: this.ringBuffer.capacity,
+        bufferSize: this.ringBuffer.size,
+      },
+    };
+
+    // Calculate additional metrics
+    if (analysis.chunkAnalysis.totalChunks > 0) {
+      analysis.chunkAnalysis.averageChunkDeliveryTime =
+        analysis.chunkAnalysis.chunkDeliveryTime / analysis.chunkAnalysis.totalChunks;
+    }
+
+    if (analysis.basic.actualDuration > 0) {
+      analysis.performance.effectiveBytesPerSecond =
+        analysis.performance.totalBytesProcessed / (analysis.basic.actualDuration / 1000);
+    }
+
+    return analysis;
   }
 }
 
@@ -1039,6 +1199,7 @@ class AudioDaemon extends EventEmitter {
                 isPaused: this.audioProcessor.isPaused,
                 bufferUtilization: this.audioProcessor.ringBuffer.utilization,
                 stats: this.audioProcessor.getStatus(),
+                timingAnalysis: this.audioProcessor.getTimingAnalysis(),
               }
             : null,
           clients: this.clients.size,
@@ -1198,6 +1359,9 @@ class AudioDaemon extends EventEmitter {
       case "heartbeat":
         this.handleHeartbeat(ws);
         break;
+      case "timing_analysis":
+        this.handleTimingAnalysis(ws);
+        break;
       default:
         console.error(`[${this.instanceId}] Unknown message type:`, message.type);
     }
@@ -1335,6 +1499,32 @@ class AudioDaemon extends EventEmitter {
         type: "heartbeat",
         timestamp: Date.now(),
         data: { status: "ok" },
+      })
+    );
+  }
+
+  /**
+   * Handle timing analysis request
+   */
+  handleTimingAnalysis(ws) {
+    if (!this.audioProcessor) {
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          timestamp: Date.now(),
+          data: { message: "Audio processor not available" },
+        })
+      );
+      return;
+    }
+
+    const analysis = this.audioProcessor.getTimingAnalysis();
+
+    ws.send(
+      JSON.stringify({
+        type: "timing_analysis",
+        timestamp: Date.now(),
+        data: analysis,
       })
     );
   }
