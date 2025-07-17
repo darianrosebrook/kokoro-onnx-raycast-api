@@ -23,12 +23,6 @@
       "title": "Speak Selected Text",
       "description": "Speak currently selected text",
       "mode": "no-view"
-    },
-    {
-      "name": "test-wav-playback",
-      "title": "Test Wav Playback",
-      "description": "Test WAV file playback using different methods",
-      "mode": "view"
     }
   ],
   "preferences": [

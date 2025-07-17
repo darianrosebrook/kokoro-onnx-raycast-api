@@ -12,9 +12,10 @@
  * - Error stack trace capture
  * - Performance timing utilities
  * - Context-aware logging
+ * - Global debug mode control
  *
  * @author @darianrosebrook
- * @version 1.0.0
+ * @version 1.1.0
  * @since 2025-01-20
  */
 
@@ -62,6 +63,57 @@ interface LoggerConfig {
   enableConsole: boolean;
   enableFile?: boolean;
   filename?: string;
+  debugMode?: boolean;
+}
+
+/**
+ * Global debug mode state
+ */
+class DebugModeManager {
+  private static instance: DebugModeManager;
+  private debugMode: boolean = false;
+
+  private constructor() {
+    this.initializeDebugMode();
+  }
+
+  static getInstance(): DebugModeManager {
+    if (!DebugModeManager.instance) {
+      DebugModeManager.instance = new DebugModeManager();
+    }
+    return DebugModeManager.instance;
+  }
+
+  private initializeDebugMode(): void {
+    // Check command line arguments for --debug flag
+    const hasDebugFlag = process.argv.includes("--debug") || process.argv.includes("-d");
+
+    // Check environment variables
+    const envDebug = process.env.DEBUG === "true" || process.env.DEBUG === "1";
+    const nodeEnvDebug = process.env.NODE_ENV === "development";
+
+    // Check for specific debug flags
+    const hasKokoroDebug = process.env.KOKORO_DEBUG === "true" || process.env.KOKORO_DEBUG === "1";
+
+    this.debugMode = hasDebugFlag || envDebug || nodeEnvDebug || hasKokoroDebug;
+
+    if (this.debugMode) {
+      console.log("🔧 Debug mode enabled via:", {
+        hasDebugFlag,
+        envDebug,
+        nodeEnvDebug,
+        hasKokoroDebug,
+      });
+    }
+  }
+
+  isDebugMode(): boolean {
+    return this.debugMode;
+  }
+
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+  }
 }
 
 /**
@@ -117,9 +169,12 @@ function createFormattedLogger(config: LoggerConfig): Logger {
 export class TTSLogger {
   private logger: Logger;
   private developmentMode: boolean;
+  private debugMode: boolean;
   private performanceTimers: Map<string, PerformanceContext> = new Map();
 
   constructor(config: Partial<LoggerConfig> = {}) {
+    const debugManager = DebugModeManager.getInstance();
+
     const defaultConfig: LoggerConfig = {
       level: LogLevel.INFO,
       developmentMode:
@@ -128,10 +183,12 @@ export class TTSLogger {
           : true,
       enableConsole: true,
       enableFile: false,
+      debugMode: debugManager.isDebugMode(),
     };
 
     const finalConfig = { ...defaultConfig, ...config };
     this.developmentMode = finalConfig.developmentMode;
+    this.debugMode = finalConfig.debugMode ?? debugManager.isDebugMode();
     this.logger = createFormattedLogger(finalConfig);
   }
 
@@ -170,12 +227,46 @@ export class TTSLogger {
   }
 
   /**
-   * Log debug information (only in development)
+   * Log debug information (only in debug mode or development)
    */
   debug(message: string, context?: LogContext): void {
-    if (this.developmentMode || this.logger.level === "debug") {
+    if (this.debugMode || this.developmentMode || this.logger.level === "debug") {
       this.logger.debug(message, context);
     }
+  }
+
+  /**
+   * Console debug output - only shows when debug mode is enabled
+   * This replaces direct console.log calls for debug information
+   */
+  consoleDebug(message: string, ...args: unknown[]): void {
+    if (this.debugMode) {
+      console.log(`[DEBUG] ${message}`, ...args);
+    }
+  }
+
+  /**
+   * Console info output - always shows
+   * This replaces direct console.log calls for important information
+   */
+  consoleInfo(message: string, ...args: unknown[]): void {
+    console.log(message, ...args);
+  }
+
+  /**
+   * Console warn output - always shows
+   * This replaces direct console.warn calls
+   */
+  consoleWarn(message: string, ...args: unknown[]): void {
+    console.warn(message, ...args);
+  }
+
+  /**
+   * Console error output - always shows
+   * This replaces direct console.error calls
+   */
+  consoleError(message: string, ...args: unknown[]): void {
+    console.error(message, ...args);
   }
 
   /**
@@ -328,6 +419,21 @@ export class TTSLogger {
   }
 
   /**
+   * Check if debug mode is enabled
+   */
+  isDebugMode(): boolean {
+    return this.debugMode;
+  }
+
+  /**
+   * Set debug mode
+   */
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+    DebugModeManager.getInstance().setDebugMode(enabled);
+  }
+
+  /**
    * Clean up performance timers
    */
   cleanup(): void {
@@ -345,3 +451,6 @@ const defaultLogger = new TTSLogger({
 // Export default logger and class
 export { defaultLogger as logger };
 export default TTSLogger;
+
+// Export debug mode manager for external access
+export { DebugModeManager };

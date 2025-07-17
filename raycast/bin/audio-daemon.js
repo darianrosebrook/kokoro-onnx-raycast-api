@@ -1,6 +1,30 @@
 #!/usr/bin/env node
 
 /**
+ * Debug mode detection
+ */
+function isDebugMode() {
+  // Check command line arguments for --debug flag
+  const hasDebugFlag = process.argv.includes("--debug") || process.argv.includes("-d");
+
+  // Check environment variables
+  const envDebug = process.env.DEBUG === "true" || process.env.DEBUG === "1";
+  const nodeEnvDebug = process.env.NODE_ENV === "development";
+  const hasKokoroDebug = process.env.KOKORO_DEBUG === "true" || process.env.KOKORO_DEBUG === "1";
+
+  return hasDebugFlag || envDebug || nodeEnvDebug || hasKokoroDebug;
+}
+
+/**
+ * Debug logging function
+ */
+function debugLog(message, ...args) {
+  if (isDebugMode()) {
+    console.log(`[DEBUG] ${message}`, ...args);
+  }
+}
+
+/**
  * Audio Daemon - Native Audio Processing Engine
  *
  * This daemon provides persistent audio playback capabilities with native
@@ -98,22 +122,11 @@ class AudioRingBuffer {
   write(data) {
     const available = this.capacity - this.size;
     available === 0 &&
-      console.log(
-        `%c [DEBUG] Buffer is full`,
-        "color: #FFAAAA; background-color: #222222; font-weight: bold"
-      );
-    console.log(
-      `  [DEBUG] Buffer size: ${this.size}, available: ${available}, capacity: ${this.capacity}`
-    );
+      debugLog(`Buffer is full`, "color: #FFAAAA; background-color: #222222; font-weight: bold");
+    debugLog(`Buffer size: ${this.size}, available: ${available}, capacity: ${this.capacity}`);
 
     const toWrite = Math.min(data.length, available);
-    console.log(
-      `[${this.instanceId}] Writing to buffer:`,
-      toWrite,
-      "bytes",
-      "capacity:",
-      this.capacity
-    );
+    debugLog(`Writing to buffer:`, toWrite, "bytes", "capacity:", this.capacity);
     if (toWrite === 0) return 0;
 
     // Write data in one or two parts (if wrapping around)
@@ -233,7 +246,7 @@ class AudioProcessor extends EventEmitter {
     this.stats.actualDuration = 0;
     this.stats.expectedDuration = 0;
 
-    console.log(`[${this.instanceId}] Starting audio playback with format:`, this.format);
+    debugLog(`Starting audio playback with format:`, this.format);
 
     // Use sox for native audio playback (fallback to ffplay if needed)
     const soxArgs = [
@@ -275,21 +288,21 @@ class AudioProcessor extends EventEmitter {
             },
           });
           soxPath = candidate;
-          console.log(`[${this.instanceId}] Found sox at: ${soxPath}`);
+          debugLog(`Found sox at: ${soxPath}`);
           break;
         } catch (e) {
           // Continue to next candidate
-          console.log(`[${this.instanceId}] sox not found at: ${candidate}`);
+          debugLog(`sox not found at: ${candidate}`);
           lastError = e;
         }
       }
 
       if (!soxPath) {
-        console.log(`[${this.instanceId}] Sox not found in any location, falling back to ffplay`);
+        debugLog(`Sox not found in any location, falling back to ffplay`);
         this.startWithFfplay();
         return;
       }
-      console.log(`[${this.instanceId}] Spawning sox at: ${soxPath}`);
+      debugLog(`Spawning sox at: ${soxPath}`);
       this.audioProcess = spawn(soxPath, soxArgs, {
         stdio: ["pipe", "ignore", "pipe"],
         detached: false,
@@ -600,8 +613,8 @@ class AudioProcessor extends EventEmitter {
 
       const available = this.ringBuffer.size;
       const utilization = available / this.ringBuffer.capacity;
-      console.log(
-        `[${this.instanceId}] Utilization:`,
+      debugLog(
+        `Utilization:`,
         utilization,
         "available:",
         available,
@@ -628,7 +641,7 @@ class AudioProcessor extends EventEmitter {
         if (this.audioProcess && !this.audioProcess.killed && this.audioProcess.exitCode === null) {
           const writeResult = this.audioProcess.stdin.write(chunk, (err) => {
             if (err) console.error("stdin.write error:", err);
-            else console.log("Wrote chunk to sox:", chunk.length);
+            else debugLog("Wrote chunk to sox:", chunk.length);
           });
 
           if (!writeResult) {

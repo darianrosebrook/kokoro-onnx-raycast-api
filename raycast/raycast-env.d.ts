@@ -30,8 +30,6 @@ declare namespace Preferences {
   export type SpeakText = ExtensionPreferences & {}
   /** Preferences accessible in the `speak-selection` command */
   export type SpeakSelection = ExtensionPreferences & {}
-  /** Preferences accessible in the `test-wav-playback` command */
-  export type TestWavPlayback = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -39,7 +37,5 @@ declare namespace Arguments {
   export type SpeakText = {}
   /** Arguments passed to the `speak-selection` command */
   export type SpeakSelection = {}
-  /** Arguments passed to the `test-wav-playback` command */
-  export type TestWavPlayback = {}
 }
 

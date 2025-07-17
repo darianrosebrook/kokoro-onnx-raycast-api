@@ -74,28 +74,28 @@ async function loadWebSocket() {
 }
 
 function findKokoroProjectRoot(startDir: string): string | null {
-  console.log(" [DEBUG] Starting project root search from:", startDir);
+  logger.consoleDebug("Starting project root search from:", startDir);
   let currentDir = startDir;
   for (let i = 0; i < 10; i++) {
     // Limit to 10 parent levels
     const markerPath = join(currentDir, ".kokoro-root");
-    console.log(` [DEBUG] Level ${i}: Checking ${markerPath}`);
+    logger.consoleDebug(`Level ${i}: Checking ${markerPath}`);
     try {
       if (existsSync(markerPath) && statSync(markerPath).isFile()) {
-        console.log("✅ [DEBUG] Found .kokoro-root marker at:", currentDir);
+        logger.consoleDebug("Found .kokoro-root marker at:", currentDir);
         return currentDir;
       }
     } catch (error) {
-      console.log(`⚠️ [DEBUG] Error checking ${markerPath}:`, error);
+      logger.consoleDebug(`Error checking ${markerPath}:`, error);
     }
     const parentDir = dirname(currentDir);
     if (parentDir === currentDir) {
-      console.log(" [DEBUG] Reached filesystem root, stopping search");
+      logger.consoleDebug("Reached filesystem root, stopping search");
       break; // Reached filesystem root
     }
     currentDir = parentDir;
   }
-  console.log(" [DEBUG] No .kokoro-root marker found in any parent directory");
+  logger.consoleDebug("No .kokoro-root marker found in any parent directory");
   return null;
 }
 
@@ -194,8 +194,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
   constructor(config: Partial<TTSProcessorConfig> = {}) {
     super();
     this.instanceId = this.constructor.name + "_" + Date.now();
-    console.log(`[${this.instanceId}] Constructor called`);
-    console.log(`[${this.instanceId}] Config provided:`, config);
+    logger.consoleDebug(`[${this.instanceId}] Constructor called`);
+    logger.consoleDebug(`[${this.instanceId}] Config provided:`, config);
 
     // Robust path resolution for daemon script (ES module compatible)
     // Priority: config > environment variable > auto-detected project root > absolute paths > relative paths
@@ -309,9 +309,9 @@ export class AudioPlaybackDaemon extends EventEmitter {
       possiblePaths,
     });
 
-    console.log(" [DEBUG] Checking possible daemon paths:");
+    logger.consoleDebug("Checking possible daemon paths:");
     possiblePaths.forEach((path, index) => {
-      console.log(`  ${index + 1}. ${path}`);
+      logger.consoleDebug(`  ${index + 1}. ${path}`);
     });
 
     let daemonScriptPath = "";
@@ -710,13 +710,13 @@ export class AudioPlaybackDaemon extends EventEmitter {
     await this.cleanupExistingDaemons();
 
     // Try to find an available port
-    console.log(
+    logger.consoleDebug(
       `[${this.instanceId}] Checking for available port starting from:`,
       this.config.port
     );
     const availablePort = await this.findAvailablePort(this.config.port);
     if (availablePort !== this.config.port) {
-      console.log(
+      logger.consoleInfo(
         `[${this.instanceId}] Port conflict detected, switching from`,
         this.config.port,
         "to",
@@ -730,7 +730,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       });
       this.config.port = availablePort;
     } else {
-      console.log(`[${this.instanceId}] Original port ${this.config.port} is available`);
+      logger.consoleDebug(`[${this.instanceId}] Original port ${this.config.port} is available`);
     }
 
     logger.info("Starting audio daemon process", {
@@ -742,10 +742,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
     });
 
     try {
-      console.log(`[${this.instanceId}] Spawning daemon process with:`);
-      console.log("  - Node executable:", this.config.daemonPath);
-      console.log("  - Daemon script:", this.config.daemonScriptPath);
-      console.log("  - Port:", this.config.port);
+      logger.consoleDebug(`[${this.instanceId}] Spawning daemon process with:`);
+      logger.consoleDebug("  - Node executable:", this.config.daemonPath);
+      logger.consoleDebug("  - Daemon script:", this.config.daemonScriptPath);
+      logger.consoleDebug("  - Port:", this.config.port);
 
       const daemonProcess = spawn(
         this.config.daemonPath,
@@ -769,12 +769,14 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
       // Set up process event handlers
       daemonProcess.on("error", (error) => {
-        console.log(`[${this.instanceId}] Daemon process error:`, error);
+        logger.consoleError(`[${this.instanceId}] Daemon process error:`, error);
         this.handleDaemonError(error);
       });
 
       daemonProcess.on("exit", (code, signal) => {
-        console.log(`[${this.instanceId}] Daemon process exit - code: ${code} signal: ${signal}`);
+        logger.consoleInfo(
+          `[${this.instanceId}] Daemon process exit - code: ${code} signal: ${signal}`
+        );
         this.handleDaemonExit(code, signal);
       });
 
@@ -782,7 +784,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       if (daemonProcess.stdout) {
         daemonProcess.stdout.on("data", (data) => {
           const message = data.toString().trim();
-          console.log(" [DEBUG] Daemon stdout:", message);
+          logger.consoleDebug("Daemon stdout:", message);
           logger.debug("Daemon stdout", {
             component: this.name,
             method: "startDaemon",
@@ -795,7 +797,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       if (daemonProcess.stderr) {
         daemonProcess.stderr.on("data", (data) => {
           const message = data.toString().trim();
-          console.log("⚠️ [DEBUG] Daemon stderr:", message);
+          logger.consoleWarn("Daemon stderr:", message);
           logger.warn("Daemon stderr", {
             component: this.name,
             method: "startDaemon",
@@ -1312,7 +1314,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     // Serialize the message to JSON
     const messageJson = JSON.stringify(message);
-    console.log(" [DEBUG] Sending message to daemon:", message.type);
+    logger.consoleDebug("Sending message to daemon:", message.type);
 
     this.ws.send(messageJson);
   }
