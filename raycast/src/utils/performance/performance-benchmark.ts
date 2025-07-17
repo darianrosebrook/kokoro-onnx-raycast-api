@@ -769,49 +769,49 @@ class TTSBenchmark {
    * Print detailed performance report to console
    */
   printReport(stats: PerformanceStats): void {
-    console.log("\n" + "=".repeat(60));
-    console.log(" TTS PERFORMANCE BENCHMARK REPORT");
-    console.log("=".repeat(60));
+    logger.info("\n" + "=".repeat(60));
+    logger.info(" TTS PERFORMANCE BENCHMARK REPORT");
+    logger.info("=".repeat(60));
 
-    console.log(`\n OVERALL STATISTICS:`);
-    console.log(`   Total Requests: ${stats.totalRequests}`);
-    console.log(
+    logger.info(`\n OVERALL STATISTICS:`);
+    logger.info(`   Total Requests: ${stats.totalRequests}`);
+    logger.info(
       `   Successful: ${stats.successfulRequests} (${((stats.successfulRequests / stats.totalRequests) * 100).toFixed(1)}%)`
     );
-    console.log(`   Cache Hit Rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
+    logger.info(`   Cache Hit Rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
 
-    console.log(`\n⏱️  TIMING PERFORMANCE:`);
-    console.log(`   Average Send Time: ${stats.averageSendTime.toFixed(2)}ms`);
-    console.log(`   Average Network Latency: ${stats.averageLatency.toFixed(2)}ms`);
-    console.log(`   Average Time to First Byte: ${stats.averageTTFB.toFixed(2)}ms`);
-    console.log(`   Average Processing Time: ${stats.averageProcessingTime.toFixed(2)}ms`);
-    console.log(`   Average Stream-to-Play Delay: ${stats.averageStreamToPlayDelay.toFixed(2)}ms`);
-    console.log(
+    logger.info(`\n⏱️  TIMING PERFORMANCE:`);
+    logger.info(`   Average Send Time: ${stats.averageSendTime.toFixed(2)}ms`);
+    logger.info(`   Average Network Latency: ${stats.averageLatency.toFixed(2)}ms`);
+    logger.info(`   Average Time to First Byte: ${stats.averageTTFB.toFixed(2)}ms`);
+    logger.info(`   Average Processing Time: ${stats.averageProcessingTime.toFixed(2)}ms`);
+    logger.info(`   Average Stream-to-Play Delay: ${stats.averageStreamToPlayDelay.toFixed(2)}ms`);
+    logger.info(
       `   Average First Audio Play Time: ${stats.averageFirstAudioPlayTime.toFixed(2)}ms`
     );
-    console.log(`   Average Total Response Time: ${stats.averageTotalTime.toFixed(2)}ms`);
+    logger.info(`   Average Total Response Time: ${stats.averageTotalTime.toFixed(2)}ms`);
 
-    console.log(`\n CACHE PERFORMANCE:`);
-    console.log(`   Cached Response Time: ${stats.cachedResponseTime.toFixed(2)}ms`);
-    console.log(`   Network Response Time: ${stats.networkResponseTime.toFixed(2)}ms`);
+    logger.info(`\n CACHE PERFORMANCE:`);
+    logger.info(`   Cached Response Time: ${stats.cachedResponseTime.toFixed(2)}ms`);
+    logger.info(`   Network Response Time: ${stats.networkResponseTime.toFixed(2)}ms`);
     if (stats.cacheSpeedup > 0) {
-      console.log(`   Cache Speedup: ${stats.cacheSpeedup.toFixed(2)}x faster`);
-      console.log(
+      logger.info(`   Cache Speedup: ${stats.cacheSpeedup.toFixed(2)}x faster`);
+      logger.info(
         `   Time Saved: ${(stats.networkResponseTime - stats.cachedResponseTime).toFixed(2)}ms per cached request`
       );
     }
 
-    console.log(`\n STREAMING PERFORMANCE:`);
-    console.log(`   Average Chunk Count: ${stats.averageChunkCount.toFixed(0)}`);
+    logger.info(`\n STREAMING PERFORMANCE:`);
+    logger.info(`   Average Chunk Count: ${stats.averageChunkCount.toFixed(0)}`);
     if (stats.averageTotalTime > 0 && stats.averageTotalTime > 0) {
-      console.log(`   Streaming Efficiency: ${stats.streamingEfficiency.toFixed(2)}x faster`);
+      logger.info(`   Streaming Efficiency: ${stats.streamingEfficiency.toFixed(2)}x faster`);
     }
 
-    console.log(`\n DATA TRANSFER:`);
-    console.log(`   Total Data Transferred: ${(stats.totalDataTransferred / 1024).toFixed(2)} KB`);
-    console.log(`   Average Response Size: ${(stats.averageResponseSize / 1024).toFixed(2)} KB`);
+    logger.info(`\n DATA TRANSFER:`);
+    logger.info(`   Total Data Transferred: ${(stats.totalDataTransferred / 1024).toFixed(2)} KB`);
+    logger.info(`   Average Response Size: ${(stats.averageResponseSize / 1024).toFixed(2)} KB`);
 
-    console.log("\n" + "=".repeat(60));
+    logger.info("\n" + "=".repeat(60));
   }
 }
 

@@ -117,7 +117,7 @@ export class PerformanceDashboard {
       this.updateMetrics();
     }, this.config.updateInterval);
 
-    console.log("Performance dashboard started");
+    logger.info("Performance dashboard started");
   }
 
   /**
@@ -129,7 +129,7 @@ export class PerformanceDashboard {
       this.updateInterval = null;
     }
 
-    console.log("Performance dashboard stopped");
+    logger.info("Performance dashboard stopped");
   }
 
   /**

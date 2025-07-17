@@ -12,7 +12,7 @@
  */
 
 import { TTSSpeechProcessor } from "./src/utils/tts/tts-processor.js";
-
+import { logger } from "./src/utils/core/logger.js";
 /**
  * Test configuration
  */
@@ -32,7 +32,7 @@ const TEST_CONFIG = {
  * Test TTS server directly without daemon
  */
 async function testTTSServerDirectly() {
-  console.log("🧪 Testing TTS server directly...");
+  logger.consoleInfo("🧪 Testing TTS server directly...");
 
   const testText = "Hello, this is a direct server test.";
   const url = `${TEST_CONFIG.serverUrl}/v1/audio/speech`;
@@ -54,7 +54,7 @@ async function testTTSServerDirectly() {
       }),
     });
 
-    console.log("📡 Server response:", {
+    logger.consoleInfo("📡 Server response:", {
       status: response.status,
       statusText: response.statusText,
       ok: response.ok,
@@ -69,10 +69,10 @@ async function testTTSServerDirectly() {
       throw new Error("No response body - streaming not supported");
     }
 
-    console.log("✅ Server test successful - streaming supported");
+    logger.consoleInfo("✅ Server test successful - streaming supported");
     return true;
   } catch (error) {
-    console.error("❌ Server test failed:", error);
+    logger.consoleError("❌ Server test failed:", error);
     return false;
   }
 }
@@ -110,12 +110,12 @@ function waitForCondition(
  * Run TTS integration test
  */
 async function runTTSTest() {
-  console.log("🚀 Starting TTS Integration Test");
-  console.log("==================================");
+  logger.consoleInfo("🚀 Starting TTS Integration Test");
+  logger.consoleInfo("==================================");
 
   // Add overall test timeout
   const testTimeout = setTimeout(() => {
-    console.error("❌ Test timeout exceeded. Forcing exit.");
+    logger.consoleError("❌ Test timeout exceeded. Forcing exit.");
     process.exit(1);
   }, TEST_CONFIG.timeoutMs);
 
@@ -123,18 +123,18 @@ async function runTTSTest() {
 
   try {
     // First, test the TTS server directly
-    console.log("🔍 Step 1: Testing TTS server connectivity...");
+    logger.consoleInfo("🔍 Step 1: Testing TTS server connectivity...");
     const serverTestPassed = await testTTSServerDirectly();
 
     if (!serverTestPassed) {
-      console.error("❌ TTS server test failed. Cannot proceed with integration test.");
+      logger.consoleError("❌ TTS server test failed. Cannot proceed with integration test.");
       process.exit(1);
     }
 
-    console.log("✅ TTS server test passed. Proceeding with full integration test...");
+    logger.consoleInfo("✅ TTS server test passed. Proceeding with full integration test...");
 
     // Create TTS processor
-    console.log("🔍 Step 2: Creating TTS processor...");
+    logger.consoleInfo("🔍 Step 2: Creating TTS processor...");
     processor = new TTSSpeechProcessor({
       voice: TEST_CONFIG.voice,
       speed: TEST_CONFIG.speed,
@@ -143,18 +143,18 @@ async function runTTSTest() {
       useStreaming: TEST_CONFIG.useStreaming,
       developmentMode: TEST_CONFIG.developmentMode,
       onStatusUpdate: (status) => {
-        console.log("📊 Status:", status.message);
+        logger.consoleInfo("📊 Status:", status.message);
       },
     });
 
-    console.log("✅ TTS Processor created");
+    logger.consoleInfo("✅ TTS Processor created");
 
     // Test text
     const testText =
       "Hello, this is a test of the audio daemon integration. Can you hear this audio playing through the daemon?";
 
-    console.log(`📝 Processing text: "${testText}"`);
-    console.log(`🎵 Voice: ${TEST_CONFIG.voice}, Speed: ${TEST_CONFIG.speed}`);
+    logger.consoleInfo(`📝 Processing text: "${testText}"`);
+    logger.consoleInfo(`🎵 Voice: ${TEST_CONFIG.voice}, Speed: ${TEST_CONFIG.speed}`);
 
     // Create a promise that resolves when processing completes
     const processingPromise = processor.speak(testText);
@@ -169,20 +169,20 @@ async function runTTSTest() {
     // Race between processing and timeout
     await Promise.race([processingPromise, timeoutPromise]);
 
-    console.log("✅ Text processing completed");
-    console.log("🔊 Audio should be playing through the daemon now!");
+    logger.consoleInfo("✅ Text processing completed");
+    logger.consoleInfo("🔊 Audio should be playing through the daemon now!");
 
     // Wait a bit for audio to finish playing
-    console.log("⏳ Waiting for audio playback to complete...");
+    logger.consoleInfo("⏳ Waiting for audio playback to complete...");
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    console.log("✅ Test completed successfully!");
+    logger.consoleInfo("✅ Test completed successfully!");
   } catch (error) {
-    console.error("❌ Test failed:", error);
+    logger.consoleError("❌ Test failed:", error);
 
     // Provide more detailed error information
     if (error instanceof Error) {
-      console.error("Error details:", {
+      logger.consoleError("Error details:", {
         name: error.name,
         message: error.message,
         stack: error.stack,
@@ -194,16 +194,16 @@ async function runTTSTest() {
     clearTimeout(testTimeout);
 
     // Clean up the processor to stop heartbeat and daemon
-    console.log("🧹 Cleaning up TTS processor...");
+    logger.consoleInfo("🧹 Cleaning up TTS processor...");
     try {
       await processor?.stop();
-      console.log("✅ TTS processor cleaned up");
+      logger.consoleInfo("✅ TTS processor cleaned up");
     } catch (cleanupError) {
-      console.warn("⚠️ Error during cleanup:", cleanupError);
+      logger.consoleWarn("⚠️ Error during cleanup:", cleanupError);
     }
 
     // Force exit after cleanup to ensure no hanging processes
-    console.log("🚪 Exiting test...");
+    logger.consoleInfo("🚪 Exiting test...");
     process.exit(0);
   }
 }
@@ -217,12 +217,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (cleanupInProgress) return;
     cleanupInProgress = true;
 
-    console.log("\n🛑 Received interrupt signal, cleaning up...");
+    logger.consoleInfo("\n🛑 Received interrupt signal, cleaning up...");
     try {
       // The processor will be cleaned up in the finally block
       process.exit(0);
     } catch (error) {
-      console.error("❌ Error during cleanup:", error);
+      logger.consoleError("❌ Error during cleanup:", error);
       process.exit(1);
     }
   };

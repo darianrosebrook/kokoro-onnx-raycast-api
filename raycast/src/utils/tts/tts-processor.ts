@@ -63,7 +63,7 @@
  *   speed: 1.2,
  *   serverUrl: "http://localhost:8000",
  *   useStreaming: true,
- *   onStatusUpdate: (status) => console.log(status)
+ *   onStatusUpdate: (status) => logger.info(status)
  * });
  *
  * await processor.speak("Hello, world!");
@@ -200,8 +200,8 @@ export class TTSSpeechProcessor {
    */
   constructor(prefs: Preferences, dependencies: ProcessorDependencies = {}) {
     this.instanceId = this.constructor.name + "_" + Date.now();
-    console.log(`[${this.instanceId}] Constructor called`);
-    console.log(`[${this.instanceId}] Dependencies provided:`, Object.keys(dependencies));
+    logger.info(`[${this.instanceId}] Constructor called`);
+    logger.info(`[${this.instanceId}] Dependencies provided:`, Object.keys(dependencies));
 
     // Voice selection with high-quality default
     this.voice = (prefs.voice as VoiceOption) ?? "af_heart";
@@ -232,7 +232,7 @@ export class TTSSpeechProcessor {
       });
     this.developmentMode = prefs.developmentMode ?? true;
 
-    console.log(`[${this.instanceId}] Configuration:`, {
+    logger.info(`[${this.instanceId}] Configuration:`, {
       voice: this.voice,
       speed: this.speed,
       serverUrl: this.serverUrl,
@@ -263,7 +263,7 @@ export class TTSSpeechProcessor {
       showPerformanceMetrics: false,
     };
 
-    console.log(`[${this.instanceId}] Creating component instances`);
+    logger.info(`[${this.instanceId}] Creating component instances`);
 
     this.textProcessor = dependencies.textProcessor ?? new TextProcessor(processorConfig);
     this.audioStreamer = dependencies.audioStreamer ?? new AudioStreamer(processorConfig);
@@ -283,16 +283,16 @@ export class TTSSpeechProcessor {
         targetUtilization: 0.7,
       });
 
-    console.log(`[${this.instanceId}] Component instances created`);
+    logger.info(`[${this.instanceId}] Component instances created`);
 
     // Initialize all modules properly
     // Note: In a real test environment, you might not initialize the actual modules
     // if you are only testing the processor's orchestration logic.
     if (Object.keys(dependencies).length === 0) {
-      console.log(`[${this.instanceId}] Starting module initialization`);
+      logger.info(`[${this.instanceId}] Starting module initialization`);
       this.initializationPromise = this.initializeModules(processorConfig);
     } else {
-      console.log(`[${this.instanceId}] Using injected dependencies, skipping initialization`);
+      logger.info(`[${this.instanceId}] Using injected dependencies, skipping initialization`);
       this.initialized = true;
     }
   }
@@ -309,7 +309,7 @@ export class TTSSpeechProcessor {
     }
   ): Promise<void> {
     try {
-      console.log(`[${this.instanceId}] Initializing modules...`);
+      logger.info(`[${this.instanceId}] Initializing modules...`);
 
       await Promise.all([
         this.textProcessor.initialize(processorConfig),
@@ -331,7 +331,7 @@ export class TTSSpeechProcessor {
       // Update daemon port with the actual port from the daemon
       const actualDaemonPort = this.playbackManager.getDaemonPort();
       if (actualDaemonPort && actualDaemonPort !== this.daemonPort) {
-        console.log(`[${this.instanceId}] Updating daemon port:`, {
+        logger.info(`[${this.instanceId}] Updating daemon port:`, {
           original: this.daemonPort,
           actual: actualDaemonPort,
         });
@@ -339,7 +339,7 @@ export class TTSSpeechProcessor {
       }
 
       this.initialized = true;
-      console.log(`[${this.instanceId}] All modules initialized successfully`);
+      logger.info(`[${this.instanceId}] All modules initialized successfully`);
     } catch (error) {
       console.error(`[${this.instanceId}] Failed to initialize TTS modules:`, error);
       showToast({ style: Toast.Style.Failure, title: "Initialization Error" });
@@ -352,16 +352,16 @@ export class TTSSpeechProcessor {
    */
   private async ensureInitialized(): Promise<void> {
     if (this.initialized) {
-      console.log(`[${this.instanceId}] Already initialized`);
+      logger.info(`[${this.instanceId}] Already initialized`);
       return;
     }
 
     if (this.initializationPromise) {
-      console.log(`[${this.instanceId}] Waiting for initialization to complete...`);
+      logger.info(`[${this.instanceId}] Waiting for initialization to complete...`);
       await this.initializationPromise;
-      console.log(`[${this.instanceId}] Initialization completed`);
+      logger.info(`[${this.instanceId}] Initialization completed`);
     } else {
-      console.log(`[${this.instanceId}] No initialization promise found`);
+      logger.info(`[${this.instanceId}] No initialization promise found`);
       throw new Error("TTS Processor initialization failed");
     }
   }
@@ -386,17 +386,17 @@ export class TTSSpeechProcessor {
    * @throws {Error} When text is empty or processing fails
    */
   async speak(text: string): Promise<void> {
-    console.log(`[${this.instanceId}] speak() called with text:`, text);
-    console.log(`[${this.instanceId}] Input text:`, {
+    logger.info(`[${this.instanceId}] speak() called with text:`, text);
+    logger.info(`[${this.instanceId}] Input text:`, {
       length: text.length,
       preview: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
     });
 
     // CRITICAL: Ensure initialization before proceeding
-    console.log(`[${this.instanceId}] Ensuring initialization...`);
+    logger.info(`[${this.instanceId}] Ensuring initialization...`);
     try {
       await this.ensureInitialized();
-      console.log(`[${this.instanceId}] ensureInitialized() complete`);
+      logger.info(`[${this.instanceId}] ensureInitialized() complete`);
     } catch (error) {
       console.error(`[${this.instanceId}] Initialization failed:`, error);
       this.onStatusUpdate({
@@ -409,7 +409,7 @@ export class TTSSpeechProcessor {
     }
 
     if (!text?.trim()) {
-      console.log(`[${this.instanceId}] No text provided`);
+      logger.info(`[${this.instanceId}] No text provided`);
       this.onStatusUpdate({
         message: "No text to speak",
         style: Toast.Style.Failure,
@@ -419,7 +419,7 @@ export class TTSSpeechProcessor {
       return;
     }
 
-    console.log(`[${this.instanceId}] Configuration:`, {
+    logger.info(`[${this.instanceId}] Configuration:`, {
       voice: this.voice,
       speed: this.speed,
       serverUrl: this.serverUrl,
@@ -431,16 +431,16 @@ export class TTSSpeechProcessor {
 
     // Stop any existing playback before starting new
     if (this.playbackManager.isActive()) {
-      console.log(`[${this.instanceId}] Stopping existing playback`);
+      logger.info(`[${this.instanceId}] Stopping existing playback`);
       await this.playbackManager.stop();
-      console.log(`[${this.instanceId}] Existing playback stopped`);
+      logger.info(`[${this.instanceId}] Existing playback stopped`);
     }
 
     this.abortController = new AbortController();
     const { signal } = this.abortController;
 
     const requestId = `tts-${Date.now()}`;
-    console.log(`[${this.instanceId}] Starting performance tracking for request:`, requestId);
+    logger.info(`[${this.instanceId}] Starting performance tracking for request:`, requestId);
     this.performanceMonitor.startTracking(requestId);
 
     // PHASE 1 OPTIMIZATION: Start streaming playback immediately
@@ -457,17 +457,17 @@ export class TTSSpeechProcessor {
     let totalChunksReceived = 0;
     const startTime = performance.now();
 
-    console.log(`[${this.instanceId}] Session start time:`, startTime);
+    logger.info(`[${this.instanceId}] Session start time:`, startTime);
 
     try {
       // PHASE 1 OPTIMIZATION: Start streaming session before chunk loop
       if (this.useStreaming && !streamingPlayback) {
-        console.log(`[${this.instanceId}] Starting streaming playback session`);
+        logger.info(`[${this.instanceId}] Starting streaming playback session`);
 
         try {
           streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
           streamingStarted = true;
-          console.log(`[${this.instanceId}] Streaming session started successfully`);
+          logger.info(`[${this.instanceId}] Streaming session started successfully`);
         } catch (streamingError) {
           console.error(`[${this.instanceId}] Failed to start streaming session:`, streamingError);
           streamingFailed = true;
@@ -475,11 +475,11 @@ export class TTSSpeechProcessor {
         }
       }
 
-      console.log(`[${this.instanceId}] Processing text...`);
+      logger.info(`[${this.instanceId}] Processing text...`);
       this.onStatusUpdate({ message: "Processing text...", isPlaying: true, isPaused: false });
 
       const processedText = this.textProcessor.preprocessText(text);
-      console.log(`[${this.instanceId}] Text preprocessing complete:`, {
+      logger.info(`[${this.instanceId}] Text preprocessing complete:`, {
         originalLength: text.length,
         processedLength: processedText.length,
         preview: processedText.substring(0, 100) + (processedText.length > 100 ? "..." : ""),
@@ -493,7 +493,7 @@ export class TTSSpeechProcessor {
         TTS_CONSTANTS.MAX_TEXT_LENGTH
       );
 
-      console.log(`[${this.instanceId}] Text segmentation complete:`, {
+      logger.info(`[${this.instanceId}] Text segmentation complete:`, {
         totalSegments: this.textParagraphs.length,
         segments: this.textParagraphs.map((seg, idx) => ({
           index: idx,
@@ -503,15 +503,15 @@ export class TTSSpeechProcessor {
       });
 
       // Stream audio for each text segment
-      console.log(`[${this.instanceId}] Starting audio streaming for segments`);
+      logger.info(`[${this.instanceId}] Starting audio streaming for segments`);
 
       for (const segment of this.textParagraphs) {
-        console.log(
+        logger.info(
           `[${this.instanceId}] Processing segment ${segment.index + 1}/${this.textParagraphs.length}`
         );
 
         if (signal.aborted) {
-          console.log(`[${this.instanceId}] Signal aborted, stopping segment processing`);
+          logger.info(`[${this.instanceId}] Signal aborted, stopping segment processing`);
           break;
         }
 
@@ -525,7 +525,7 @@ export class TTSSpeechProcessor {
           format: this.useStreaming ? "pcm" : this.format,
         };
 
-        console.log(`[${this.instanceId}] Creating server request:`, {
+        logger.info(`[${this.instanceId}] Creating server request:`, {
           segmentIndex: segment.index,
           textLength: segment.text.length,
           voice: requestParams.voice,
@@ -543,7 +543,7 @@ export class TTSSpeechProcessor {
           startTime: performance.now(),
         };
 
-        console.log(`[${this.instanceId}] Sending request to audio streamer`);
+        logger.info(`[${this.instanceId}] Sending request to audio streamer`);
 
         await this.audioStreamer.streamAudio(requestParams, streamingContext, async (chunk) => {
           totalChunksReceived++;
@@ -551,7 +551,7 @@ export class TTSSpeechProcessor {
 
           // Log every 10th chunk to reduce verbosity
           if (totalChunksReceived % 10 === 0 || totalChunksReceived <= 3) {
-            console.log(`[${this.instanceId}] Received audio chunk:`, {
+            logger.info(`[${this.instanceId}] Received audio chunk:`, {
               chunkNumber: totalChunksReceived,
               segmentIndex: segment.index,
               chunkSize: chunk.data.length,
@@ -569,7 +569,7 @@ export class TTSSpeechProcessor {
             try {
               await streamingPlayback.writeChunk(chunk.data);
               if (totalChunksReceived % 10 === 0 || totalChunksReceived <= 3) {
-                console.log(
+                logger.info(
                   `[${this.instanceId}] Streamed chunk ${totalChunksReceived} (${chunk.data.length} bytes) in ${elapsedTime}ms`
                 );
               }
@@ -586,7 +586,7 @@ export class TTSSpeechProcessor {
                   streamError.message.includes("Ignoring write attempt after normal termination"));
 
               if (isNormalTermination) {
-                console.log(
+                logger.info(
                   `[${this.instanceId}] Normal termination detected - marking streaming as complete`
                 );
                 streamingTerminated = true;
@@ -620,17 +620,17 @@ export class TTSSpeechProcessor {
           }
         });
 
-        console.log(`[${this.instanceId}] Segment ${segment.index + 1} processing complete`);
+        logger.info(`[${this.instanceId}] Segment ${segment.index + 1} processing complete`);
       }
 
-      console.log(`[${this.instanceId}] All segments processed, ending streaming playback`);
+      logger.info(`[${this.instanceId}] All segments processed, ending streaming playback`);
 
       // PHASE 1 OPTIMIZATION: End streaming playback
       if (streamingPlayback && streamingStarted && !streamingFailed) {
-        console.log(`[${this.instanceId}] Ending streaming playback`);
+        logger.info(`[${this.instanceId}] Ending streaming playback`);
         try {
           await streamingPlayback.endStream();
-          console.log(`[${this.instanceId}] Streaming playback ended gracefully`);
+          logger.info(`[${this.instanceId}] Streaming playback ended gracefully`);
         } catch (endStreamError) {
           console.error(`[${this.instanceId}] Error ending streaming playback:`, endStreamError);
           // Check if this is a normal termination
@@ -643,29 +643,29 @@ export class TTSSpeechProcessor {
             errorMessage.includes("Stream ended normally despite timeout");
 
           if (isNormalTermination) {
-            console.log(`[${this.instanceId}] Normal termination during endStream - continuing`);
+            logger.info(`[${this.instanceId}] Normal termination during endStream - continuing`);
           } else {
             console.error(`[${this.instanceId}] Failed to end streaming playback:`, endStreamError);
             // Don't throw for endStream errors - they're not critical
           }
         }
       } else if (streamingTerminated) {
-        console.log(
+        logger.info(
           `[${this.instanceId}] Streaming already terminated normally - no need to end stream`
         );
       } else if (streamingFailed) {
-        console.log(`[${this.instanceId}] Streaming failed - no need to end stream`);
+        logger.info(`[${this.instanceId}] Streaming failed - no need to end stream`);
       }
 
       if (!signal.aborted) {
         const totalTime = performance.now() - startTime;
-        console.log(` [${this.instanceId}]  Speech processing complete:`, {
+        logger.info(` [${this.instanceId}]  Speech processing complete:`, {
           totalChunks: totalChunksReceived,
           totalTime: totalTime.toFixed(2) + "ms",
           averageChunkTime:
             totalChunksReceived > 0 ? (totalTime / totalChunksReceived).toFixed(2) + "ms" : "N/A",
         });
-        console.log(
+        logger.info(
           ` [${this.instanceId}] PHASE 1 OPTIMIZATION: All ${totalChunksReceived} chunks processed in ${totalTime}ms`
         );
         this.onStatusUpdate({
@@ -690,7 +690,7 @@ export class TTSSpeechProcessor {
       });
 
       if (streamingPlayback && !streamingFailed) {
-        console.log(` [${this.instanceId}]  Cleaning up streaming playback after error`);
+        logger.info(` [${this.instanceId}]  Cleaning up streaming playback after error`);
         try {
           await streamingPlayback.endStream();
         } catch (cleanupError) {
@@ -713,19 +713,16 @@ export class TTSSpeechProcessor {
         throw error;
       }
     } finally {
-      console.log(` [${this.instanceId}]  Cleaning up resources`);
+      logger.info(` [${this.instanceId}]  Cleaning up resources`);
       const finalTime = performance.now() - startTime;
-      console.log(
-        ` [${this.instanceId}]  Final session duration:`,
-        finalTime.toFixed(2) + "ms"
-      );
+      logger.info(` [${this.instanceId}]  Final session duration:`, finalTime.toFixed(2) + "ms");
 
       this.performanceMonitor.endTracking(requestId);
       this.performanceMonitor.logPerformanceReport();
       await this.cleanup();
       this.abortController = null;
 
-      console.log(` [${this.instanceId}] === SPEAK METHOD END ===`);
+      logger.info(` [${this.instanceId}] === SPEAK METHOD END ===`);
     }
   }
 
@@ -801,7 +798,7 @@ export class TTSSpeechProcessor {
   /**
    * Get current playing state.
    *
-   * **Debug Note**: Includes console.log for debugging state transitions.
+   * **Debug Note**: Includes logger.info for debugging state transitions.
    */
   get playing(): boolean {
     return this.playbackManager.isActive();

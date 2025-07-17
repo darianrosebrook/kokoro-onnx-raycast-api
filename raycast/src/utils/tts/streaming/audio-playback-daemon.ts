@@ -211,8 +211,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
       cwd === "/" || // Raycast sometimes runs from root
       process.env.RAYCAST_EXTENSION_PATH !== undefined; // Raycast environment variable
 
-    console.log(`[${this.instanceId}] Extension CWD:`, process.cwd());
-    console.log(`[${this.instanceId}] Is Raycast extension:`, isRaycastExtension);
+    logger.info(`[${this.instanceId}] Extension CWD:`, process.cwd());
+    logger.info(`[${this.instanceId}] Is Raycast extension:`, isRaycastExtension);
 
     // Auto-detect project root by walking up parent directories for .kokoro-root
     let projectRoot = process.cwd();
@@ -221,7 +221,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       // If running from root, try to find the actual extension directory first
       let searchStartDir = process.cwd();
       if (cwd === "/") {
-        console.log(
+        logger.info(
           `[${this.instanceId}] Running from root, trying to find extension directory...`
         );
         // Try common Raycast extension locations
@@ -234,7 +234,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
         for (const extDir of possibleExtensionDirs) {
           if (extDir && existsSync(extDir)) {
-            console.log(`[${this.instanceId}] Found extension directory:`, extDir);
+            logger.info(`[${this.instanceId}] Found extension directory:`, extDir);
             searchStartDir = extDir;
             break;
           }
@@ -250,7 +250,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
           autoDetectedRoot,
         });
       } else {
-        console.log(`[${this.instanceId}] Auto-detection failed, trying fallback paths...`);
+        logger.info(`[${this.instanceId}] Auto-detection failed, trying fallback paths...`);
         // Fallback to previous guessing logic
         const possibleProjectRoots = [
           "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx",
@@ -258,13 +258,13 @@ export class AudioPlaybackDaemon extends EventEmitter {
           process.env.HOME + "/Desktop/Projects/kokoro-onnx",
           process.env.HOME + "/Projects/kokoro-onnx",
         ].filter(Boolean);
-        console.log(`[${this.instanceId}] Fallback project roots:`, possibleProjectRoots);
+        logger.info(`[${this.instanceId}] Fallback project roots:`, possibleProjectRoots);
         for (const root of possibleProjectRoots) {
           const daemonPath = join(root, "raycast/bin/audio-daemon.js");
-          console.log(`[${this.instanceId}] Checking fallback path: ${daemonPath}`);
+          logger.info(`[${this.instanceId}] Checking fallback path: ${daemonPath}`);
           if (root && existsSync(daemonPath)) {
             projectRoot = root;
-            console.log(`[${this.instanceId}] Found daemon in fallback path:`, root);
+            logger.info(`[${this.instanceId}] Found daemon in fallback path:`, root);
             break;
           }
         }
@@ -319,7 +319,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       try {
         if (existsSync(path)) {
           daemonScriptPath = path;
-          console.log(`[${this.instanceId}] Found daemon script at:`, daemonScriptPath);
+          logger.info(`[${this.instanceId}] Found daemon script at:`, daemonScriptPath);
           logger.info("Found daemon script", {
             component: this.name,
             method: "constructor",
@@ -327,10 +327,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
           });
           break;
         } else {
-          console.log(`[${this.instanceId}] Path not found: ${path}`);
+          logger.info(`[${this.instanceId}] Path not found: ${path}`);
         }
       } catch (error) {
-        console.log(`[${this.instanceId}] Error checking path ${path}:`, error);
+        logger.info(`[${this.instanceId}] Error checking path ${path}:`, error);
         logger.warn("Error checking daemon path", {
           component: this.name,
           method: "constructor",
@@ -670,7 +670,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
         });
 
         // If we get here, the port is available
-        console.log(`[${this.instanceId}] Port ${currentPort} is available`);
+        logger.info(`[${this.instanceId}] Port ${currentPort} is available`);
         logger.debug("Port available", {
           component: this.name,
           method: "findAvailablePort",
@@ -678,7 +678,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
         });
         return currentPort;
       } catch (error) {
-        console.log(`[${this.instanceId}] Port ${currentPort} is in use, trying next port`);
+        logger.info(`[${this.instanceId}] Port ${currentPort} is in use, trying next port`);
         logger.debug("Port in use, trying next port", {
           component: this.name,
           method: "findAvailablePort",
@@ -863,7 +863,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     const startTime = Date.now();
     const healthUrl = `http://localhost:${this.config.port}/health`;
 
-    console.log(`[${this.instanceId}] Checking daemon health at:`, healthUrl);
+    logger.info(`[${this.instanceId}] Checking daemon health at:`, healthUrl);
 
     while (Date.now() - startTime < maxWaitTime) {
       try {
@@ -877,7 +877,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
         if (response.ok) {
           const health = await response.json();
-          console.log(`[${this.instanceId}] Daemon health check passed:`, health.status);
+          logger.info(`[${this.instanceId}] Daemon health check passed:`, health.status);
 
           // Mark as connected
           this.daemonProcess.isConnected = true;
@@ -895,7 +895,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
           return;
         }
       } catch (error) {
-        console.log(`[${this.instanceId}] Daemon not ready yet, retrying...`);
+        logger.info(`[${this.instanceId}] Daemon not ready yet, retrying...`);
         // Continue waiting
       }
 
@@ -914,13 +914,13 @@ export class AudioPlaybackDaemon extends EventEmitter {
     }
 
     const wsUrl = `ws://localhost:${this.config.port}`;
-    console.log(`[${this.instanceId}] Establishing WebSocket connection to:`, wsUrl);
+    logger.info(`[${this.instanceId}] Establishing WebSocket connection to:`, wsUrl);
 
     return new Promise<void>((resolve, reject) => {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.on("open", () => {
-        console.log(`[${this.instanceId}] WebSocket connection established`);
+        logger.info(`[${this.instanceId}] WebSocket connection established`);
         logger.info("WebSocket connection established", {
           component: this.name,
           method: "establishWebSocketConnection",
@@ -930,7 +930,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       });
 
       this.ws.on("error", (error: Error) => {
-        console.log(`[${this.instanceId}] WebSocket connection error:`, error);
+        logger.info(`[${this.instanceId}] WebSocket connection error:`, error);
         logger.error("WebSocket connection error", {
           component: this.name,
           method: "establishWebSocketConnection",
@@ -940,7 +940,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       });
 
       this.ws.on("close", (code: number, reason: string) => {
-        console.log(
+        logger.info(
           `[${this.instanceId}] WebSocket connection closed - code: ${code} reason: ${reason}`
         );
         logger.debug("WebSocket connection closed", {
@@ -956,10 +956,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
       this.ws.on("message", (data: Buffer) => {
         try {
           const message = JSON.parse(data.toString());
-          console.log(`[${this.instanceId}] Received message from daemon:`, message.type);
+          logger.info(`[${this.instanceId}] Received message from daemon:`, message.type);
           this.handleIncomingMessage(message);
         } catch (error) {
-          console.log(
+          logger.info(
             `[${this.instanceId}] Failed to parse WebSocket message:`,
             JSON.stringify(error)
           );

@@ -121,8 +121,8 @@ export class PlaybackManager implements IPlaybackManager {
    * Play audio with memory-based playback
    */
   async playAudio(context: PlaybackContext, _signal: AbortSignal): Promise<void> {
-    console.log(" [PLAYBACK-MANAGER] === PLAY AUDIO START ===");
-    console.log(" [PLAYBACK-MANAGER] Audio playback request:", {
+    logger.info(" [PLAYBACK-MANAGER] === PLAY AUDIO START ===");
+    logger.info(" [PLAYBACK-MANAGER] Audio playback request:", {
       audioSize: context.audioData.length,
       voice: context.metadata.voice,
       speed: context.metadata.speed,
@@ -130,12 +130,12 @@ export class PlaybackManager implements IPlaybackManager {
     });
 
     if (!this.initialized) {
-      console.log(" [PLAYBACK-MANAGER]  Playback manager not initialized");
+      logger.info(" [PLAYBACK-MANAGER]  Playback manager not initialized");
       throw new Error("Playback manager not initialized");
     }
 
     const sessionId = `playback-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    console.log(" [PLAYBACK-MANAGER]  Created session:", sessionId);
+    logger.info(" [PLAYBACK-MANAGER]  Created session:", sessionId);
 
     const timerId = logger.startTiming("audio-playback", {
       component: this.name,
@@ -146,11 +146,11 @@ export class PlaybackManager implements IPlaybackManager {
     });
 
     // Stop any existing playback
-    console.log(" [PLAYBACK-MANAGER]  Stopping any existing playback");
+    logger.info(" [PLAYBACK-MANAGER]  Stopping any existing playback");
     await this.stop();
 
     // Create new playback session
-    console.log(" [PLAYBACK-MANAGER]  Creating new playback session");
+    logger.info(" [PLAYBACK-MANAGER]  Creating new playback session");
     this.currentSession = {
       id: sessionId,
       context,
@@ -166,15 +166,15 @@ export class PlaybackManager implements IPlaybackManager {
 
     try {
       // Send audio data to daemon in one chunk, then end stream
-      console.log(" [PLAYBACK-MANAGER]  Sending audio data to daemon");
-      console.log(" [PLAYBACK-MANAGER]  Audio data size:", context.audioData.length, "bytes");
+      logger.info(" [PLAYBACK-MANAGER]  Sending audio data to daemon");
+      logger.info(" [PLAYBACK-MANAGER]  Audio data size:", context.audioData.length, "bytes");
 
       try {
         await this.audioDaemon.writeChunk(context.audioData);
-        console.log(" [PLAYBACK-MANAGER] ✅ Audio chunk sent to daemon");
+        logger.info(" [PLAYBACK-MANAGER] ✅ Audio chunk sent to daemon");
 
         await this.audioDaemon.endStream();
-        console.log(" [PLAYBACK-MANAGER] ✅ Audio stream ended");
+        logger.info(" [PLAYBACK-MANAGER] ✅ Audio stream ended");
       } catch (error) {
         console.error(" [PLAYBACK-MANAGER]  Audio daemon playback failed:", error);
         logger.error("Audio daemon playback failed", {
@@ -191,7 +191,7 @@ export class PlaybackManager implements IPlaybackManager {
         audioSize: context.audioData.length,
       });
 
-      console.log(" [PLAYBACK-MANAGER]  Audio playback completed:", {
+      logger.info(" [PLAYBACK-MANAGER]  Audio playback completed:", {
         sessionId,
         duration: `${duration}ms`,
         audioSize: context.audioData.length,
@@ -219,7 +219,7 @@ export class PlaybackManager implements IPlaybackManager {
    * Start streaming playback and return control interface
    */
   async startStreamingPlayback(signal: AbortSignal): Promise<any> {
-    console.log("[PLAYBACK-MANAGER] startStreamingPlayback() called");
+    logger.info("[PLAYBACK-MANAGER] startStreamingPlayback() called");
     if (!this.initialized) {
       throw new Error("Playback manager not initialized");
     }
@@ -250,7 +250,7 @@ export class PlaybackManager implements IPlaybackManager {
         });
       },
     };
-    console.log("[PLAYBACK-MANAGER] Streaming playback started");
+    logger.info("[PLAYBACK-MANAGER] Streaming playback started");
     return playback;
   }
 

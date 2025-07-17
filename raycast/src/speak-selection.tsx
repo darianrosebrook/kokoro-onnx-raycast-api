@@ -18,6 +18,7 @@ import { getSelectedText, showToast, Toast, getPreferenceValues } from "@raycast
 import { TTSSpeechProcessor } from "./utils/tts/tts-processor";
 import { getValidatedVoice } from "./utils/tts/voice-manager";
 import type { StatusUpdate } from "./types";
+import { logger } from "./utils/core/logger";
 
 /**
  * Raycast command to speak currently selected text using the TTS processor
@@ -89,16 +90,16 @@ export default async function SpeakSelection() {
       onStatusUpdate,
     });
 
-    console.log(" [SPEAK-SELECTION] === START TTS ===");
-    console.log(" [SPEAK-SELECTION] Selected text:", {
+    logger.info(" [SPEAK-SELECTION] === START TTS ===");
+    logger.info(" [SPEAK-SELECTION] Selected text:", {
       length: text.length,
       preview: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
     });
-    console.log(" [SPEAK-SELECTION] TTS processor config:", processor.config);
+    logger.consoleInfo(" [SPEAK-SELECTION] TTS processor config:", processor.config);
 
     // This will await until playback is completely finished
     await processor.speak(text);
-    console.log(" [SPEAK-SELECTION] ✅ TTS processing completed successfully");
+    logger.info(" [SPEAK-SELECTION] ✅ TTS processing completed successfully");
 
     // The 'speak' method now resolves when finished, paused, or stopped.
     // We only show "Finished" if it wasn't stopped.
@@ -120,6 +121,6 @@ export default async function SpeakSelection() {
   } finally {
     // The processor will handle its own cleanup when playback completes naturally
     // Calling processor.stop() here would prematurely terminate ongoing playback
-    console.log(" [SPEAK-SELECTION] === END TTS ===");
+    logger.info(" [SPEAK-SELECTION] === END TTS ===");
   }
 }
