@@ -42,6 +42,7 @@ import {
   getItalianVoices,
   getBrazilianPortugueseVoices,
 } from "./utils/tts/voices";
+import { logger } from "./utils/core/logger";
 
 /**
  * Generate voice options dynamically from server, with fallback to hardcoded voices
@@ -53,7 +54,7 @@ const generateVoiceOptions = async (
     // Try to get voices from server first
     return await generateDynamicVoiceOptions(serverUrl);
   } catch (error) {
-    console.warn("Falling back to hardcoded voices:", error);
+    logger.consoleWarn("Falling back to hardcoded voices:", error);
 
     // Fallback to hardcoded voices
     return generateHardcodedVoiceOptions();
@@ -262,16 +263,16 @@ export default function SpeakTextSimple() {
       // Only stop if the processor is still actively processing
       // Don't interrupt natural playback completion
       if (processorRef.current && isProcessing && !processorRef.current.paused) {
-        console.log("Component unmounting, stopping active TTS processor");
+        logger.consoleDebug("Component unmounting, stopping active TTS processor");
         processorRef.current.stop();
       }
     };
   }, [isProcessing]);
 
   const handleStart = async () => {
-    console.log(" [SPEAK-TEXT] === TTS SESSION START ===");
-    console.log(" [SPEAK-TEXT] User initiated speech");
-    console.log(" [SPEAK-TEXT] Current state:", {
+    logger.consoleInfo(" [SPEAK-TEXT] === TTS SESSION START ===");
+    logger.consoleInfo(" [SPEAK-TEXT] User initiated speech");
+    logger.consoleDebug(" [SPEAK-TEXT] Current state:", {
       isProcessing,
       isPaused,
       textLength: text.length,
@@ -282,16 +283,16 @@ export default function SpeakTextSimple() {
     });
 
     // Log environment info for debugging
-    console.log(" [SPEAK-TEXT] Starting speech processing");
+    logger.consoleDebug(" [SPEAK-TEXT] Starting speech processing");
 
     if (isProcessing) {
-      console.log(" [SPEAK-TEXT] Restarting - stopping existing processor");
+      logger.consoleDebug(" [SPEAK-TEXT] Restarting - stopping existing processor");
       await processorRef.current?.stop();
     }
 
     const trimmedText = text.trim();
     if (!trimmedText) {
-      console.log(" [SPEAK-TEXT]  No text provided");
+      logger.consoleWarn(" [SPEAK-TEXT]  No text provided");
       await showToast({
         style: Toast.Style.Failure,
         title: "Text required",
@@ -300,14 +301,14 @@ export default function SpeakTextSimple() {
       return;
     }
 
-    console.log(" [SPEAK-TEXT] Text to speak:", {
+    logger.consoleDebug(" [SPEAK-TEXT] Text to speak:", {
       length: trimmedText.length,
       preview: trimmedText.substring(0, 100) + (trimmedText.length > 100 ? "..." : ""),
     });
 
     // Check server health before processing
     if (!isHealthy) {
-      console.log(" [SPEAK-TEXT]  Server health check failed");
+      logger.consoleWarn(" [SPEAK-TEXT]  Server health check failed");
       await showToast({
         style: Toast.Style.Failure,
         title: "Server unavailable",
@@ -316,17 +317,17 @@ export default function SpeakTextSimple() {
       return;
     }
 
-    console.log(" [SPEAK-TEXT] ✅ Server health check passed");
-    console.log(" [SPEAK-TEXT] Server latency:", latency + "ms");
+    logger.consoleInfo(" [SPEAK-TEXT] ✅ Server health check passed");
+    logger.consoleDebug(" [SPEAK-TEXT] Server latency:", latency + "ms");
 
     setIsProcessing(true);
     setIsPaused(false);
 
     // Add to request history
     addToHistory(trimmedText, voice);
-    console.log(" [SPEAK-TEXT] Added to request history");
+    logger.consoleDebug(" [SPEAK-TEXT] Added to request history");
 
-    console.log(" [SPEAK-TEXT] Creating TTS processor with config:", {
+    logger.consoleDebug(" [SPEAK-TEXT] Creating TTS processor with config:", {
       voice,
       speed,
       serverUrl: preferences.serverUrl,
@@ -335,7 +336,7 @@ export default function SpeakTextSimple() {
       maxSentenceLength: preferences.maxSentenceLength,
     });
 
-    console.log(" [SPEAK-TEXT] About to create TTSSpeechProcessor...");
+    logger.consoleDebug(" [SPEAK-TEXT] About to create TTSSpeechProcessor...");
     const newProcessor = new TTSSpeechProcessor({
       voice,
       speed,
@@ -345,10 +346,10 @@ export default function SpeakTextSimple() {
       maxSentenceLength: preferences.maxSentenceLength.toString(),
       onStatusUpdate,
     });
-    console.log(" [SPEAK-TEXT] TTSSpeechProcessor created successfully");
+    logger.consoleDebug(" [SPEAK-TEXT] TTSSpeechProcessor created successfully");
     processorRef.current = newProcessor;
 
-    console.log(" [SPEAK-TEXT] TTS processor created, starting speech...");
+    logger.consoleDebug(" [SPEAK-TEXT] TTS processor created, starting speech...");
 
     showToast({
       style: Toast.Style.Animated,
@@ -357,30 +358,30 @@ export default function SpeakTextSimple() {
     });
 
     const startTime = performance.now();
-    console.log(" [SPEAK-TEXT]  Speech start time:", startTime);
+    logger.consoleDebug(" [SPEAK-TEXT]  Speech start time:", startTime);
 
     newProcessor
       .speak(trimmedText)
       .then(() => {
         const endTime = performance.now();
         const duration = endTime - startTime;
-        console.log(" [SPEAK-TEXT] ✅ Speech completed successfully");
-        console.log(" [SPEAK-TEXT]  Total duration:", duration.toFixed(2) + "ms");
-        console.log(" [SPEAK-TEXT] === TTS SESSION END ===");
+        logger.consoleInfo(" [SPEAK-TEXT] ✅ Speech completed successfully");
+        logger.consoleInfo(" [SPEAK-TEXT]  Total duration:", duration.toFixed(2) + "ms");
+        logger.consoleInfo(" [SPEAK-TEXT] === TTS SESSION END ===");
       })
       .catch((error) => {
         const endTime = performance.now();
         const duration = endTime - startTime;
-        console.log(" [SPEAK-TEXT]  Speech failed");
-        console.log(" [SPEAK-TEXT]  Failed after:", duration.toFixed(2) + "ms");
-        console.log(" [SPEAK-TEXT] Error:", error);
-        console.log(" [SPEAK-TEXT] Error details:", {
+        logger.consoleError(" [SPEAK-TEXT]  Speech failed");
+        logger.consoleError(" [SPEAK-TEXT]  Failed after:", duration.toFixed(2) + "ms");
+        logger.consoleError(" [SPEAK-TEXT] Error:", error);
+        logger.consoleError(" [SPEAK-TEXT] Error details:", {
           name: error.name,
           message: error.message,
           stack: error.stack,
           code: error.code,
         });
-        console.log(" [SPEAK-TEXT] === TTS SESSION END (ERROR) ===");
+        logger.consoleError(" [SPEAK-TEXT] === TTS SESSION END (ERROR) ===");
 
         if (!newProcessor.paused && !processorRef.current?.playing) {
           handleError(
@@ -391,13 +392,13 @@ export default function SpeakTextSimple() {
       })
       .finally(() => {
         if (processorRef.current === newProcessor) {
-          console.log(" [SPEAK-TEXT] Cleaning up processor state");
+          logger.consoleDebug(" [SPEAK-TEXT] Cleaning up processor state");
           setIsProcessing(false);
           setIsPaused(false);
           // Clear processor reference after a delay to allow natural cleanup
           setTimeout(() => {
             if (processorRef.current === newProcessor) {
-              console.log(" [SPEAK-TEXT] Clearing processor reference");
+              logger.consoleDebug(" [SPEAK-TEXT] Clearing processor reference");
               processorRef.current = null;
             }
           }, 100);
@@ -408,42 +409,42 @@ export default function SpeakTextSimple() {
   };
 
   const handleStop = async () => {
-    console.log(" [SPEAK-TEXT]  User requested stop");
+    logger.consoleInfo(" [SPEAK-TEXT]  User requested stop");
     if (processorRef.current) {
-      console.log(" [SPEAK-TEXT] Stopping processor");
+      logger.consoleDebug(" [SPEAK-TEXT] Stopping processor");
       await processorRef.current.stop();
       setIsProcessing(false);
       setIsPaused(false);
       processorRef.current = null;
       toastRef.current?.hide();
       toastRef.current = null;
-      console.log(" [SPEAK-TEXT] ✅ Stop completed");
+      logger.consoleInfo(" [SPEAK-TEXT] ✅ Stop completed");
     } else {
-      console.log(" [SPEAK-TEXT] No processor to stop");
+      logger.consoleDebug(" [SPEAK-TEXT] No processor to stop");
     }
   };
 
   const handlePause = () => {
-    console.log(" [SPEAK-TEXT] ⏸️ User requested pause");
+    logger.consoleInfo(" [SPEAK-TEXT] ⏸️ User requested pause");
     if (processorRef.current?.playing && !processorRef.current?.paused) {
-      console.log(" [SPEAK-TEXT] Pausing processor");
+      logger.consoleDebug(" [SPEAK-TEXT] Pausing processor");
       processorRef.current.pause();
       setIsPaused(true);
-      console.log(" [SPEAK-TEXT] ✅ Pause completed");
+      logger.consoleInfo(" [SPEAK-TEXT] ✅ Pause completed");
     } else {
-      console.log(" [SPEAK-TEXT] Cannot pause - processor not playing or already paused");
+      logger.consoleDebug(" [SPEAK-TEXT] Cannot pause - processor not playing or already paused");
     }
   };
 
   const handleResume = () => {
-    console.log(" [SPEAK-TEXT] ▶️ User requested resume");
+    logger.consoleInfo(" [SPEAK-TEXT] ▶️ User requested resume");
     if (processorRef.current?.paused) {
-      console.log(" [SPEAK-TEXT] Resuming processor");
+      logger.consoleDebug(" [SPEAK-TEXT] Resuming processor");
       processorRef.current.resume();
       setIsPaused(false);
-      console.log(" [SPEAK-TEXT] ✅ Resume completed");
+      logger.consoleInfo(" [SPEAK-TEXT] ✅ Resume completed");
     } else {
-      console.log(" [SPEAK-TEXT] Cannot resume - processor not paused");
+      logger.consoleDebug(" [SPEAK-TEXT] Cannot resume - processor not paused");
     }
   };
 
@@ -494,15 +495,19 @@ export default function SpeakTextSimple() {
         format: "wav" as const,
       };
 
-      console.log("\n Single Request Benchmark:");
-      console.log(`Text: "${trimmedText.substring(0, 50)}${trimmedText.length > 50 ? "..." : ""}"`);
-      console.log(`Voice: ${voice}, Speed: ${preferences.speed}, Streaming: ${useStreaming}`);
+      logger.consoleInfo("\n Single Request Benchmark:");
+      logger.consoleInfo(
+        `Text: "${trimmedText.substring(0, 50)}${trimmedText.length > 50 ? "..." : ""}"`
+      );
+      logger.consoleInfo(
+        `Voice: ${voice}, Speed: ${preferences.speed}, Streaming: ${useStreaming}`
+      );
 
       const metrics = await ttsBenchmark.benchmarkTTSRequest(
         request,
         preferences.serverUrl,
         (stage, elapsed) => {
-          console.log(` ${stage}: ${elapsed.toFixed(2)}ms`);
+          logger.consoleInfo(` ${stage}: ${elapsed.toFixed(2)}ms`);
         }
       );
 
@@ -518,15 +523,15 @@ export default function SpeakTextSimple() {
       });
 
       // Log detailed metrics
-      console.log("\n Detailed Metrics:");
-      console.log(`   Request ID: ${metrics.requestId}`);
-      console.log(`   Cache Hit: ${metrics.cacheHit ? "✅" : ""}`);
-      console.log(`   Network Latency: ${metrics.networkLatency.toFixed(2)}ms`);
-      console.log(`   Time to First Byte: ${metrics.timeToFirstByte.toFixed(2)}ms`);
-      console.log(`   Time to First Audio: ${metrics.timeToFirstAudioChunk.toFixed(2)}ms`);
-      console.log(`   Total Response Time: ${metrics.totalResponseTime.toFixed(2)}ms`);
-      console.log(`   Audio Processing: ${metrics.audioProcessingTime.toFixed(2)}ms`);
-      console.log(`   Audio Data Size: ${(metrics.audioDataSize / 1024).toFixed(2)}KB`);
+      logger.consoleInfo("\n Detailed Metrics:");
+      logger.consoleInfo(`   Request ID: ${metrics.requestId}`);
+      logger.consoleInfo(`   Cache Hit: ${metrics.cacheHit ? "✅" : ""}`);
+      logger.consoleInfo(`   Network Latency: ${metrics.networkLatency.toFixed(2)}ms`);
+      logger.consoleInfo(`   Time to First Byte: ${metrics.timeToFirstByte.toFixed(2)}ms`);
+      logger.consoleInfo(`   Time to First Audio: ${metrics.timeToFirstAudioChunk.toFixed(2)}ms`);
+      logger.consoleInfo(`   Total Response Time: ${metrics.totalResponseTime.toFixed(2)}ms`);
+      logger.consoleInfo(`   Audio Processing: ${metrics.audioProcessingTime.toFixed(2)}ms`);
+      logger.consoleInfo(`   Audio Data Size: ${(metrics.audioDataSize / 1024).toFixed(2)}KB`);
     } catch (error) {
       handleError(
         error instanceof Error ? error : new Error("Single benchmark failed"),
@@ -538,7 +543,7 @@ export default function SpeakTextSimple() {
   };
 
   const onStatusUpdate = async (status: StatusUpdate) => {
-    console.log(" [SPEAK-TEXT]  Status update:", {
+    logger.consoleDebug(" [SPEAK-TEXT]  Status update:", {
       message: status.message,
       style: status.style,
       isPlaying: status.isPlaying,
