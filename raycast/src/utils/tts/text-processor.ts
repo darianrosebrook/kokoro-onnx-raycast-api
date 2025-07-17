@@ -94,7 +94,7 @@ export class TextProcessor implements ITextProcessor {
 
     this.initialized = true;
 
-    logger.info("Text processor initialized", {
+    logger.consoleInfo("Text processor initialized", {
       component: this.name,
       method: "initialize",
       config: this.config,
@@ -241,7 +241,7 @@ export class TextProcessor implements ITextProcessor {
       segmentationStrategy: this.determineSegmentationStrategy(text, maxLength),
     };
 
-    logger.info("Text segmentation completed", {
+    logger.consoleInfo("Text segmentation completed", {
       component: this.name,
       method: "segmentText",
       stats: this.stats,
@@ -539,7 +539,7 @@ export class TextProcessor implements ITextProcessor {
     this.config = { ...this.config, ...config };
     this.initializePreprocessors();
 
-    logger.info("Text processor configuration updated", {
+    logger.consoleInfo("Text processor configuration updated", {
       component: this.name,
       method: "updateConfig",
       config: this.config,

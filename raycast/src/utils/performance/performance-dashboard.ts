@@ -11,6 +11,7 @@
  */
 
 import type { PerformanceMetrics, BufferHealth, NetworkConditions } from "../validation/tts-types";
+import { logger } from "../core/logger";
 
 /**
  * Performance alert types
@@ -117,7 +118,7 @@ export class PerformanceDashboard {
       this.updateMetrics();
     }, this.config.updateInterval);
 
-    logger.info("Performance dashboard started");
+    logger.consoleInfo("Performance dashboard started");
   }
 
   /**
@@ -129,7 +130,7 @@ export class PerformanceDashboard {
       this.updateInterval = null;
     }
 
-    logger.info("Performance dashboard stopped");
+    logger.consoleInfo("Performance dashboard stopped");
   }
 
   /**

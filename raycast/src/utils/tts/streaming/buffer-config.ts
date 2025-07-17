@@ -275,7 +275,7 @@ export function applyBufferConfig(config: OptimalBufferConfig): void {
     });
   }
 
-  logger.info("Buffer configuration applied", {
+  logger.consoleInfo("Buffer configuration applied", {
     component: "BufferConfig",
     method: "applyBufferConfig",
     config: {

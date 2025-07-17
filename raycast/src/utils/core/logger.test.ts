@@ -38,7 +38,7 @@ describe("TTSLogger", () => {
     const logger = new TTSLogger();
     const message = "Test info message";
     const context = { component: "Test" };
-    logger.info(message, context);
+    logger.consoleInfo(message, context);
 
     // We can't directly access the mocked logger instance from here easily
     // without a more complex setup. Instead, we'll rely on the fact

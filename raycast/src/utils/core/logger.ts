@@ -98,7 +98,7 @@ class DebugModeManager {
     this.debugMode = hasDebugFlag || envDebug || nodeEnvDebug || hasKokoroDebug;
 
     if (this.debugMode) {
-      logger.info("🔧 Debug mode enabled via:", {
+      console.log("🔧 Debug mode enabled via:", {
         hasDebugFlag,
         envDebug,
         nodeEnvDebug,
@@ -237,20 +237,20 @@ export class TTSLogger {
 
   /**
    * Console debug output - only shows when debug mode is enabled
-   * This replaces direct logger.info calls for debug information
+   * This replaces direct console.log calls for debug information
    */
   consoleDebug(message: string, ...args: unknown[]): void {
     if (this.debugMode) {
-      logger.info(`[DEBUG] ${message}`, ...args);
+      console.log(`[DEBUG] ${message}`, ...args);
     }
   }
 
   /**
    * Console info output - always shows
-   * This replaces direct logger.info calls for important information
+   * This replaces direct console.log calls for important information
    */
   consoleInfo(message: string, ...args: unknown[]): void {
-    logger.info(message, ...args);
+    console.log(message, ...args);
   }
 
   /**

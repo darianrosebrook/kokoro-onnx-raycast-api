@@ -769,49 +769,57 @@ class TTSBenchmark {
    * Print detailed performance report to console
    */
   printReport(stats: PerformanceStats): void {
-    logger.info("\n" + "=".repeat(60));
-    logger.info(" TTS PERFORMANCE BENCHMARK REPORT");
-    logger.info("=".repeat(60));
+    logger.consoleInfo("\n" + "=".repeat(60));
+    logger.consoleInfo(" TTS PERFORMANCE BENCHMARK REPORT");
+    logger.consoleInfo("=".repeat(60));
 
-    logger.info(`\n OVERALL STATISTICS:`);
-    logger.info(`   Total Requests: ${stats.totalRequests}`);
-    logger.info(
+    logger.consoleInfo(`\n OVERALL STATISTICS:`);
+    logger.consoleInfo(`   Total Requests: ${stats.totalRequests}`);
+    logger.consoleInfo(
       `   Successful: ${stats.successfulRequests} (${((stats.successfulRequests / stats.totalRequests) * 100).toFixed(1)}%)`
     );
-    logger.info(`   Cache Hit Rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
+    logger.consoleInfo(`   Cache Hit Rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
 
-    logger.info(`\n⏱️  TIMING PERFORMANCE:`);
-    logger.info(`   Average Send Time: ${stats.averageSendTime.toFixed(2)}ms`);
-    logger.info(`   Average Network Latency: ${stats.averageLatency.toFixed(2)}ms`);
-    logger.info(`   Average Time to First Byte: ${stats.averageTTFB.toFixed(2)}ms`);
-    logger.info(`   Average Processing Time: ${stats.averageProcessingTime.toFixed(2)}ms`);
-    logger.info(`   Average Stream-to-Play Delay: ${stats.averageStreamToPlayDelay.toFixed(2)}ms`);
-    logger.info(
+    logger.consoleInfo(`\n⏱️  TIMING PERFORMANCE:`);
+    logger.consoleInfo(`   Average Send Time: ${stats.averageSendTime.toFixed(2)}ms`);
+    logger.consoleInfo(`   Average Network Latency: ${stats.averageLatency.toFixed(2)}ms`);
+    logger.consoleInfo(`   Average Time to First Byte: ${stats.averageTTFB.toFixed(2)}ms`);
+    logger.consoleInfo(`   Average Processing Time: ${stats.averageProcessingTime.toFixed(2)}ms`);
+    logger.consoleInfo(
+      `   Average Stream-to-Play Delay: ${stats.averageStreamToPlayDelay.toFixed(2)}ms`
+    );
+    logger.consoleInfo(
       `   Average First Audio Play Time: ${stats.averageFirstAudioPlayTime.toFixed(2)}ms`
     );
-    logger.info(`   Average Total Response Time: ${stats.averageTotalTime.toFixed(2)}ms`);
+    logger.consoleInfo(`   Average Total Response Time: ${stats.averageTotalTime.toFixed(2)}ms`);
 
-    logger.info(`\n CACHE PERFORMANCE:`);
-    logger.info(`   Cached Response Time: ${stats.cachedResponseTime.toFixed(2)}ms`);
-    logger.info(`   Network Response Time: ${stats.networkResponseTime.toFixed(2)}ms`);
+    logger.consoleInfo(`\n CACHE PERFORMANCE:`);
+    logger.consoleInfo(`   Cached Response Time: ${stats.cachedResponseTime.toFixed(2)}ms`);
+    logger.consoleInfo(`   Network Response Time: ${stats.networkResponseTime.toFixed(2)}ms`);
     if (stats.cacheSpeedup > 0) {
-      logger.info(`   Cache Speedup: ${stats.cacheSpeedup.toFixed(2)}x faster`);
-      logger.info(
+      logger.consoleInfo(`   Cache Speedup: ${stats.cacheSpeedup.toFixed(2)}x faster`);
+      logger.consoleInfo(
         `   Time Saved: ${(stats.networkResponseTime - stats.cachedResponseTime).toFixed(2)}ms per cached request`
       );
     }
 
-    logger.info(`\n STREAMING PERFORMANCE:`);
-    logger.info(`   Average Chunk Count: ${stats.averageChunkCount.toFixed(0)}`);
+    logger.consoleInfo(`\n STREAMING PERFORMANCE:`);
+    logger.consoleInfo(`   Average Chunk Count: ${stats.averageChunkCount.toFixed(0)}`);
     if (stats.averageTotalTime > 0 && stats.averageTotalTime > 0) {
-      logger.info(`   Streaming Efficiency: ${stats.streamingEfficiency.toFixed(2)}x faster`);
+      logger.consoleInfo(
+        `   Streaming Efficiency: ${stats.streamingEfficiency.toFixed(2)}x faster`
+      );
     }
 
-    logger.info(`\n DATA TRANSFER:`);
-    logger.info(`   Total Data Transferred: ${(stats.totalDataTransferred / 1024).toFixed(2)} KB`);
-    logger.info(`   Average Response Size: ${(stats.averageResponseSize / 1024).toFixed(2)} KB`);
+    logger.consoleInfo(`\n DATA TRANSFER:`);
+    logger.consoleInfo(
+      `   Total Data Transferred: ${(stats.totalDataTransferred / 1024).toFixed(2)} KB`
+    );
+    logger.consoleInfo(
+      `   Average Response Size: ${(stats.averageResponseSize / 1024).toFixed(2)} KB`
+    );
 
-    logger.info("\n" + "=".repeat(60));
+    logger.consoleInfo("\n" + "=".repeat(60));
   }
 }
 

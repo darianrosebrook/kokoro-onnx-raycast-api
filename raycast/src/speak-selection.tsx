@@ -90,8 +90,8 @@ export default async function SpeakSelection() {
       onStatusUpdate,
     });
 
-    logger.info(" [SPEAK-SELECTION] === START TTS ===");
-    logger.info(" [SPEAK-SELECTION] Selected text:", {
+    logger.consoleInfo(" [SPEAK-SELECTION] === START TTS ===");
+    logger.consoleInfo(" [SPEAK-SELECTION] Selected text:", {
       length: text.length,
       preview: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
     });
@@ -99,7 +99,7 @@ export default async function SpeakSelection() {
 
     // This will await until playback is completely finished
     await processor.speak(text);
-    logger.info(" [SPEAK-SELECTION] ✅ TTS processing completed successfully");
+    logger.consoleInfo(" [SPEAK-SELECTION] ✅ TTS processing completed successfully");
 
     // The 'speak' method now resolves when finished, paused, or stopped.
     // We only show "Finished" if it wasn't stopped.
@@ -121,6 +121,6 @@ export default async function SpeakSelection() {
   } finally {
     // The processor will handle its own cleanup when playback completes naturally
     // Calling processor.stop() here would prematurely terminate ongoing playback
-    logger.info(" [SPEAK-SELECTION] === END TTS ===");
+    logger.consoleInfo(" [SPEAK-SELECTION] === END TTS ===");
   }
 }

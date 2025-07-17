@@ -17,7 +17,7 @@
  * @since 2025-01-20
  */
 
-import { logger } from "../core/logger.js";
+import { logger } from "../core/logger";
 import type {
   RetryConfig,
   RetryStrategy,
@@ -110,7 +110,7 @@ export class RetryManager {
 
     this.initialized = true;
 
-    logger.info("Retry manager initialized", {
+    logger.consoleInfo("Retry manager initialized", {
       component: this.name,
       method: "initialize",
       config: this.config,
@@ -179,7 +179,7 @@ export class RetryManager {
         const totalTime = performance.now() - startTime;
         this.updateMetrics(attempt, totalTime);
 
-        logger.info("Operation succeeded", {
+        logger.consoleInfo("Operation succeeded", {
           component: this.name,
           method: "executeWithRetry",
           context,
@@ -239,7 +239,7 @@ export class RetryManager {
         const delay = this.calculateDelay(attempt, config);
         retryAttempt.delay = delay;
 
-        logger.info("Retrying operation", {
+        logger.consoleInfo("Retrying operation", {
           component: this.name,
           method: "executeWithRetry",
           context,
@@ -315,7 +315,7 @@ export class RetryManager {
       circuitBreakerTrips: 0,
     };
 
-    logger.info("Retry metrics reset", {
+    logger.consoleInfo("Retry metrics reset", {
       component: this.name,
       method: "resetMetrics",
     });
@@ -340,7 +340,7 @@ export class RetryManager {
       successCount: 0,
     };
 
-    logger.info("Circuit breaker reset", {
+    logger.consoleInfo("Circuit breaker reset", {
       component: this.name,
       method: "resetCircuitBreaker",
     });
@@ -352,7 +352,7 @@ export class RetryManager {
   updateConfig(config: Partial<RetryConfig>): void {
     this.config = { ...this.config, ...config };
 
-    logger.info("Retry configuration updated", {
+    logger.consoleInfo("Retry configuration updated", {
       component: this.name,
       method: "updateConfig",
       config: this.config,
@@ -399,7 +399,7 @@ export class RetryManager {
     if (this.circuitBreaker.isOpen) {
       this.circuitBreaker.isOpen = false;
 
-      logger.info("Circuit breaker closed after success", {
+      logger.consoleInfo("Circuit breaker closed after success", {
         component: this.name,
         method: "recordSuccess",
         successCount: this.circuitBreaker.successCount,
@@ -567,7 +567,7 @@ export class RetryManager {
     const metrics = this.getRetryMetrics();
     const circuitState = this.getCircuitBreakerState();
 
-    logger.info("Retry Statistics", {
+    logger.consoleInfo("Retry Statistics", {
       component: this.name,
       method: "logRetryStats",
       metrics: {

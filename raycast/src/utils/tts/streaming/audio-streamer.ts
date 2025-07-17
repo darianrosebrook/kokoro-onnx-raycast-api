@@ -159,7 +159,7 @@ export class AudioStreamer implements IAudioStreamer {
 
     this.initialized = true;
 
-    logger.info("Audio streamer initialized", {
+    logger.consoleInfo("Audio streamer initialized", {
       component: this.name,
       method: "initialize",
       config: this.config,
@@ -199,16 +199,16 @@ export class AudioStreamer implements IAudioStreamer {
     context: StreamingContext,
     onChunk: (chunk: AudioChunk) => void
   ): Promise<void> {
-    logger.info(`[${this.instanceID}] streamAudio() called with request:`, request);
+    logger.consoleInfo(`[${this.instanceID}] streamAudio() called with request:`, request);
     try {
       await this.streamFromServerWithImmediatePlayback(request, context, (chunk) => {
-        // logger.info(
+        // logger.consoleInfo(
         //   `[${this.instanceID}] onChunk callback invoked with chunk:`,
         //   "too verbose for debugging"
         // );
         onChunk(chunk);
       });
-      logger.info(`[${this.instanceID}] streamFromServerWithImmediatePlayback completed`);
+      logger.consoleInfo(`[${this.instanceID}] streamFromServerWithImmediatePlayback completed`);
     } catch (err) {
       console.error(`[${this.instanceID}] Error in streamAudio:`, err);
       throw err;
@@ -248,9 +248,11 @@ export class AudioStreamer implements IAudioStreamer {
     context: StreamingContext,
     onChunk: (chunk: AudioChunk) => void
   ): Promise<void> {
-    logger.info(`[${this.instanceID}] streamFromServerWithImmediatePlayback() called`);
-    logger.info(` [${this.instanceID}] === SERVER STREAMING START ===`);
-    logger.info(` [${this.instanceID}]  DEBUGGING: Starting streamFromServerWithImmediatePlayback`);
+    logger.consoleInfo(`[${this.instanceID}] streamFromServerWithImmediatePlayback() called`);
+    logger.consoleInfo(` [${this.instanceID}] === SERVER STREAMING START ===`);
+    logger.consoleInfo(
+      ` [${this.instanceID}]  DEBUGGING: Starting streamFromServerWithImmediatePlayback`
+    );
 
     // PHASE 1 OPTIMIZATION: Use PCM format for streaming to avoid WAV header + raw audio mixing
     const streamingRequest = {
@@ -259,7 +261,7 @@ export class AudioStreamer implements IAudioStreamer {
       format: "pcm", // Use PCM for streaming, WAV for caching
     };
 
-    logger.info(` [${this.instanceID}]  Preparing server request:`, {
+    logger.consoleInfo(` [${this.instanceID}]  Preparing server request:`, {
       url: `${this.config.serverUrl}/v1/audio/speech`,
       method: "POST",
       headers: {
@@ -274,7 +276,7 @@ export class AudioStreamer implements IAudioStreamer {
       },
     });
 
-    logger.info(
+    logger.consoleInfo(
       ` [${this.instanceID}]  DEBUGGING: Request:`,
       JSON.stringify(streamingRequest, null, 2)
     );
@@ -282,8 +284,8 @@ export class AudioStreamer implements IAudioStreamer {
     const url = `${this.config.serverUrl}/v1/audio/speech`;
     const requestStartTime = performance.now();
 
-    logger.info(` [${this.instanceID}]  Sending request to server...`);
-    logger.info(` [${this.instanceID}]  Request start time:`, requestStartTime);
+    logger.consoleInfo(` [${this.instanceID}]  Sending request to server...`);
+    logger.consoleInfo(` [${this.instanceID}]  Request start time:`, requestStartTime);
 
     const response = await fetch(url, {
       method: "POST",
@@ -293,20 +295,20 @@ export class AudioStreamer implements IAudioStreamer {
     });
 
     const responseTime = performance.now() - requestStartTime;
-    logger.info(` [${this.instanceID}]  Server response received:`, {
+    logger.consoleInfo(` [${this.instanceID}]  Server response received:`, {
       responseTime: responseTime.toFixed(2) + "ms",
       status: response.status,
       statusText: response.statusText,
       ok: response.ok,
     });
 
-    logger.info(` [${this.instanceID}]  DEBUGGING: Response status:`, response.status);
+    logger.consoleInfo(` [${this.instanceID}]  DEBUGGING: Response status:`, response.status);
     if (response.headers) {
       const headers = [...response.headers.entries()];
-      logger.info(` [${this.instanceID}]  DEBUGGING: Response headers:`, headers);
-      logger.info(` [${this.instanceID}]  Response headers:`, Object.fromEntries(headers));
+      logger.consoleInfo(` [${this.instanceID}]  DEBUGGING: Response headers:`, headers);
+      logger.consoleInfo(` [${this.instanceID}]  Response headers:`, Object.fromEntries(headers));
     } else {
-      logger.info(` [${this.instanceID}]  DEBUGGING: Response headers: undefined`);
+      logger.consoleInfo(` [${this.instanceID}]  DEBUGGING: Response headers: undefined`);
     }
 
     if (!response || !response.ok) {
@@ -328,7 +330,7 @@ export class AudioStreamer implements IAudioStreamer {
       throw new Error("Streaming not supported by this environment");
     }
 
-    logger.info(` [${this.instanceID}] ✅ Server response valid, starting chunk processing`);
+    logger.consoleInfo(` [${this.instanceID}] ✅ Server response valid, starting chunk processing`);
 
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
@@ -337,9 +339,9 @@ export class AudioStreamer implements IAudioStreamer {
     const startTime = Date.now();
     let totalBytesReceived = 0;
 
-    logger.info(` [${this.instanceID}]  DEBUGGING: Starting to read PCM chunks...`);
-    logger.info(` [${this.instanceID}]  Starting chunk processing...`);
-    logger.info(` [${this.instanceID}]  Chunk processing start time:`, startTime);
+    logger.consoleInfo(` [${this.instanceID}]  DEBUGGING: Starting to read PCM chunks...`);
+    logger.consoleInfo(` [${this.instanceID}]  Starting chunk processing...`);
+    logger.consoleInfo(` [${this.instanceID}]  Chunk processing start time:`, startTime);
 
     // PHASE 1 OPTIMIZATION: Stream PCM data directly to afplay
     while (true) {
@@ -348,8 +350,8 @@ export class AudioStreamer implements IAudioStreamer {
       const readTime = performance.now() - readStartTime;
 
       if (done) {
-        logger.info(` [${this.instanceID}]  DEBUGGING: Stream reading completed`);
-        logger.info(` [${this.instanceID}] ✅ Stream reading completed`);
+        logger.consoleInfo(` [${this.instanceID}]  DEBUGGING: Stream reading completed`);
+        logger.consoleInfo(` [${this.instanceID}] ✅ Stream reading completed`);
         break;
       }
 
@@ -358,7 +360,7 @@ export class AudioStreamer implements IAudioStreamer {
         totalBytesReceived += value.length;
         const elapsedTime = Date.now() - startTime;
 
-        // logger.info(` [${this.instanceID}]  Received chunk:`, {
+        // logger.consoleInfo(` [${this.instanceID}]  Received chunk:`, {
         //   chunkIndex,
         //   size: value.length,
         //   totalBytes: totalBytesReceived,
@@ -366,15 +368,15 @@ export class AudioStreamer implements IAudioStreamer {
         //   readTime: readTime.toFixed(2) + "ms",
         // });
 
-        // logger.info(
+        // logger.consoleInfo(
         //   ` [${this.instanceID}]  DEBUGGING: Received PCM chunk ${chunkIndex}: ${value.length} bytes`
         // );
 
         // Debug first chunk specifically
         if (firstChunk) {
-          logger.info(` [${this.instanceID}]  DEBUGGING: First PCM chunk details:`);
-          logger.info(` [${this.instanceID}]    Size:`, value.length);
-          logger.info(
+          logger.consoleInfo(` [${this.instanceID}]  DEBUGGING: First PCM chunk details:`);
+          logger.consoleInfo(` [${this.instanceID}]    Size:`, value.length);
+          logger.consoleInfo(
             ` [${this.instanceID}]    First 8 bytes:`,
             Array.from(value.slice(0, 8))
               .map((b) => `0x${b.toString(16).padStart(2, "0")}`)
@@ -388,8 +390,11 @@ export class AudioStreamer implements IAudioStreamer {
             value[1] === 0x49 &&
             value[2] === 0x46 &&
             value[3] === 0x46;
-          logger.info(` [${this.instanceID}]    Has RIFF header (should be false):`, hasRiff);
-          logger.info(` [${this.instanceID}]  First chunk analysis:`, {
+          logger.consoleInfo(
+            ` [${this.instanceID}]    Has RIFF header (should be false):`,
+            hasRiff
+          );
+          logger.consoleInfo(` [${this.instanceID}]  First chunk analysis:`, {
             size: value.length,
             hasRiffHeader: hasRiff,
             firstBytes: Array.from(value.slice(0, 8))
@@ -405,7 +410,7 @@ export class AudioStreamer implements IAudioStreamer {
         const elapsedTimeMs = currentTime - startTime;
         const chunkDuration = this.calculateChunkDuration(value.length);
 
-        // logger.info(` [${this.instanceID}]  Sending chunk to processor:`, {
+        // logger.consoleInfo(` [${this.instanceID}]  Sending chunk to processor:`, {
         //   chunkIndex,
         //   size: value.length,
         //   duration: chunkDuration.toFixed(2) + "ms",
@@ -422,8 +427,11 @@ export class AudioStreamer implements IAudioStreamer {
 
         // Log TTFA for first chunk
         if (firstChunk) {
-          logger.info(` [${this.instanceID}]  Time to First Audio (TTFA):`, elapsedTimeMs + "ms");
-          logger.info("PHASE 1 OPTIMIZATION: First PCM chunk sent to afplay", {
+          logger.consoleInfo(
+            ` [${this.instanceID}]  Time to First Audio (TTFA):`,
+            elapsedTimeMs + "ms"
+          );
+          logger.consoleInfo("PHASE 1 OPTIMIZATION: First PCM chunk sent to afplay", {
             component: this.name,
             method: "streamFromServerWithImmediatePlayback",
             requestId: context.requestId,
@@ -439,7 +447,7 @@ export class AudioStreamer implements IAudioStreamer {
           const avgChunkSize = totalBytesReceived / chunkIndex;
           const avgChunkTime = elapsedTimeMs / chunkIndex;
 
-          logger.info(` [${this.instanceID}]  Progress report:`, {
+          logger.consoleInfo(` [${this.instanceID}]  Progress report:`, {
             chunkIndex,
             avgChunkSize: avgChunkSize.toFixed(0) + " bytes",
             avgChunkTime: avgChunkTime.toFixed(2) + "ms",
@@ -462,7 +470,7 @@ export class AudioStreamer implements IAudioStreamer {
     const processingEndTime = Date.now();
     const totalProcessingTime = processingEndTime - startTime;
 
-    logger.info(` [${this.instanceID}]  All chunks received:`, {
+    logger.consoleInfo(` [${this.instanceID}]  All chunks received:`, {
       totalChunks: chunkIndex,
       totalBytes: totalBytesReceived,
       totalTime: totalProcessingTime + "ms",
@@ -472,12 +480,12 @@ export class AudioStreamer implements IAudioStreamer {
     });
 
     // PHASE 1 OPTIMIZATION: Create WAV file for caching (but not for streaming)
-    logger.info(` [${this.instanceID}]  Creating WAV file for caching...`);
+    logger.consoleInfo(` [${this.instanceID}]  Creating WAV file for caching...`);
     const wavCreationStart = performance.now();
     const combinedAudio = this.createWAVFromPCMChunks(chunks);
     const wavCreationTime = performance.now() - wavCreationStart;
 
-    logger.info(` [${this.instanceID}]  WAV file created:`, {
+    logger.consoleInfo(` [${this.instanceID}]  WAV file created:`, {
       pcmChunks: chunks.length,
       pcmBytes: totalBytesReceived,
       wavBytes: combinedAudio.length,
@@ -486,7 +494,7 @@ export class AudioStreamer implements IAudioStreamer {
 
     // Cache the complete WAV audio for future requests
     if (combinedAudio.length > 0) {
-      logger.info(` [${this.instanceID}]  Caching WAV audio for future requests`);
+      logger.consoleInfo(` [${this.instanceID}]  Caching WAV audio for future requests`);
       cacheManager.cacheTTSResponse(request, combinedAudio.buffer);
     } else {
       console.warn(` [${this.instanceID}] ⚠️ No audio data to cache`);
@@ -499,7 +507,7 @@ export class AudioStreamer implements IAudioStreamer {
     this.stats.streamingDuration = totalProcessingTime;
     this.stats.efficiency = this.calculateStreamingEfficiency(this.stats.streamingDuration);
 
-    logger.info(` [${this.instanceID}]  Final streaming statistics:`, {
+    logger.consoleInfo(` [${this.instanceID}]  Final streaming statistics:`, {
       chunksReceived: this.stats.chunksReceived,
       bytesReceived: this.stats.bytesReceived,
       averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
@@ -507,7 +515,7 @@ export class AudioStreamer implements IAudioStreamer {
       efficiency: (this.stats.efficiency * 100).toFixed(1) + "%",
     });
 
-    logger.info("PHASE 1 OPTIMIZATION: PCM streaming completed", {
+    logger.consoleInfo("PHASE 1 OPTIMIZATION: PCM streaming completed", {
       component: this.name,
       method: "streamFromServerWithImmediatePlayback",
       requestId: context.requestId,
@@ -517,8 +525,8 @@ export class AudioStreamer implements IAudioStreamer {
       efficiency: `${(this.stats.efficiency * 100).toFixed(1)}%`,
     });
 
-    logger.info(` [${this.instanceID}] === SERVER STREAMING END ===`);
-    logger.info(`[${this.instanceID}] streamFromServerWithImmediatePlayback() finished`);
+    logger.consoleInfo(` [${this.instanceID}] === SERVER STREAMING END ===`);
+    logger.consoleInfo(`[${this.instanceID}] streamFromServerWithImmediatePlayback() finished`);
   }
 
   /**
@@ -551,13 +559,13 @@ export class AudioStreamer implements IAudioStreamer {
     const firstChunk = chunks[0];
 
     // Debug: Check what's actually in the first chunk
-    logger.info(` [${this.instanceID}]  First chunk size: ${firstChunk.length} bytes`);
-    logger.info(
+    logger.consoleInfo(` [${this.instanceID}]  First chunk size: ${firstChunk.length} bytes`);
+    logger.consoleInfo(
       ` [${this.instanceID}]  First chunk first 4 bytes: ${Array.from(firstChunk.slice(0, 4))
         .map((b) => "0x" + b.toString(16).padStart(2, "0"))
         .join(" ")}`
     );
-    logger.info(
+    logger.consoleInfo(
       ` [${this.instanceID}]  First chunk first 8 bytes as string: "${firstChunk.slice(0, 8).toString()}"`
     );
 
@@ -569,14 +577,16 @@ export class AudioStreamer implements IAudioStreamer {
       firstChunk[2] === 0x46 && // 'F'
       firstChunk[3] === 0x46; // 'F'
 
-    logger.info(` [${this.instanceID}]  WAV header detected: ${hasWavHeader}`);
+    logger.consoleInfo(` [${this.instanceID}]  WAV header detected: ${hasWavHeader}`);
 
     if (!hasWavHeader) {
       logger.warn("First chunk missing WAV header, using simple concatenation", {
         component: this.name,
         method: "combineAudioChunks",
       });
-      logger.info(` [${this.instanceID}]  Using simple concatenation due to missing WAV header`);
+      logger.consoleInfo(
+        ` [${this.instanceID}]  Using simple concatenation due to missing WAV header`
+      );
       return this.simpleConcatenation(chunks);
     }
 
@@ -623,14 +633,14 @@ export class AudioStreamer implements IAudioStreamer {
     updatedHeader[43] = (totalAudioSize >> 24) & 0xff;
 
     // Debug: Check the updated header
-    logger.info(
+    logger.consoleInfo(
       ` [${this.instanceID}]  Updated header first 12 bytes: ${Array.from(
         updatedHeader.slice(0, 12)
       )
         .map((b) => "0x" + b.toString(16).padStart(2, "0"))
         .join(" ")}`
     );
-    logger.info(
+    logger.consoleInfo(
       ` [${this.instanceID}]  Updated header as string: "${updatedHeader.slice(0, 12).toString()}"`
     );
 
@@ -753,7 +763,7 @@ export class AudioStreamer implements IAudioStreamer {
       if (newBufferSize !== oldBufferSize) {
         this.bufferConfig = { ...this.bufferConfig, ...optimalConfig };
 
-        logger.info("Buffer adjusted using adaptive manager", {
+        logger.consoleInfo("Buffer adjusted using adaptive manager", {
           component: this.name,
           method: "adjustBuffer",
           oldBufferSize,
@@ -796,7 +806,7 @@ export class AudioStreamer implements IAudioStreamer {
     if (newBufferSize !== oldBufferSize) {
       this.bufferConfig.targetBufferMs = newBufferSize;
 
-      logger.info("Buffer adjusted using fallback method", {
+      logger.consoleInfo("Buffer adjusted using fallback method", {
         component: this.name,
         method: "adjustBuffer",
         oldBufferSize,
@@ -846,7 +856,7 @@ export class AudioStreamer implements IAudioStreamer {
   updateBufferConfig(config: Partial<BufferConfig>): void {
     this.bufferConfig = { ...this.bufferConfig, ...config };
 
-    logger.info("Buffer configuration updated", {
+    logger.consoleInfo("Buffer configuration updated", {
       component: this.name,
       method: "updateBufferConfig",
       config: this.bufferConfig,

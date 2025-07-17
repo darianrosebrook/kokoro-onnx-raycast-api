@@ -135,7 +135,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
       this.startPeriodicReporting();
     }
 
-    logger.info("Performance monitor initialized", {
+    logger.consoleInfo("Performance monitor initialized", {
       component: this.name,
       method: "initialize",
       config: this.config,
@@ -283,7 +283,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     const activeSessions = this.activeSessions.size;
     const sessionDuration = (performance.now() - metrics.sessionStart) / 1000;
 
-    logger.info("Performance Report", {
+    logger.consoleInfo("Performance Report", {
       component: this.name,
       method: "logPerformanceReport",
       sessionDuration: `${sessionDuration.toFixed(2)}s`,
@@ -375,7 +375,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
   updateThresholds(thresholds: Partial<PerformanceThresholds>): void {
     this.thresholds = { ...this.thresholds, ...thresholds };
 
-    logger.info("Performance thresholds updated", {
+    logger.consoleInfo("Performance thresholds updated", {
       component: this.name,
       method: "updateThresholds",
       thresholds: this.thresholds,
@@ -628,7 +628,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     metrics: PerformanceMetrics,
     duration: number
   ): void {
-    logger.info("Performance Summary", {
+    logger.consoleInfo("Performance Summary", {
       component: this.name,
       method: "logPerformanceSummary",
       requestId,
@@ -651,7 +651,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     requestId: string,
     recommendations: PerformanceRecommendation[]
   ): void {
-    logger.info("Performance Recommendations", {
+    logger.consoleInfo("Performance Recommendations", {
       component: this.name,
       method: "logRecommendations",
       requestId,
@@ -697,7 +697,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     const count = this.activeSessions.size;
     this.activeSessions.clear();
 
-    logger.info("All performance sessions cleared", {
+    logger.consoleInfo("All performance sessions cleared", {
       component: this.name,
       method: "clearSessions",
       clearedCount: count,

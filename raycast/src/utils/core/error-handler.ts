@@ -3,7 +3,7 @@
  * @author @darianrosebrook
  */
 
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 /**
  * Error types that can be presented to users
