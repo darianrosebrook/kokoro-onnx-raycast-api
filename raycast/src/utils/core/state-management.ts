@@ -164,7 +164,7 @@ export const useDaemonHealth = () => {
       cacheManager.cacheServerHealth(preferences.daemonUrl, health);
 
       return health;
-    } catch (error) {
+    } catch {
       // Don't log errors for daemon health checks - they're expected when daemon isn't running
       const health: CachedServerHealth = {
         status: "unhealthy",

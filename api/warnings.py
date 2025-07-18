@@ -124,6 +124,7 @@ import os
 import sys
 import contextlib
 import io
+import re
 from typing import Optional, TextIO
 from api.performance.stats import handle_coreml_context_warning
 
@@ -151,73 +152,72 @@ class StderrInterceptor:
         self.original_stderr = original_stderr
         self.suppressed_count = 0
         self.total_count = 0
+        self.line_buffer = ""
         
-        # Patterns to suppress (known harmless CoreML warnings)
+        # Compile regex for more robust pattern matching
         self.suppress_patterns = [
-            "Context leak detected",
-            "msgtracer returned -1",
-            "Some nodes were not assigned",
-            "Rerunning with verbose output",
-            "CoreMLExecutionProvider::GetCapability",
-            "number of partitions supported",
-            "words count mismatch"
+            re.compile(r"Context leak detected", re.IGNORECASE),
+            re.compile(r"msgtracer returned -1", re.IGNORECASE),
+            re.compile(r"Some nodes were not assigned", re.IGNORECASE),
+            re.compile(r"Rerunning with verbose output", re.IGNORECASE),
+            re.compile(r"CoreMLExecutionProvider::GetCapability", re.IGNORECASE),
+            re.compile(r"number of partitions supported", re.IGNORECASE),
+            re.compile(r"words count mismatch", re.IGNORECASE),
+            re.compile(r"EP Error.*PhonemeBasedPadding", re.IGNORECASE), # Suppress EP Error for PhonemeBasedPadding
         ]
         
-        # Patterns to always show (important errors)
         self.show_patterns = [
-            "ERROR",
-            "CRITICAL",
-            "FATAL",
-            "Exception",
-            "Traceback"
+            re.compile(r"ERROR", re.IGNORECASE),
+            re.compile(r"CRITICAL", re.IGNORECASE),
+            re.compile(r"FATAL", re.IGNORECASE),
+            re.compile(r"Exception", re.IGNORECASE),
+            re.compile(r"Traceback", re.IGNORECASE),
         ]
     
     def write(self, text: str):
         """
-        Intercept stderr writes and apply pattern-based filtering.
+        Intercept stderr writes, buffer lines, and apply pattern-based filtering.
         
         @param text: The text being written to stderr
         """
+        self.line_buffer += text
+        # Process complete lines
+        while '\n' in self.line_buffer:
+            line, self.line_buffer = self.line_buffer.split('\n', 1)
+            self._process_line(line)
+
+    def _process_line(self, line: str):
+        """Process a single line of stderr output."""
         self.total_count += 1
         
         # Check if this is a warning we should suppress
-        should_suppress = False
-        for pattern in self.suppress_patterns:
-            if pattern in text:
-                should_suppress = True
-                break
+        is_suppress_target = any(pattern.search(line) for pattern in self.suppress_patterns)
         
         # Check if this is an important message we should always show
-        should_show = False
-        for pattern in self.show_patterns:
-            if pattern in text:
-                should_show = True
-                break
+        is_important_message = any(pattern.search(line) for pattern in self.show_patterns)
         
-        # Decision logic: suppress known warnings, show important errors, pass through others
-        if should_suppress and not should_show:
-            # Suppress this warning but track it
+        # Decision logic
+        if is_suppress_target and not is_important_message:
             self.suppressed_count += 1
-            logger.debug(f" Suppressed stderr warning: {text.strip()}")
-            
-            # Track in performance monitoring
+            logger.debug(f"Suppressed stderr warning: {line.strip()}")
             try:
                 handle_coreml_context_warning()
             except Exception as e:
                 logger.debug(f"⚠️ Could not track warning in performance system: {e}")
-            
-            return  # Don't write to original stderr
+            return
         
         # Pass through to original stderr
         try:
-            self.original_stderr.write(text)
+            self.original_stderr.write(line + '\n')
             self.original_stderr.flush()
         except Exception as e:
-            # If original stderr fails, try to log the error
             logger.debug(f"⚠️ Error writing to original stderr: {e}")
     
     def flush(self):
-        """Flush the original stderr stream."""
+        """Flush the buffer and the original stderr stream."""
+        if self.line_buffer:
+            self._process_line(self.line_buffer)
+            self.line_buffer = ""
         try:
             self.original_stderr.flush()
         except Exception:
@@ -225,6 +225,7 @@ class StderrInterceptor:
     
     def close(self):
         """Close the original stderr stream."""
+        self.flush()
         try:
             self.original_stderr.close()
         except Exception:

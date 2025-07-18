@@ -1,4 +1,4 @@
-import type { VoiceOption } from "../validation/tts-types";
+import type { VoiceOption } from "../validation/tts-types.js";
 
 /**
  * Voice configuration with traits and metadata

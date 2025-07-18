@@ -152,6 +152,7 @@
   "scripts": {
     "build": "ray build -e dist",
     "dev": "ray develop",
+    "dev:debug": "KOKORO_DEBUG=true ray develop",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
     "test": "vitest",

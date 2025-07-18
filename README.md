@@ -50,13 +50,17 @@ kokoro-onnx/
 
 ## Installation
 
+### Python Version Support
+- **Python 3.8 - 3.12**: Full compatibility with standard installation
+- **Python 3.13**: Full compatibility with automatic dependency resolution (see [Python 3.13 Guide](./docs/python-3.13-compatibility.md))
+
 ### Automated Quickstart
 Get up and running with a single command. This script handles all dependencies, model downloads, and environment setup.
 
 ```bash
 ./setup.sh
 ```
-> **Note**: On the first run, you may see a message about ORT conversion. This is a one-time optimization step that makes subsequent startups much faster.
+> **Note**: The setup script automatically detects Python 3.13 and uses optimized dependency installation to avoid compilation issues. On the first run, you may see a message about ORT conversion - this is a one-time optimization step that makes subsequent startups much faster.
 
 ### Manual Installation
 If you prefer to install manually, follow these steps:
@@ -65,7 +69,14 @@ If you prefer to install manually, follow these steps:
     ```bash
     python3 -m venv .venv
     source .venv/bin/activate
-    pip install -r requirements.txt
+    
+    # For Python 3.13, use compatibility-optimized installation:
+    if [[ "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" == "3.13" ]]; then
+        pip install "spacy>=3.8.0" num2words misaki
+        pip install -r requirements.txt
+    else
+        pip install -r requirements.txt
+    fi
     ```
 2.  **Install eSpeak-ng**
     ```bash

@@ -1,2 +1,5 @@
-# Marker file for Kokoro-ONNX project root
-# Used for auto-detecting the project root from Raycast extension environments 
+# Kokoro TTS Project Root Marker
+# This file helps the Raycast extension locate the project root directory
+PROJECT_NAME=kokoro-onnx
+PROJECT_ROOT=/Users/darianrosebrook/Desktop/Projects/kokoro-onnx
+AUDIO_DAEMON_PATH=/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/raycast/bin/audio-daemon.js 

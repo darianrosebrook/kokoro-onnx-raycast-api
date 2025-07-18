@@ -4,6 +4,7 @@ logs/
 reports/
 plans/
 archive/
+summary/
 
 # Temporary files and cache artifacts
 .cache/tmp*

@@ -514,10 +514,10 @@ def _verbalize_date(match):
         str: Verbalized date string or original if parsing fails
         
     Examples:
-        >>> _verbalize_date(re.match(r'(\d{4}-\d{2}-\d{2})', '2024-01-15'))
+        >>> _verbalize_date(re.match(r'(\\d{4}-\\d{2}-\\d{2})', '2024-01-15'))
         'the 15th of January, 2024'
         
-        >>> _verbalize_date(re.match(r'(\d{4}-\d{2}-\d{2})', '2024-12-25'))
+        >>> _verbalize_date(re.match(r'(\\d{4}-\\d{2}-\\d{2})', '2024-12-25'))
         'the 25th of December, 2024'
     """
     from datetime import datetime
@@ -544,10 +544,10 @@ def _verbalize_time(match):
         str: Verbalized time string
         
     Examples:
-        >>> _verbalize_time(re.match(r'(\d{2}:\d{2}:\d{2})', '14:30:00'))
+        >>> _verbalize_time(re.match(r'(\\d{2}:\\d{2}:\\d{2})', '14:30:00'))
         'fourteen thirty and zero seconds'
         
-        >>> _verbalize_time(re.match(r'(\d{2}:\d{2}:\d{2})', '09:05:23'))
+        >>> _verbalize_time(re.match(r'(\\d{2}:\\d{2}:\\d{2})', '09:05:23'))
         'nine five and twenty three seconds'
     """
     parts = match.group(0).split(':')

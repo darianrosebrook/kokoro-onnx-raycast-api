@@ -9,7 +9,7 @@
  * @since 2025-07-17
  */
 
-import type { PerformanceProfile, BufferConfig } from "../validation/tts-types";
+import type { PerformanceProfile, BufferConfig } from "../validation/tts-types.js";
 
 /**
  * Predefined performance profiles with optimized buffer configurations
@@ -175,16 +175,20 @@ export class PerformanceProfileManager {
       let isAppleSilicon = false;
 
       // Try to get system information from Node.js
+      // eslint-disable-next-line no-undef
       if (typeof process !== "undefined" && process.platform) {
         // Use Node.js APIs for system detection
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
         const os = require("os");
         cpuCores = os.cpus().length;
 
         // Estimate memory (Node.js doesn't have direct access to total system memory)
+        // eslint-disable-next-line no-undef
         const nodeMemoryUsage = process.memoryUsage();
         memoryGB = Math.round((nodeMemoryUsage.heapTotal || 0) / (1024 * 1024 * 1024)) || 8;
 
         // Detect Apple Silicon
+        // eslint-disable-next-line no-undef
         isAppleSilicon = process.platform === "darwin" && process.arch === "arm64";
       } else if (typeof navigator !== "undefined") {
         // Fallback to browser APIs if available
