@@ -10,9 +10,7 @@
  * License: MIT
  */
 
-import type { VoiceOption } from "../validation/tts-types";
-import { logger } from "../core/logger";
-
+import type { VoiceOption } from "../validation/tts-types.js";
 /**
  * Cache for voice data to avoid repeated API calls
  */
@@ -51,7 +49,7 @@ export async function fetchAvailableVoices(serverUrl: string): Promise<string[]>
 
     return voices;
   } catch (error) {
-    logger.consoleWarn("Failed to fetch voices from server:", error);
+    console.warn("Failed to fetch voices from server:", error);
     return [];
   }
 }
@@ -67,18 +65,18 @@ export async function getValidatedVoice(
     const availableVoices = await fetchAvailableVoices(serverUrl);
 
     if (availableVoices.length === 0) {
-      logger.consoleWarn("No voices available from server, using requested voice");
+      console.warn("No voices available from server, using requested voice");
       return requestedVoice;
     }
 
     // Check if requested voice is available
     if (availableVoices.includes(requestedVoice)) {
-      logger.consoleInfo(`✅ Using requested voice: ${requestedVoice}`);
+      console.log(`✅ Using requested voice: ${requestedVoice}`);
       return requestedVoice;
     }
 
     // Find a suitable fallback voice
-    logger.consoleWarn(`⚠️ Requested voice '${requestedVoice}' not available`);
+    console.warn(`⚠️ Requested voice '${requestedVoice}' not available`);
 
     // Try to find a similar voice (same gender/category if possible)
     const requestedPrefix = requestedVoice.split("_")[0];
@@ -88,20 +86,20 @@ export async function getValidatedVoice(
 
     if (similarVoices.length > 0) {
       const fallbackVoice = similarVoices[0];
-      logger.consoleInfo(` Using similar voice: ${fallbackVoice}`);
+      console.log(` Using similar voice: ${fallbackVoice}`);
       return fallbackVoice;
     }
 
     // Default fallback - use first available voice
     const fallbackVoice = availableVoices[0];
-    logger.consoleInfo(` Using fallback voice: ${fallbackVoice}`);
-    logger.consoleDebug(
+    console.log(` Using fallback voice: ${fallbackVoice}`);
+    console.warn(
       ` Available voices: ${availableVoices.slice(0, 5).join(", ")}${availableVoices.length > 5 ? "..." : ""}`
     );
 
     return fallbackVoice;
   } catch (error) {
-    logger.consoleError("Voice validation failed:", error);
+    console.error("Voice validation failed:", error);
     return requestedVoice; // Return original voice if validation fails
   }
 }
@@ -210,7 +208,7 @@ export async function generateVoiceOptions(
       }
     });
 
-    logger.consoleInfo(`✅ Generated ${voiceOptions.length} voice options from server`);
+    console.log(`✅ Generated ${voiceOptions.length} voice options from server`);
     return voiceOptions;
   } catch (error) {
     console.error("Failed to generate voice options from server:", error);

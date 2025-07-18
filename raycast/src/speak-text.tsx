@@ -205,7 +205,7 @@ export default function SpeakTextSimple() {
         const options = await generateVoiceOptions(preferences.serverUrl);
         setVoiceOptions(options);
       } catch (error) {
-        console.error("Failed to load voice options:", error);
+        logger.consoleError("Failed to load voice options:", error);
         // Fallback to hardcoded voices
         const fallbackOptions = generateHardcodedVoiceOptions();
         setVoiceOptions(fallbackOptions);
@@ -231,7 +231,7 @@ export default function SpeakTextSimple() {
             updatePreferences({ performanceProfile: recommendations.recommended });
           }
         } catch (error) {
-          console.error("Failed to load profile recommendations:", error);
+          logger.consoleError("Failed to load profile recommendations:", error);
         } finally {
           setIsLoadingProfiles(false);
         }

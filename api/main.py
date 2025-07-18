@@ -189,6 +189,7 @@ import asyncio
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
+from datetime import datetime
 
 import numpy as np
 import onnxruntime as ort
@@ -200,6 +201,8 @@ from fastapi.responses import StreamingResponse, ORJSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response as StarletteResponse
+
+from api.security import SecurityMiddleware, SecurityConfig
 import soundfile as sf
 
 from api.config import TTSConfig, TTSRequest
@@ -732,14 +735,65 @@ async def initialize_model():
                     # Handle direct paths
                     if os.path.exists(temp_pattern):
                         try:
-                            shutil.rmtree(temp_pattern)
-                            logger.info(
-                                f" Cleaned up CoreML temp directory: {temp_pattern}")
+                            # For the local coreml_temp directory, clean files but keep the directory
+                            if temp_pattern == ".cache/coreml_temp":
+                                # Clean up old files but preserve directory structure
+                                import glob as file_glob
+                                current_time = time.time()
+                                cleaned_files = 0
+                                
+                                for file_path in file_glob.glob(os.path.join(temp_pattern, "*")):
+                                    try:
+                                        # Remove files older than 1 hour or all files if startup
+                                        if os.path.isfile(file_path):
+                                            file_age = current_time - os.path.getmtime(file_path)
+                                            if file_age > 3600 or True:  # Always clean during startup
+                                                os.remove(file_path)
+                                                cleaned_files += 1
+                                        elif os.path.isdir(file_path):
+                                            # Remove subdirectories that might be left from failed operations
+                                            shutil.rmtree(file_path)
+                                            cleaned_files += 1
+                                    except Exception:
+                                        pass  # Ignore errors for individual files
+                                
+                                logger.info(f" Cleaned up {cleaned_files} files in CoreML temp directory: {temp_pattern}")
+                                
+                                # Ensure directory still exists and has proper permissions
+                                os.makedirs(temp_pattern, exist_ok=True)
+                                os.chmod(temp_pattern, 0o755)
+                            else:
+                                # For other directories, remove completely (system temp dirs)
+                                shutil.rmtree(temp_pattern)
+                                logger.info(
+                                    f" Cleaned up CoreML temp directory: {temp_pattern}")
                         except Exception as e:
                             logger.debug(
                                 f"⚠️ Could not clean up {temp_pattern}: {e}")
         except Exception as e:
             logger.debug(f"⚠️ CoreML temp cleanup failed: {e}")
+
+        # Ensure CoreML temp directory exists with proper setup after cleanup
+        try:
+            import tempfile
+            cache_dir = os.path.abspath(".cache")
+            local_temp_dir = os.path.join(cache_dir, "coreml_temp")
+            os.makedirs(local_temp_dir, exist_ok=True)
+            os.chmod(local_temp_dir, 0o755)
+            
+            # Set environment variables for espeak and other temp file operations
+            os.environ['TMPDIR'] = local_temp_dir
+            os.environ['TMP'] = local_temp_dir 
+            os.environ['TEMP'] = local_temp_dir
+            os.environ['COREML_TEMP_DIR'] = local_temp_dir
+            os.environ['ONNXRUNTIME_TEMP_DIR'] = local_temp_dir
+            
+            # Set Python's tempfile default directory
+            tempfile.tempdir = local_temp_dir
+            
+            logger.debug(f"✅ CoreML temp directory configured: {local_temp_dir}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not setup CoreML temp directory: {e}")
 
         update_startup_progress(10, "Applying production patches...")
         apply_all_patches()
@@ -830,13 +884,27 @@ app = FastAPI(
 # Enhanced middleware configuration for optimal performance
 # Reference: DEPENDENCY_RESEARCH.md section 2.3
 
-# Add performance middleware first for accurate timing
+# Add security middleware first to block malicious requests early
+security_config = SecurityConfig(
+    allow_localhost_only=True,  # Restrict to localhost only
+    block_suspicious_ips=True,
+    max_requests_per_minute=60,
+    max_requests_per_hour=1000
+)
+app.add_middleware(SecurityMiddleware, config=security_config)
+
+# Add performance middleware for accurate timing
 app.add_middleware(PerformanceMiddleware)
 
-# Enhanced CORS middleware configuration
+# Enhanced CORS middleware configuration - Restricted to localhost only
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict for production
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",  # For development frontends
+        "http://127.0.0.1:3000"
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*", "X-Request-ID", "X-API-Key"],  # Add common headers
@@ -1139,6 +1207,32 @@ async def trigger_phase4_optimization():
         return {
             "error": "Phase 4 optimization trigger failed",
             "details": str(e)
+        }
+
+
+@app.get("/security-status")
+async def get_security_status():
+    """
+    Get security middleware status and statistics.
+    
+    Returns information about blocked requests, suspicious IPs, and security events.
+    """
+    try:
+        from api.security import get_security_middleware
+        security_middleware = get_security_middleware()
+        stats = security_middleware.get_security_stats()
+        
+        return {
+            "security_enabled": True,
+            "localhost_only": True,
+            "statistics": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "security_enabled": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
         }
 
 

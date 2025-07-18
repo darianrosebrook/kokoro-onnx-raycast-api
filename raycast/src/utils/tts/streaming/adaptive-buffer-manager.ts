@@ -18,7 +18,6 @@
  */
 
 import { performance } from "perf_hooks";
-import { logger } from "../../core/logger.js";
 import type { BufferConfig } from "../../validation/tts-types.js";
 import type { PerformanceMonitor } from "../../performance/performance-monitor.js";
 
@@ -117,7 +116,7 @@ export class AdaptiveBufferManager {
       endTime: 0,
     };
 
-    logger.consoleInfo("AdaptiveBufferManager initialized", {
+    console.log("AdaptiveBufferManager initialized", {
       component: this.name,
       method: "constructor",
       config: this.config,
@@ -130,7 +129,7 @@ export class AdaptiveBufferManager {
   async initialize(config?: Partial<BufferConfig>): Promise<void> {
     this.initialized = true;
 
-    logger.consoleInfo("AdaptiveBufferManager initialization completed", {
+    console.log("AdaptiveBufferManager initialization completed", {
       component: this.name,
       method: "initialize",
       config,
@@ -169,7 +168,7 @@ export class AdaptiveBufferManager {
       this.adjustBufferSettings();
     }, 5000); // Adjust every 5 seconds
 
-    logger.consoleInfo("Performance monitoring started", {
+    console.log("Performance monitoring started", {
       component: this.name,
       method: "startMonitoring",
     });
@@ -189,7 +188,7 @@ export class AdaptiveBufferManager {
       this.adjustmentInterval = null;
     }
 
-    logger.consoleInfo("Performance monitoring stopped", {
+    console.log("Performance monitoring stopped", {
       component: this.name,
       method: "stopMonitoring",
       metrics: this.getMetrics(),
@@ -233,7 +232,7 @@ export class AdaptiveBufferManager {
     if (!this.isMonitoring) return;
 
     this.metrics.bufferUnderruns++;
-    logger.warn("Buffer underrun recorded", {
+    console.warn("Buffer underrun recorded", {
       component: this.name,
       method: "recordUnderrun",
       totalUnderruns: this.metrics.bufferUnderruns,
@@ -341,7 +340,7 @@ export class AdaptiveBufferManager {
           recommendations.reasoning.join("; ")
         );
 
-        logger.consoleInfo("Buffer adjusted using performance monitor", {
+        console.log("Buffer adjusted using performance monitor", {
           component: this.name,
           method: "updateBufferWithPerformanceMonitor",
           oldBufferMs,
@@ -359,7 +358,7 @@ export class AdaptiveBufferManager {
       !recommendations.shouldDecreaseBuffer
     ) {
       this.config.deliveryRate += 10;
-      logger.debug("Forced adaptation applied", {
+      console.warn("Forced adaptation applied", {
         component: this.name,
         method: "updateBufferWithPerformanceMonitor",
         newDeliveryRate: this.config.deliveryRate,
@@ -511,7 +510,7 @@ export class AdaptiveBufferManager {
     const underrunRate = this.metrics.bufferUnderruns / Math.max(this.metrics.totalChunks, 1);
     const avgUtilization = this.getAverageUtilization();
 
-    logger.debug("Adjusting buffer settings", {
+    console.warn("Adjusting buffer settings", {
       component: this.name,
       method: "adjustBufferSettings",
       avgLatency,
@@ -527,7 +526,7 @@ export class AdaptiveBufferManager {
     }
 
     // Log adjustment results
-    logger.consoleInfo("Buffer settings adjusted", {
+    console.log("Buffer settings adjusted", {
       component: this.name,
       method: "adjustBufferSettings",
       newConfig: this.config,
@@ -549,7 +548,7 @@ export class AdaptiveBufferManager {
         this.config.bufferSize * 1.5,
         8 * 1024 * 1024 // Max 8MB
       );
-      logger.consoleInfo("Increased buffer size for performance", {
+      console.log("Increased buffer size for performance", {
         component: this.name,
         method: "optimizeForPerformance",
         newBufferSize: this.config.bufferSize,
@@ -562,7 +561,7 @@ export class AdaptiveBufferManager {
         this.config.deliveryRate * 1.5,
         100 // Max 100ms
       );
-      logger.consoleInfo("Increased delivery rate for performance", {
+      console.log("Increased delivery rate for performance", {
         component: this.name,
         method: "optimizeForPerformance",
         newDeliveryRate: this.config.deliveryRate,
@@ -575,7 +574,7 @@ export class AdaptiveBufferManager {
         this.config.chunkSize * 1.2,
         9600 // Max 200ms chunks
       );
-      logger.consoleInfo("Increased chunk size for performance", {
+      console.log("Increased chunk size for performance", {
         component: this.name,
         method: "optimizeForPerformance",
         newChunkSize: this.config.chunkSize,
@@ -596,7 +595,7 @@ export class AdaptiveBufferManager {
         this.config.bufferSize * 0.8,
         1024 * 1024 // Min 1MB
       );
-      logger.consoleInfo("Decreased buffer size for efficiency", {
+      console.log("Decreased buffer size for efficiency", {
         component: this.name,
         method: "optimizeForEfficiency",
         newBufferSize: this.config.bufferSize,
@@ -609,7 +608,7 @@ export class AdaptiveBufferManager {
         this.config.deliveryRate * 1.2,
         50 // Max 50ms
       );
-      logger.consoleInfo("Increased delivery rate for efficiency", {
+      console.log("Increased delivery rate for efficiency", {
         component: this.name,
         method: "optimizeForEfficiency",
         newDeliveryRate: this.config.deliveryRate,
@@ -622,7 +621,7 @@ export class AdaptiveBufferManager {
         this.config.chunkSize * 0.8,
         1200 // Min 25ms chunks
       );
-      logger.consoleInfo("Decreased chunk size for efficiency", {
+      console.log("Decreased chunk size for efficiency", {
         component: this.name,
         method: "optimizeForEfficiency",
         newChunkSize: this.config.chunkSize,
@@ -668,7 +667,7 @@ export class AdaptiveBufferManager {
       });
     }
 
-    logger.consoleInfo("Configuration updated from benchmark", {
+    console.log("Configuration updated from benchmark", {
       component: this.name,
       method: "updateFromBenchmark",
       oldConfig,
@@ -742,7 +741,7 @@ export class AdaptiveBufferManager {
       endTime: 0,
     };
 
-    logger.consoleInfo("Configuration reset to defaults", {
+    console.log("Configuration reset to defaults", {
       component: this.name,
       method: "reset",
     });
@@ -753,7 +752,7 @@ export class AdaptiveBufferManager {
    */
   setPerformanceMonitor(monitor: PerformanceMonitor): void {
     this.performanceMonitor = monitor;
-    logger.consoleInfo("Performance monitor integrated", {
+    console.log("Performance monitor integrated", {
       component: this.name,
       method: "setPerformanceMonitor",
     });

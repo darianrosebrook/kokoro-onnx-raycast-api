@@ -19,8 +19,7 @@
  */
 
 import { performance } from "perf_hooks";
-import { logger } from "../../core/logger.js";
-import type { AudioFormat } from "../validation/tts-types.js";
+import type { AudioFormat } from "../../validation/tts-types.js";
 
 /**
  * Audio timing metrics
@@ -78,6 +77,8 @@ interface AudioTestConfig {
   chunkSize: number;
   deliveryRate: number;
   bufferSize: number;
+  testMode: boolean;
+  format: string;
 }
 
 /**
@@ -91,7 +92,7 @@ export class AudioTimingBenchmark {
 
   constructor(testMode = false) {
     this.testMode = testMode;
-    logger.consoleInfo("Audio timing benchmark system created", {
+    console.log("Audio timing benchmark system created", {
       component: this.name,
       method: "constructor",
       testMode,
@@ -104,7 +105,7 @@ export class AudioTimingBenchmark {
   startCollection(): void {
     this.isCollecting = true;
     this.metrics = [];
-    logger.consoleInfo("Audio timing benchmark started");
+    console.log("Audio timing benchmark started");
   }
 
   /**
@@ -119,7 +120,7 @@ export class AudioTimingBenchmark {
   } {
     this.isCollecting = false;
     const report = this.generateReport();
-    logger.consoleInfo("Audio timing benchmark completed", report);
+    console.log("Audio timing benchmark completed", report);
     return report;
   }
 
@@ -175,10 +176,12 @@ export class AudioTimingBenchmark {
       chunkSize: 2400, // 50ms at 24kHz, 16-bit, mono
       deliveryRate: 50, // 50ms between chunks
       bufferSize: 2 * 1024 * 1024, // 2MB
+      testMode: false, // Default test mode
+      format: "pcm", // Default format
       ...config,
     };
     // If testMode is set in config, override instance testMode
-    const testMode = (config as any).testMode ?? this.testMode;
+    const testMode = (config as AudioFormat & { testMode?: boolean }).testMode ?? this.testMode;
 
     const metrics: Partial<AudioTimingMetrics> = {
       testId,
@@ -256,7 +259,7 @@ export class AudioTimingBenchmark {
         this.metrics.push(metrics as AudioTimingMetrics);
       }
 
-      logger.consoleInfo("Audio timing benchmark completed", {
+      console.log("Audio timing benchmark completed", {
         component: this.name,
         method: "benchmarkAudioTiming",
         testId,
@@ -272,7 +275,7 @@ export class AudioTimingBenchmark {
       metrics.success = false;
       metrics.errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-      logger.error("Audio timing benchmark failed", {
+      console.error("Audio timing benchmark failed", {
         component: this.name,
         method: "benchmarkAudioTiming",
         testId,
@@ -308,7 +311,7 @@ export class AudioTimingBenchmark {
     const firstChunkTime = lastChunkTime;
 
     while (currentOffset < audioData.length) {
-      const chunk = audioData.slice(currentOffset, currentOffset + chunkSize);
+      const _chunk = audioData.slice(currentOffset, currentOffset + chunkSize);
       const chunkTime = performance.now();
 
       chunks.push(chunkTime);
@@ -474,6 +477,7 @@ export class AudioTimingBenchmark {
    */
   generateTestAudio(durationMs: number, format: AudioFormat): Uint8Array {
     const samples = Math.floor((durationMs / 1000) * format.sampleRate);
+    // eslint-disable-next-line no-undef
     const buffer = Buffer.alloc(samples * format.channels * (format.bitDepth / 8));
 
     // Generate a simple sine wave (440Hz)
@@ -524,6 +528,8 @@ export class AudioTimingBenchmark {
         channels: testCase.channels,
         bitDepth: testCase.bitDepth,
         format: "pcm",
+        bytesPerSample: testCase.bitDepth / 8,
+        bytesPerSecond: testCase.sampleRate * testCase.channels * (testCase.bitDepth / 8),
       });
 
       const result = await this.benchmarkAudioTiming(audioData, {
@@ -531,6 +537,8 @@ export class AudioTimingBenchmark {
         channels: testCase.channels,
         bitDepth: testCase.bitDepth,
         format: "pcm",
+        bytesPerSample: testCase.bitDepth / 8,
+        bytesPerSecond: testCase.sampleRate * testCase.channels * (testCase.bitDepth / 8),
       });
 
       results.push(result);
@@ -614,36 +622,36 @@ export class AudioTimingBenchmark {
    * Print detailed timing report
    */
   printTimingReport(metrics: AudioTimingMetrics[]): void {
-    logger.consoleInfo("\n" + "=".repeat(80));
-    logger.consoleInfo(" AUDIO TIMING BENCHMARK REPORT");
-    logger.consoleInfo("=".repeat(80));
+    console.log("\n" + "=".repeat(80));
+    console.log(" AUDIO TIMING BENCHMARK REPORT");
+    console.log("=".repeat(80));
 
     for (const metric of metrics) {
-      logger.consoleInfo(`\nTest: ${metric.testId}`);
-      logger.consoleInfo(
+      console.log(`\nTest: ${metric.testId}`);
+      console.log(
         `  Duration: ${metric.calculatedDurationMs.toFixed(1)}ms (expected: ${metric.expectedDurationMs.toFixed(1)}ms)`
       );
-      logger.consoleInfo(
+      console.log(
         `  Accuracy: ${((1 - Math.abs(metric.calculatedDurationMs - metric.expectedDurationMs) / metric.expectedDurationMs) * 100).toFixed(1)}%`
       );
-      logger.consoleInfo(`  Daemon Lifetime: ${metric.daemonLifetimeMs.toFixed(1)}ms`);
-      logger.consoleInfo(
+      console.log(`  Daemon Lifetime: ${metric.daemonLifetimeMs.toFixed(1)}ms`);
+      console.log(
         `  End-of-Stream: ${metric.endOfStreamDetected ? "✅" : "❌"} (${metric.endOfStreamDelayMs.toFixed(1)}ms delay)`
       );
-      logger.consoleInfo(`  Premature Termination: ${metric.prematureTermination ? "❌" : "✅"}`);
-      logger.consoleInfo(`  Success: ${metric.success ? "✅" : "❌"}`);
+      console.log(`  Premature Termination: ${metric.prematureTermination ? "❌" : "✅"}`);
+      console.log(`  Success: ${metric.success ? "✅" : "❌"}`);
     }
 
     const summary = this.generateReport();
-    logger.consoleInfo(`\nSUMMARY:`);
-    logger.consoleInfo(`  Total Tests: ${summary.totalTests}`);
-    logger.consoleInfo(`  Successful: ${summary.successfulTests}/${summary.totalTests}`);
-    logger.consoleInfo(`  Average Accuracy: ${((1 - summary.averageAccuracy) * 100).toFixed(1)}%`);
-    logger.consoleInfo(`  Premature Terminations: ${summary.prematureTerminations}`);
+    console.log(`\nSUMMARY:`);
+    console.log(`  Total Tests: ${summary.totalTests}`);
+    console.log(`  Successful: ${summary.successfulTests}/${summary.totalTests}`);
+    console.log(`  Average Accuracy: ${((1 - summary.averageAccuracy) * 100).toFixed(1)}%`);
+    console.log(`  Premature Terminations: ${summary.prematureTerminations}`);
 
     if (summary.recommendations.length > 0) {
-      logger.consoleInfo(`\nRECOMMENDATIONS:`);
-      summary.recommendations.forEach((rec) => logger.consoleInfo(`  - ${rec}`));
+      console.log(`\nRECOMMENDATIONS:`);
+      summary.recommendations.forEach((rec) => console.log(`  - ${rec}`));
     }
   }
 }

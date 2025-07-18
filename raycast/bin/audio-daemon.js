@@ -82,7 +82,7 @@ const logger = new SimpleLogger();
  * Debug logging function
  */
 function debugLog(message, ...args) {
-  logger.debug(message, ...args);
+  console.warn(message, ...args);
 }
 
 /**
@@ -103,7 +103,7 @@ class AudioFormat {
 
   validate() {
     if (![8000, 16000, 22050, 24000, 32000, 44100, 48000].includes(this.sampleRate)) {
-      logger.consoleWarn(`[AUDIO-FORMAT] Unusual sample rate: ${this.sampleRate}Hz`);
+      console.warn(`[AUDIO-FORMAT] Unusual sample rate: ${this.sampleRate}Hz`);
     }
     if (![1, 2].includes(this.channels)) {
       throw new Error(`Unsupported channel count: ${this.channels}`);
@@ -266,9 +266,9 @@ class AudioProcessor extends EventEmitter {
     this.processKeepAliveTimer = null; // Timer to keep process alive
     this.processStartTime = 0; // When the process started playing
 
-    logger.consoleInfo(`[${this.instanceId}] Constructor called with format:`, this.format);
-    logger.consoleInfo(`[${this.instanceId}] Instance ID:`, this.instanceId);
-    logger.consoleInfo(
+    console.log(`[${this.instanceId}] Constructor called with format:`, this.format);
+    console.log(`[${this.instanceId}] Instance ID:`, this.instanceId);
+    console.log(
       `[${this.instanceId}] Buffer capacity: ${this.ringBuffer.capacity} bytes (${(this.ringBuffer.capacity / this.format.bytesPerSecond).toFixed(1)}s)`
     );
   }
@@ -363,20 +363,20 @@ class AudioProcessor extends EventEmitter {
       });
 
       this.audioProcess.on("error", (error) => {
-        logger.consoleError("Audio process error:", error.message);
+        console.error("Audio process error:", error.message);
         this.emit("error", error);
         this.isPlaying = false;
       });
 
       this.audioProcess.on("exit", (code, signal) => {
-        logger.consoleInfo("Audio process exited:", code, signal);
+        console.log("Audio process exited:", code, signal);
         this.isPlaying = false;
 
         // Clear the keep-alive timer
         if (this.processKeepAliveTimer) {
           clearTimeout(this.processKeepAliveTimer);
           this.processKeepAliveTimer = null;
-          logger.consoleInfo(`[${this.instanceId}] Cleared process keep-alive timer on exit`);
+          console.log(`[${this.instanceId}] Cleared process keep-alive timer on exit`);
         }
 
         // Record playback end time and calculate actual duration
@@ -390,7 +390,7 @@ class AudioProcessor extends EventEmitter {
             : 0;
         this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
 
-        logger.consoleInfo(`[${this.instanceId}] Playback timing:`, {
+        console.log(`[${this.instanceId}] Playback timing:`, {
           startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
           endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
           actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
@@ -404,23 +404,23 @@ class AudioProcessor extends EventEmitter {
 
         // If process exited normally (code 0), it finished playing successfully
         if (code === 0) {
-          logger.info("Audio playback completed successfully");
+          console.log("Audio playback completed successfully");
           // Clear any remaining buffer data
           if (this.ringBuffer.size > 0) {
-            logger.info(
+            console.log(
               `[${this.instanceId}] Clearing remaining buffer data: ${this.ringBuffer.size} bytes`
             );
             this.ringBuffer.clear();
           }
           this.emit("completed");
         } else {
-          logger.info("Audio process exited with error, restarting...");
+          console.log("Audio process exited with error, restarting...");
           this.restartAudioProcess();
         }
       });
 
       this.audioProcess.on("close", (code) => {
-        logger.info("Audio process closed:", code);
+        console.log("Audio process closed:", code);
         this.isPlaying = false;
 
         // Record playback end time if not already recorded
@@ -435,7 +435,7 @@ class AudioProcessor extends EventEmitter {
               : 0;
           this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
 
-          logger.info(`[${this.instanceId}] Playback timing (close):`, {
+          console.log(`[${this.instanceId}] Playback timing (close):`, {
             startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
             endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
             actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
@@ -450,7 +450,7 @@ class AudioProcessor extends EventEmitter {
 
         // Clear any remaining buffer data when process is closed
         if (this.ringBuffer.size > 0) {
-          logger.info(
+          console.log(
             `[${this.instanceId}] Clearing buffer data after process close: ${this.ringBuffer.size} bytes`
           );
           this.ringBuffer.clear();
@@ -461,7 +461,7 @@ class AudioProcessor extends EventEmitter {
       if (this.audioProcess.stdin) {
         this.audioProcess.stdin.on("error", (error) => {
           if (error.code === "EPIPE") {
-            logger.info("Audio process stdin pipe closed");
+            console.log("Audio process stdin pipe closed");
             this.isPlaying = false;
           } else {
             console.error("Audio process stdin error:", error.message);
@@ -478,20 +478,20 @@ class AudioProcessor extends EventEmitter {
   }
 
   waitForDataAndStart() {
-    logger.info(`[${this.instanceId}] waitForDataAndStart called`);
+    console.log(`[${this.instanceId}] waitForDataAndStart called`);
     const chunkSize = this.format.bytesPerSecond * 0.05; // 50ms chunks
     const minBufferSize = chunkSize * 4; // Wait for at least 4 chunks
     const fallbackBufferSize = chunkSize * 2; // Fallback after timeout
     const maxWaitTime = 2000; // 2 seconds max wait
     const startTime = performance.now();
 
-    logger.info(`[${this.instanceId}] Waiting for`, minBufferSize, "bytes to start playback");
+    console.log(`[${this.instanceId}] Waiting for`, minBufferSize, "bytes to start playback");
 
     const checkBuffer = () => {
       // Don't exit early if isPlaying is false - it might be set to false temporarily
       // Only exit if we've been explicitly stopped
       if (this.isStopped) {
-        logger.info(`[${this.instanceId}] Stopped, stopping buffer check`);
+        console.log(`[${this.instanceId}] Stopped, stopping buffer check`);
         return;
       }
 
@@ -499,7 +499,7 @@ class AudioProcessor extends EventEmitter {
       const currentBufferSize = this.ringBuffer.size;
       const adaptiveThreshold = elapsed > maxWaitTime ? fallbackBufferSize : minBufferSize;
 
-      logger.info(
+      console.log(
         `[${this.instanceId}] Buffer check:`,
         currentBufferSize,
         "/",
@@ -514,10 +514,10 @@ class AudioProcessor extends EventEmitter {
       );
 
       if (currentBufferSize >= adaptiveThreshold) {
-        logger.info(`[${this.instanceId}] Buffer threshold met, starting audio processing loop`);
+        console.log(`[${this.instanceId}] Buffer threshold met, starting audio processing loop`);
         this.processAudioLoop();
       } else if (elapsed > maxWaitTime) {
-        logger.info(
+        console.log(
           `[${this.instanceId}] Timeout reached, starting with low buffer (underrun recovery)`
         );
         this.stats.underruns++;
@@ -563,7 +563,7 @@ class AudioProcessor extends EventEmitter {
       });
 
       this.audioProcess.on("exit", (code, signal) => {
-        logger.info("Audio process exited:", code, signal);
+        console.log("Audio process exited:", code, signal);
         this.isPlaying = false;
         this.emit("exit", { code, signal });
       });
@@ -604,7 +604,7 @@ class AudioProcessor extends EventEmitter {
     // Only restart if we're still supposed to be playing and haven't stopped intentionally
     if (this.isPlaying && !this.isStopped) {
       const backoffDelay = Math.min(500 * Math.pow(2, this.restartAttempts - 1), 5000); // Exponential backoff, max 5s
-      logger.info(
+      console.log(
         `[${this.instanceId}] Restarting audio process (attempt ${this.restartAttempts}/${this.MAX_RESTARTS}) in ${backoffDelay}ms`
       );
 
@@ -616,7 +616,7 @@ class AudioProcessor extends EventEmitter {
         }, 100);
       }, backoffDelay);
     } else {
-      logger.info(
+      console.log(
         `[${this.instanceId}] Not restarting audio process - playback stopped or completed`
       );
     }
@@ -632,12 +632,12 @@ class AudioProcessor extends EventEmitter {
       return;
     }
     this._audioLoopActive = true;
-    logger.info(`[${this.instanceId}] processAudioLoop START`);
+    console.log(`[${this.instanceId}] processAudioLoop START`);
 
     // Record playback start time
     if (this.stats.playbackStartTime === 0) {
       this.stats.playbackStartTime = performance.now();
-      logger.info(
+      console.log(
         `[${this.instanceId}] Playback start time recorded: ${this.stats.playbackStartTime.toFixed(2)}ms`
       );
 
@@ -646,12 +646,12 @@ class AudioProcessor extends EventEmitter {
     }
 
     if (!this.audioProcess) {
-      logger.info(`[${this.instanceId}] No audio process`);
+      console.log(`[${this.instanceId}] No audio process`);
       this._audioLoopActive = false;
       return;
     }
     const chunkSize = this.format.bytesPerSecond * 0.05; // 50ms chunks
-    logger.info(`[${this.instanceId}] Processing with chunk size:`, chunkSize, "bytes");
+    console.log(`[${this.instanceId}] Processing with chunk size:`, chunkSize, "bytes");
 
     // Adaptive polling based on buffer utilization
     let _lastProcessTime = Date.now();
@@ -664,16 +664,16 @@ class AudioProcessor extends EventEmitter {
       }
 
       if (this.audioProcess.killed || this.audioProcess.exitCode !== null) {
-        logger.info(
+        console.log(
           `[${this.instanceId}] Audio process died, checking if buffer needs draining...`
         );
         if (this.ringBuffer.size > 0) {
-          logger.info(
+          console.log(
             `[${this.instanceId}] Buffer has ${this.ringBuffer.size} bytes remaining, continuing to drain...`
           );
           // Continue processing to drain the buffer
         } else {
-          logger.info(`[${this.instanceId}] Buffer empty, restarting audio process...`);
+          console.log(`[${this.instanceId}] Buffer empty, restarting audio process...`);
           this.restartAudioProcess();
           return;
         }
@@ -714,15 +714,15 @@ class AudioProcessor extends EventEmitter {
 
           if (!writeResult) {
             // Back-pressure detected, wait for drain
-            logger.info(`[${this.instanceId}] Back-pressure detected, waiting for drain...`);
+            console.log(`[${this.instanceId}] Back-pressure detected, waiting for drain...`);
             this.audioProcess.stdin.once("drain", () => {
-              logger.info(`[${this.instanceId}] Drain event received, resuming...`);
+              console.log(`[${this.instanceId}] Drain event received, resuming...`);
               setImmediate(processChunk);
             });
             return;
           }
         } else {
-          logger.info(
+          console.log(
             `[${this.instanceId}] Audio process not available, skipping write but processing chunk: ${chunk.length} bytes`
           );
         }
@@ -735,7 +735,7 @@ class AudioProcessor extends EventEmitter {
       } else {
         // Buffer empty, check if we should stop
         if (this.isStopped && this.ringBuffer.size === 0) {
-          logger.info(`[${this.instanceId}] Buffer empty and stopped, ending processing`);
+          console.log(`[${this.instanceId}] Buffer empty and stopped, ending processing`);
 
           // Calculate final timing statistics
           if (this.stats.playbackStartTime > 0 && this.stats.playbackEndTime === 0) {
@@ -749,7 +749,7 @@ class AudioProcessor extends EventEmitter {
                 : 0;
             this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
 
-            logger.info(`[${this.instanceId}] Final playback timing:`, {
+            console.log(`[${this.instanceId}] Final playback timing:`, {
               startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
               endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
               actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
@@ -771,7 +771,7 @@ class AudioProcessor extends EventEmitter {
 
         // Check if we're ending stream and buffer is empty
         if (this.isEndingStream && this.ringBuffer.size === 0) {
-          logger.info(
+          console.log(
             `[${this.instanceId}] End stream requested and buffer empty - completing naturally`
           );
 
@@ -787,7 +787,7 @@ class AudioProcessor extends EventEmitter {
                 : 0;
             this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
 
-            logger.info(`[${this.instanceId}] Natural completion timing:`, {
+            console.log(`[${this.instanceId}] Natural completion timing:`, {
               startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
               endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
               actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
@@ -826,7 +826,7 @@ class AudioProcessor extends EventEmitter {
     if (this._memoryLogInterval) return;
     this._memoryLogInterval = setInterval(() => {
       const mem = process.memoryUsage();
-      logger.info(`[${this.instanceId}] Memory usage:`, (mem.rss / 1024 / 1024).toFixed(1), "MB");
+      console.log(`[${this.instanceId}] Memory usage:`, (mem.rss / 1024 / 1024).toFixed(1), "MB");
     }, 5000);
   }
 
@@ -846,7 +846,7 @@ class AudioProcessor extends EventEmitter {
     const processingBuffer = Math.min(durationMs * 0.01, 50); // 1% or 50ms max
     const adjustedDurationMs = durationMs + processingBuffer;
 
-    logger.info(`[${this.instanceId}] Duration calculation:`, {
+    console.log(`[${this.instanceId}] Duration calculation:`, {
       totalBytes,
       bytesPerSecond: this.format.bytesPerSecond,
       durationSeconds: durationSeconds.toFixed(3),
@@ -865,7 +865,7 @@ class AudioProcessor extends EventEmitter {
     this.totalAudioBytes = totalBytes;
     this.audioDurationMs = this.calculateExpectedDuration(totalBytes);
 
-    logger.info(`[${this.instanceId}] Audio duration set:`, {
+    console.log(`[${this.instanceId}] Audio duration set:`, {
       totalBytes: this.totalAudioBytes,
       durationMs: this.audioDurationMs.toFixed(1),
       expectedDuration: (this.audioDurationMs / 1000).toFixed(3) + "s",
@@ -881,19 +881,19 @@ class AudioProcessor extends EventEmitter {
     }
 
     if (this.audioDurationMs <= 0) {
-      logger.info(`[${this.instanceId}] No audio duration set, skipping keep-alive timer`);
+      console.log(`[${this.instanceId}] No audio duration set, skipping keep-alive timer`);
       return;
     }
 
     this.processStartTime = performance.now();
     const keepAliveDuration = this.audioDurationMs + 1000; // Add 1 second buffer
 
-    logger.info(
+    console.log(
       `[${this.instanceId}] Starting process keep-alive timer for ${keepAliveDuration.toFixed(1)}ms`
     );
 
     this.processKeepAliveTimer = setTimeout(() => {
-      logger.info(
+      console.log(
         `[${this.instanceId}] Keep-alive timer expired, checking if process should be terminated`
       );
       this.checkProcessTermination();
@@ -905,14 +905,14 @@ class AudioProcessor extends EventEmitter {
    */
   checkProcessTermination() {
     if (!this.audioProcess || this.audioProcess.killed || this.audioProcess.exitCode !== null) {
-      logger.info(`[${this.instanceId}] Process already terminated, no action needed`);
+      console.log(`[${this.instanceId}] Process already terminated, no action needed`);
       return;
     }
 
     const elapsedTime = performance.now() - this.processStartTime;
     const expectedEndTime = this.audioDurationMs;
 
-    logger.info(`[${this.instanceId}] Process termination check:`, {
+    console.log(`[${this.instanceId}] Process termination check:`, {
       elapsedTime: elapsedTime.toFixed(1) + "ms",
       expectedEndTime: expectedEndTime.toFixed(1) + "ms",
       remainingBuffer: this.ringBuffer.size + " bytes",
@@ -920,14 +920,14 @@ class AudioProcessor extends EventEmitter {
 
     // Only terminate if we've exceeded the expected duration and buffer is empty
     if (elapsedTime >= expectedEndTime && this.ringBuffer.size === 0) {
-      logger.info(`[${this.instanceId}] Terminating process after expected duration`);
+      console.log(`[${this.instanceId}] Terminating process after expected duration`);
       this.terminateProcessGracefully();
     } else if (elapsedTime >= expectedEndTime * 1.5) {
       // Force termination if we're way past expected duration
-      logger.info(`[${this.instanceId}] Force terminating process (50% past expected duration)`);
+      console.log(`[${this.instanceId}] Force terminating process (50% past expected duration)`);
       this.terminateProcessGracefully();
     } else {
-      logger.info(`[${this.instanceId}] Process should continue running`);
+      console.log(`[${this.instanceId}] Process should continue running`);
     }
   }
 
@@ -939,7 +939,7 @@ class AudioProcessor extends EventEmitter {
       return;
     }
 
-    logger.info(`[${this.instanceId}] Gracefully terminating audio process`);
+    console.log(`[${this.instanceId}] Gracefully terminating audio process`);
 
     // Close stdin to signal end of input
     if (this.audioProcess.stdin) {
@@ -949,7 +949,7 @@ class AudioProcessor extends EventEmitter {
     // Give the process a moment to finish, then force kill if needed
     setTimeout(() => {
       if (this.audioProcess && !this.audioProcess.killed && this.audioProcess.exitCode === null) {
-        logger.info(`[${this.instanceId}] Force killing audio process`);
+        console.log(`[${this.instanceId}] Force killing audio process`);
         this.audioProcess.kill("SIGTERM");
       }
     }, 1000);
@@ -978,7 +978,7 @@ class AudioProcessor extends EventEmitter {
     // Calculate average chunk size
     this.stats.averageChunkSize = this.stats.bytesProcessed / this.stats.totalChunksReceived;
 
-    logger.info(
+    console.log(
       `[${this.instanceId}] writeChunk: wrote ${written} bytes, buffer size: ${this.ringBuffer.size}, chunk #${this.stats.totalChunksReceived}`
     );
 
@@ -1010,7 +1010,7 @@ class AudioProcessor extends EventEmitter {
   pause() {
     if (!this.isPaused) {
       this.isPaused = true;
-      logger.info(`[${this.instanceId}] Flow control: PAUSED playback`);
+      console.log(`[${this.instanceId}] Flow control: PAUSED playback`);
     }
   }
 
@@ -1020,7 +1020,7 @@ class AudioProcessor extends EventEmitter {
   resume() {
     if (this.isPaused) {
       this.isPaused = false;
-      logger.info(`[${this.instanceId}] Flow control: RESUMED playback`);
+      console.log(`[${this.instanceId}] Flow control: RESUMED playback`);
     }
   }
 
@@ -1037,7 +1037,7 @@ class AudioProcessor extends EventEmitter {
     if (this.processKeepAliveTimer) {
       clearTimeout(this.processKeepAliveTimer);
       this.processKeepAliveTimer = null;
-      logger.info(`[${this.instanceId}] Cleared process keep-alive timer`);
+      console.log(`[${this.instanceId}] Cleared process keep-alive timer`);
     }
 
     if (this.audioProcess && !this.audioProcess.killed) {
@@ -1181,8 +1181,8 @@ class AudioDaemon extends EventEmitter {
    * Start the daemon
    */
   start() {
-    logger.info(`[${this.instanceId}] Starting Audio Daemon on port:`, this.config.port);
-    logger.info(`[${this.instanceId}] Audio format:`, this.config);
+    console.log(`[${this.instanceId}] Starting Audio Daemon on port:`, this.config.port);
+    console.log(`[${this.instanceId}] Audio format:`, this.config);
 
     // Create HTTP server with health endpoint
     this.server = http.createServer((req, res) => {
@@ -1232,7 +1232,7 @@ class AudioDaemon extends EventEmitter {
 
     // Set up WebSocket event handlers
     this.wss.on("connection", (ws) => {
-      logger.info("Client connected");
+      console.log("Client connected");
       this.clients.add(ws);
 
       // Send initial status
@@ -1251,13 +1251,13 @@ class AudioDaemon extends EventEmitter {
 
       // Handle incoming messages
       ws.on("message", (message) => {
-        // logger.info(
+        // console.log(
         //   `[${this.instanceId}] Raw message received:`,
         //   message.toString().substring(0, 200)
         // );
         try {
           const data = JSON.parse(message);
-          // logger.info(`[${this.instanceId}] Parsed message type:`, data.type);
+          // console.log(`[${this.instanceId}] Parsed message type:`, data.type);
           this.handleMessage(ws, data);
         } catch (error) {
           console.error(`[${this.instanceId}] Failed to parse message:`, error.message);
@@ -1266,7 +1266,7 @@ class AudioDaemon extends EventEmitter {
 
       // Handle client disconnect
       ws.on("close", () => {
-        logger.info("Client disconnected");
+        console.log("Client disconnected");
         this.clients.delete(ws);
       });
 
@@ -1300,7 +1300,7 @@ class AudioDaemon extends EventEmitter {
     });
 
     this.audioProcessor.on("completed", () => {
-      logger.info(`[${this.instanceId}] Audio playback completed naturally`);
+      console.log(`[${this.instanceId}] Audio playback completed naturally`);
       this.broadcast({
         type: "completed",
         timestamp: Date.now(),
@@ -1318,7 +1318,7 @@ class AudioDaemon extends EventEmitter {
 
     // Start server
     this.server.listen(this.config.port, () => {
-      logger.info(`Audio Daemon listening on port ${this.config.port}`);
+      console.log(`Audio Daemon listening on port ${this.config.port}`);
       this.emit("started");
     });
   }
@@ -1327,7 +1327,7 @@ class AudioDaemon extends EventEmitter {
    * Handle incoming WebSocket messages
    */
   handleMessage(ws, message) {
-    logger.info("Received message:", message.type);
+    console.log("Received message:", message.type);
     switch (message.type) {
       case "start":
         this.handleStart(ws, message);
@@ -1371,7 +1371,7 @@ class AudioDaemon extends EventEmitter {
    * Handle audio chunk message
    */
   handleAudioChunk(_ws, message) {
-    // logger.info(`[${this.instanceId}] Received audio_chunk message`);
+    // console.log(`[${this.instanceId}] Received audio_chunk message`);
 
     if (!this.audioProcessor) {
       console.error(`[${this.instanceId}] Audio processor not initialized`);
@@ -1393,7 +1393,7 @@ class AudioDaemon extends EventEmitter {
       const numeric = keys.every((k) => /^\d+$/.test(k));
       if (numeric) {
         chunkData = Buffer.from(Object.values(chunkData));
-        // logger.info(
+        // console.log(
         //   `[${this.instanceId}] Converted numeric-key object chunk to Buffer:`,
         //   chunkData.length,
         //   "bytes"
@@ -1408,16 +1408,16 @@ class AudioDaemon extends EventEmitter {
     }
 
     try {
-      // logger.info(
+      // console.log(
       //   `[${this.instanceId}] Writing chunk to audio processor:`,
       //   chunkData.length,
       //   "bytes"
       // );
       if (this.audioProcessor && typeof this.audioProcessor.writeChunk === "function") {
         this.audioProcessor.writeChunk(chunkData);
-        logger.info(`[${this.instanceId}] Chunk written successfully`);
+        console.log(`[${this.instanceId}] Chunk written successfully`);
       } else {
-        logger.info(
+        console.log(
           `[${this.instanceId}] Audio processor not initialized, emitting audioChunk event`
         );
         this.emit("audioChunk", chunkData);
@@ -1433,7 +1433,7 @@ class AudioDaemon extends EventEmitter {
   handleEndStream() {
     if (!this.audioProcessor) return;
 
-    logger.info("End stream received, stopping audio processor");
+    console.log("End stream received, stopping audio processor");
     this.audioProcessor.stop();
   }
 
@@ -1463,12 +1463,12 @@ class AudioDaemon extends EventEmitter {
       case "end_stream":
         // Instead of immediately stopping, mark that we're ending the stream
         // and let the audio finish playing naturally
-        logger.info(`[${this.instanceId}] End stream requested - letting audio finish naturally`);
+        console.log(`[${this.instanceId}] End stream requested - letting audio finish naturally`);
         this.audioProcessor.isEndingStream = true;
         break;
 
       case "configure":
-        logger.info("Configuration received:", data.params);
+        console.log("Configuration received:", data.params);
         break;
 
       default:
@@ -1539,16 +1539,16 @@ class AudioDaemon extends EventEmitter {
     const newPauseState = data.pause;
     const currentUtilization = this.audioProcessor.ringBuffer.utilization;
 
-    logger.info(
+    console.log(
       `[${this.instanceId}] Received flow_control message: pause=${newPauseState}, currentUtilization=${(currentUtilization * 100).toFixed(1)}%`
     );
 
     if (newPauseState !== this.audioProcessor.isPaused) {
       if (newPauseState) {
-        logger.info(`[${this.instanceId}] Pausing audio playback due to flow control.`);
+        console.log(`[${this.instanceId}] Pausing audio playback due to flow control.`);
         this.audioProcessor.pause();
       } else {
-        logger.info(`[${this.instanceId}] Resuming audio playback due to flow control.`);
+        console.log(`[${this.instanceId}] Resuming audio playback due to flow control.`);
         this.audioProcessor.resume();
       }
     }
@@ -1583,7 +1583,7 @@ class AudioDaemon extends EventEmitter {
    * Stop the daemon
    */
   stop() {
-    logger.info("Stopping Audio Daemon");
+    console.log("Stopping Audio Daemon");
 
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
@@ -1607,7 +1607,7 @@ class AudioDaemon extends EventEmitter {
 
 // Handle process signals
 process.on("SIGINT", () => {
-  logger.info("Received SIGINT, shutting down...");
+  console.log("Received SIGINT, shutting down...");
   if (global.daemon) {
     global.daemon.stop();
   }
@@ -1615,7 +1615,7 @@ process.on("SIGINT", () => {
 });
 
 process.on("SIGTERM", () => {
-  logger.info("Received SIGTERM, shutting down...");
+  console.log("Received SIGTERM, shutting down...");
   if (global.daemon) {
     global.daemon.stop();
   }
@@ -1628,11 +1628,11 @@ if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === proce
   global.daemon = daemon;
 
   daemon.on("started", () => {
-    logger.info("Audio Daemon started successfully");
+    console.log("Audio Daemon started successfully");
   });
 
   daemon.on("stopped", () => {
-    logger.info("Audio Daemon stopped");
+    console.log("Audio Daemon stopped");
     process.exit(0);
   });
 

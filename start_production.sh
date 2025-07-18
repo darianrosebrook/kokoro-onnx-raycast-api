@@ -5,7 +5,7 @@
 # number of workers based on the system architecture.
 
 # --- Configuration ---
-HOST=${HOST:-"0.0.0.0"}
+HOST=${HOST:-"127.0.0.1"}
 PORT=${PORT:-8000}
 LOG_LEVEL=${LOG_LEVEL:-"info"}
 WORKER_CLASS=${WORKER_CLASS:-"uvicorn.workers.UvicornWorker"}

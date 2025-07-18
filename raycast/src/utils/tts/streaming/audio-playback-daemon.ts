@@ -34,7 +34,6 @@ import { spawn, ChildProcess } from "child_process";
 import { join, dirname } from "path";
 import { existsSync, statSync } from "fs";
 import { fileURLToPath } from "url";
-import { logger } from "../../core/logger.js";
 import { TTS_CONSTANTS } from "../../validation/tts-types.js";
 import type {
   AudioFormat,
@@ -55,47 +54,47 @@ try {
     __filename = process.cwd();
     __dirname = process.cwd();
   }
-} catch (error) {
+} catch {
   // Fallback for environments where fileURLToPath fails
   __filename = process.cwd();
   __dirname = process.cwd();
 }
 
 // Import WebSocket for client connection
-let WebSocket: any;
+let WebSocket: typeof import("ws").default;
 
 async function loadWebSocket() {
   try {
     const wsModule = await import("ws");
     WebSocket = wsModule.default;
-  } catch (error) {
+  } catch {
     console.warn("WebSocket library not available, audio daemon communication will be limited");
   }
 }
 
 function findKokoroProjectRoot(startDir: string): string | null {
-  logger.consoleDebug("Starting project root search from:", startDir);
+  console.warn("Starting project root search from:", startDir);
   let currentDir = startDir;
   for (let i = 0; i < 10; i++) {
     // Limit to 10 parent levels
     const markerPath = join(currentDir, ".kokoro-root");
-    logger.consoleDebug(`Level ${i}: Checking ${markerPath}`);
+    console.warn(`Level ${i}: Checking ${markerPath}`);
     try {
       if (existsSync(markerPath) && statSync(markerPath).isFile()) {
-        logger.consoleDebug("Found .kokoro-root marker at:", currentDir);
+        console.warn("Found .kokoro-root marker at:", currentDir);
         return currentDir;
       }
     } catch (error) {
-      logger.consoleDebug(`Error checking ${markerPath}:`, error);
+      console.warn(`Error checking ${markerPath}:`, error);
     }
     const parentDir = dirname(currentDir);
     if (parentDir === currentDir) {
-      logger.consoleDebug("Reached filesystem root, stopping search");
+      console.warn("Reached filesystem root, stopping search");
       break; // Reached filesystem root
     }
     currentDir = parentDir;
   }
-  logger.consoleDebug("No .kokoro-root marker found in any parent directory");
+  console.warn("No .kokoro-root marker found in any parent directory");
   return null;
 }
 
@@ -141,7 +140,7 @@ interface ControlMessage {
   timestamp: number;
   data: {
     action: "play" | "pause" | "stop" | "resume" | "configure" | "end_stream";
-    params?: any;
+    params?: Record<string, unknown>;
   };
 }
 
@@ -167,7 +166,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
   };
 
   private daemonProcess: AudioDaemonProcess | null = null;
-  private ws: any = null; // WebSocket client connection
+  private ws: InstanceType<typeof import("ws").default> | null = null; // WebSocket client connection
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
@@ -194,8 +193,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
   constructor(config: Partial<TTSProcessorConfig> = {}) {
     super();
     this.instanceId = this.constructor.name + "_" + Date.now();
-    logger.consoleDebug(`[${this.instanceId}] Constructor called`);
-    logger.consoleDebug(`[${this.instanceId}] Config provided:`, config);
+    console.warn(`[${this.instanceId}] Constructor called`);
+    console.warn(`[${this.instanceId}] Config provided:`, config);
 
     // Robust path resolution for daemon script (ES module compatible)
     // Priority: config > environment variable > auto-detected project root > absolute paths > relative paths
@@ -211,8 +210,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
       cwd === "/" || // Raycast sometimes runs from root
       process.env.RAYCAST_EXTENSION_PATH !== undefined; // Raycast environment variable
 
-    logger.consoleInfo(`[${this.instanceId}] Extension CWD:`, process.cwd());
-    logger.consoleInfo(`[${this.instanceId}] Is Raycast extension:`, isRaycastExtension);
+    console.log(`[${this.instanceId}] Extension CWD:`, process.cwd());
+    console.log(`[${this.instanceId}] Is Raycast extension:`, isRaycastExtension);
 
     // Auto-detect project root by walking up parent directories for .kokoro-root
     let projectRoot = process.cwd();
@@ -221,7 +220,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       // If running from root, try to find the actual extension directory first
       let searchStartDir = process.cwd();
       if (cwd === "/") {
-        logger.consoleInfo(
+        console.log(
           `[${this.instanceId}] Running from root, trying to find extension directory...`
         );
         // Try common Raycast extension locations
@@ -234,7 +233,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
         for (const extDir of possibleExtensionDirs) {
           if (extDir && existsSync(extDir)) {
-            logger.consoleInfo(`[${this.instanceId}] Found extension directory:`, extDir);
+            console.log(`[${this.instanceId}] Found extension directory:`, extDir);
             searchStartDir = extDir;
             break;
           }
@@ -244,27 +243,27 @@ export class AudioPlaybackDaemon extends EventEmitter {
       autoDetectedRoot = findKokoroProjectRoot(searchStartDir);
       if (autoDetectedRoot) {
         projectRoot = autoDetectedRoot;
-        logger.consoleInfo("Auto-detected Kokoro project root via .kokoro-root marker", {
+        console.log("Auto-detected Kokoro project root via .kokoro-root marker", {
           component: this.name,
           method: "constructor",
           autoDetectedRoot,
         });
       } else {
-        logger.consoleInfo(`[${this.instanceId}] Auto-detection failed, trying fallback paths...`);
+        console.log(`[${this.instanceId}] Auto-detection failed, trying fallback paths...`);
         // Fallback to previous guessing logic
         const possibleProjectRoots = [
-          "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx",
+          "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api",
           process.env.KOKORO_PROJECT_ROOT,
-          process.env.HOME + "/Desktop/Projects/kokoro-onnx",
-          process.env.HOME + "/Projects/kokoro-onnx",
+          process.env.HOME + "/Desktop/Projects/kokoro-onnx-raycast-api",
+          process.env.HOME + "/Projects/kokoro-onnx-raycast-api",
         ].filter(Boolean);
-        logger.consoleInfo(`[${this.instanceId}] Fallback project roots:`, possibleProjectRoots);
+        console.log(`[${this.instanceId}] Fallback project roots:`, possibleProjectRoots);
         for (const root of possibleProjectRoots) {
           const daemonPath = join(root, "raycast/bin/audio-daemon.js");
-          logger.consoleInfo(`[${this.instanceId}] Checking fallback path: ${daemonPath}`);
+          console.log(`[${this.instanceId}] Checking fallback path: ${daemonPath}`);
           if (root && existsSync(daemonPath)) {
             projectRoot = root;
-            logger.consoleInfo(`[${this.instanceId}] Found daemon in fallback path:`, root);
+            console.log(`[${this.instanceId}] Found daemon in fallback path:`, root);
             break;
           }
         }
@@ -299,7 +298,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       join(__dirname, "../../bin/audio-daemon.js"), // Alternative relative path
     ];
 
-    logger.consoleInfo("Starting daemon script path resolution", {
+    console.log("Starting daemon script path resolution", {
       component: this.name,
       method: "constructor",
       workingDirectory: process.cwd(),
@@ -309,9 +308,9 @@ export class AudioPlaybackDaemon extends EventEmitter {
       possiblePaths,
     });
 
-    logger.consoleDebug("Checking possible daemon paths:");
+    console.warn("Checking possible daemon paths:");
     possiblePaths.forEach((path, index) => {
-      logger.consoleDebug(`  ${index + 1}. ${path}`);
+      console.warn(`  ${index + 1}. ${path}`);
     });
 
     let daemonScriptPath = "";
@@ -319,19 +318,19 @@ export class AudioPlaybackDaemon extends EventEmitter {
       try {
         if (existsSync(path)) {
           daemonScriptPath = path;
-          logger.consoleInfo(`[${this.instanceId}] Found daemon script at:`, daemonScriptPath);
-          logger.consoleInfo("Found daemon script", {
+          console.log(`[${this.instanceId}] Found daemon script at:`, daemonScriptPath);
+          console.log("Found daemon script", {
             component: this.name,
             method: "constructor",
             path: daemonScriptPath,
           });
           break;
         } else {
-          logger.consoleInfo(`[${this.instanceId}] Path not found: ${path}`);
+          console.log(`[${this.instanceId}] Path not found: ${path}`);
         }
       } catch (error) {
-        logger.consoleInfo(`[${this.instanceId}] Error checking path ${path}:`, error);
-        logger.warn("Error checking daemon path", {
+        console.log(`[${this.instanceId}] Error checking path ${path}:`, error);
+        console.warn("Error checking daemon path", {
           component: this.name,
           method: "constructor",
           path,
@@ -347,20 +346,21 @@ export class AudioPlaybackDaemon extends EventEmitter {
       try {
         // Check if we can find the daemon script in any of the project roots
         const projectRoots = [
-          "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx",
+          "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api",
           process.env.KOKORO_PROJECT_ROOT,
-          process.env.HOME + "/Desktop/Projects/kokoro-onnx",
-          process.env.HOME + "/Projects/kokoro-onnx",
+          process.env.HOME + "/Desktop/Projects/kokoro-onnx-raycast-api",
+          process.env.HOME + "/Projects/kokoro-onnx-raycast-api",
         ].filter(Boolean);
 
         for (const root of projectRoots) {
           const sourcePath = join(root, "raycast/bin/audio-daemon.js");
           if (existsSync(sourcePath)) {
             // Copy the daemon script to the extension directory
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const fs = require("fs");
             fs.copyFileSync(sourcePath, localDaemonPath);
             daemonScriptPath = localDaemonPath;
-            logger.consoleInfo("Copied daemon script to extension directory", {
+            console.log("Copied daemon script to extension directory", {
               component: this.name,
               method: "constructor",
               sourcePath,
@@ -370,7 +370,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
           }
         }
       } catch (copyError) {
-        logger.warn("Failed to copy daemon script", {
+        console.warn("Failed to copy daemon script", {
           component: this.name,
           method: "constructor",
           error: copyError instanceof Error ? copyError.message : "Unknown error",
@@ -379,7 +379,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
       if (!daemonScriptPath) {
         const error = new Error("Audio daemon script not found in any expected location");
-        logger.error("Daemon script not found", {
+        console.error("Daemon script not found", {
           component: this.name,
           method: "constructor",
           possiblePaths,
@@ -393,7 +393,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     let nodeExecutable = "";
     const nodePath = process.execPath;
 
-    logger.consoleInfo("Detecting Node.js executable", {
+    console.log("Detecting Node.js executable", {
       component: this.name,
       method: "constructor",
       processExecPath: nodePath,
@@ -401,7 +401,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     if (nodePath && typeof nodePath === "string" && existsSync(nodePath)) {
       nodeExecutable = nodePath;
-      logger.consoleInfo("Using process.execPath for Node.js", {
+      console.log("Using process.execPath for Node.js", {
         component: this.name,
         method: "constructor",
         nodeExecutable,
@@ -419,7 +419,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
         try {
           if (existsSync(path)) {
             nodeExecutable = path;
-            logger.consoleInfo("Found Node.js in common location", {
+            console.log("Found Node.js in common location", {
               component: this.name,
               method: "constructor",
               nodeExecutable,
@@ -427,7 +427,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
             break;
           }
         } catch (error) {
-          logger.warn("Error checking Node.js path", {
+          console.warn("Error checking Node.js path", {
             component: this.name,
             method: "constructor",
             path,
@@ -441,7 +441,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       const error = new Error(
         "Node.js executable not found. Please ensure Node.js is installed and available."
       );
-      logger.error("Node.js executable not found", {
+      console.error("Node.js executable not found", {
         component: this.name,
         method: "constructor",
         error: error.message,
@@ -468,7 +468,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       bytesPerSecond: 48000,
     };
 
-    logger.consoleInfo("AudioPlaybackDaemon controller initialized", {
+    console.log("AudioPlaybackDaemon controller initialized", {
       component: this.name,
       method: "constructor",
       config: {
@@ -485,7 +485,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Initialize the daemon controller
    */
   async initialize(): Promise<void> {
-    logger.consoleInfo("Initializing audio daemon controller", {
+    console.log("Initializing audio daemon controller", {
       component: this.name,
       method: "initialize",
     });
@@ -498,7 +498,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       await this.waitForConnection();
       await this.configureAudio();
 
-      logger.consoleInfo("Audio daemon controller initialized successfully", {
+      console.log("Audio daemon controller initialized successfully", {
         component: this.name,
         method: "initialize",
         port: this.config.port,
@@ -507,7 +507,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       // Check if it's a port conflict error
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       if (errorMessage.includes("EADDRINUSE") || errorMessage.includes("address already in use")) {
-        logger.warn("Port conflict detected during initialization, attempting to resolve", {
+        console.warn("Port conflict detected during initialization, attempting to resolve", {
           component: this.name,
           method: "initialize",
           error: errorMessage,
@@ -515,13 +515,13 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
         try {
           await this.handlePortConflict();
-          logger.consoleInfo("Successfully resolved port conflict during initialization", {
+          console.log("Successfully resolved port conflict during initialization", {
             component: this.name,
             method: "initialize",
             port: this.config.port,
           });
         } catch (retryError) {
-          logger.error("Failed to resolve port conflict during initialization", {
+          console.error("Failed to resolve port conflict during initialization", {
             component: this.name,
             method: "initialize",
             originalError: errorMessage,
@@ -530,7 +530,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
           throw retryError;
         }
       } else {
-        logger.error("Failed to initialize audio daemon controller", {
+        console.error("Failed to initialize audio daemon controller", {
           component: this.name,
           method: "initialize",
           error: errorMessage,
@@ -544,7 +544,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Clean up any existing daemon processes that might be using our ports
    */
   private async cleanupExistingDaemons(): Promise<void> {
-    logger.consoleInfo("Checking for existing daemon processes", {
+    console.log("Checking for existing daemon processes", {
       component: this.name,
       method: "cleanupExistingDaemons",
     });
@@ -559,7 +559,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       const result = await execAsync("ps aux | grep 'audio-daemon.js' | grep -v grep");
 
       if (result.stdout.trim()) {
-        logger.warn("Found existing daemon processes", {
+        console.warn("Found existing daemon processes", {
           component: this.name,
           method: "cleanupExistingDaemons",
           processes: result.stdout.trim(),
@@ -568,7 +568,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
         // Kill any existing daemon processes
         await execAsync("pkill -f 'audio-daemon.js'");
 
-        logger.consoleInfo("Cleaned up existing daemon processes", {
+        console.log("Cleaned up existing daemon processes", {
           component: this.name,
           method: "cleanupExistingDaemons",
         });
@@ -578,7 +578,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       }
     } catch (error) {
       // Ignore errors - this is just cleanup
-      logger.debug("Cleanup check failed (this is normal)", {
+      console.warn("Cleanup check failed (this is normal)", {
         component: this.name,
         method: "cleanupExistingDaemons",
         error: error instanceof Error ? error.message : "Unknown error",
@@ -590,7 +590,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Handle port conflict by finding a new available port and restarting
    */
   private async handlePortConflict(): Promise<void> {
-    logger.consoleInfo("Handling port conflict", {
+    console.log("Handling port conflict", {
       component: this.name,
       method: "handlePortConflict",
       currentPort: this.config.port,
@@ -600,7 +600,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       // Find a new available port
       const newPort = await this.findAvailablePort(this.config.port + 1);
 
-      logger.consoleInfo("Found new available port", {
+      console.log("Found new available port", {
         component: this.name,
         method: "handlePortConflict",
         oldPort: this.config.port,
@@ -622,13 +622,13 @@ export class AudioPlaybackDaemon extends EventEmitter {
       await this.waitForConnection();
       await this.configureAudio();
 
-      logger.consoleInfo("Successfully restarted daemon with new port", {
+      console.log("Successfully restarted daemon with new port", {
         component: this.name,
         method: "handlePortConflict",
         port: this.config.port,
       });
     } catch (error) {
-      logger.error("Failed to handle port conflict", {
+      console.error("Failed to handle port conflict", {
         component: this.name,
         method: "handlePortConflict",
         error: error instanceof Error ? error.message : "Unknown error",
@@ -670,16 +670,16 @@ export class AudioPlaybackDaemon extends EventEmitter {
         });
 
         // If we get here, the port is available
-        logger.consoleInfo(`[${this.instanceId}] Port ${currentPort} is available`);
-        logger.debug("Port available", {
+        console.log(`[${this.instanceId}] Port ${currentPort} is available`);
+        console.warn("Port available", {
           component: this.name,
           method: "findAvailablePort",
           port: currentPort,
         });
         return currentPort;
       } catch (error) {
-        logger.consoleInfo(`[${this.instanceId}] Port ${currentPort} is in use, trying next port`);
-        logger.debug("Port in use, trying next port", {
+        console.log(`[${this.instanceId}] Port ${currentPort} is in use, trying next port`);
+        console.warn("Port in use, trying next port", {
           component: this.name,
           method: "findAvailablePort",
           port: currentPort,
@@ -699,7 +699,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    */
   private async startDaemon(): Promise<void> {
     if (this.daemonProcess) {
-      logger.warn("Daemon process already running", {
+      console.warn("Daemon process already running", {
         component: this.name,
         method: "startDaemon",
       });
@@ -710,19 +710,19 @@ export class AudioPlaybackDaemon extends EventEmitter {
     await this.cleanupExistingDaemons();
 
     // Try to find an available port
-    logger.consoleDebug(
+    console.warn(
       `[${this.instanceId}] Checking for available port starting from:`,
       this.config.port
     );
     const availablePort = await this.findAvailablePort(this.config.port);
     if (availablePort !== this.config.port) {
-      logger.consoleInfo(
+      console.log(
         `[${this.instanceId}] Port conflict detected, switching from`,
         this.config.port,
         "to",
         availablePort
       );
-      logger.consoleInfo("Port conflict detected, using fallback port", {
+      console.log("Port conflict detected, using fallback port", {
         component: this.name,
         method: "startDaemon",
         originalPort: this.config.port,
@@ -730,10 +730,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
       });
       this.config.port = availablePort;
     } else {
-      logger.consoleDebug(`[${this.instanceId}] Original port ${this.config.port} is available`);
+      console.warn(`[${this.instanceId}] Original port ${this.config.port} is available`);
     }
 
-    logger.consoleInfo("Starting audio daemon process", {
+    console.log("Starting audio daemon process", {
       component: this.name,
       method: "startDaemon",
       daemonPath: this.config.daemonPath,
@@ -742,10 +742,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
     });
 
     try {
-      logger.consoleDebug(`[${this.instanceId}] Spawning daemon process with:`);
-      logger.consoleDebug("  - Node executable:", this.config.daemonPath);
-      logger.consoleDebug("  - Daemon script:", this.config.daemonScriptPath);
-      logger.consoleDebug("  - Port:", this.config.port);
+      console.warn(`[${this.instanceId}] Spawning daemon process with:`);
+      console.warn("  - Node executable:", this.config.daemonPath);
+      console.warn("  - Daemon script:", this.config.daemonScriptPath);
+      console.warn("  - Port:", this.config.port);
 
       const daemonProcess = spawn(
         this.config.daemonPath,
@@ -760,7 +760,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
         }
       );
 
-      logger.consoleInfo("Daemon process spawned", {
+      console.log("Daemon process spawned", {
         component: this.name,
         method: "startDaemon",
         pid: daemonProcess.pid,
@@ -769,14 +769,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
       // Set up process event handlers
       daemonProcess.on("error", (error) => {
-        logger.consoleError(`[${this.instanceId}] Daemon process error:`, error);
+        console.error(`[${this.instanceId}] Daemon process error:`, error);
         this.handleDaemonError(error);
       });
 
       daemonProcess.on("exit", (code, signal) => {
-        logger.consoleInfo(
-          `[${this.instanceId}] Daemon process exit - code: ${code} signal: ${signal}`
-        );
+        console.log(`[${this.instanceId}] Daemon process exit - code: ${code} signal: ${signal}`);
         this.handleDaemonExit(code, signal);
       });
 
@@ -784,8 +782,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
       if (daemonProcess.stdout) {
         daemonProcess.stdout.on("data", (data) => {
           const message = data.toString().trim();
-          logger.consoleDebug("Daemon stdout:", message);
-          logger.debug("Daemon stdout", {
+          console.warn("Daemon stdout:", message);
+          console.warn("Daemon stdout", {
             component: this.name,
             method: "startDaemon",
             pid: daemonProcess.pid,
@@ -797,8 +795,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
       if (daemonProcess.stderr) {
         daemonProcess.stderr.on("data", (data) => {
           const message = data.toString().trim();
-          logger.consoleWarn("Daemon stderr:", message);
-          logger.warn("Daemon stderr", {
+          console.warn("Daemon stderr:", message);
+          console.warn("Daemon stderr", {
             component: this.name,
             method: "startDaemon",
             pid: daemonProcess.pid,
@@ -807,7 +805,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
           // Check for port conflict error
           if (message.includes("EADDRINUSE") || message.includes("address already in use")) {
-            logger.warn("Port conflict detected in daemon stderr", {
+            console.warn("Port conflict detected in daemon stderr", {
               component: this.name,
               method: "startDaemon",
               port: this.config.port,
@@ -829,13 +827,13 @@ export class AudioPlaybackDaemon extends EventEmitter {
         healthStatus: "healthy",
       };
 
-      logger.consoleInfo("Daemon process setup complete", {
+      console.log("Daemon process setup complete", {
         component: this.name,
         method: "startDaemon",
         pid: daemonProcess.pid,
       });
     } catch (error) {
-      logger.error("Failed to start daemon process", {
+      console.error("Failed to start daemon process", {
         component: this.name,
         method: "startDaemon",
         error: error instanceof Error ? error.message : "Unknown error",
@@ -852,7 +850,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       throw new Error("Daemon process not started");
     }
 
-    logger.consoleInfo("Waiting for daemon connection", {
+    console.log("Waiting for daemon connection", {
       component: this.name,
       method: "waitForConnection",
       port: this.config.port,
@@ -863,7 +861,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     const startTime = Date.now();
     const healthUrl = `http://localhost:${this.config.port}/health`;
 
-    logger.consoleInfo(`[${this.instanceId}] Checking daemon health at:`, healthUrl);
+    console.log(`[${this.instanceId}] Checking daemon health at:`, healthUrl);
 
     while (Date.now() - startTime < maxWaitTime) {
       try {
@@ -877,7 +875,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
         if (response.ok) {
           const health = await response.json();
-          logger.consoleInfo(`[${this.instanceId}] Daemon health check passed:`, health.status);
+          console.log(`[${this.instanceId}] Daemon health check passed:`, health.status);
 
           // Mark as connected
           this.daemonProcess.isConnected = true;
@@ -886,7 +884,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
           // Establish WebSocket connection
           await this.establishWebSocketConnection();
 
-          logger.consoleInfo("Daemon connection established", {
+          console.log("Daemon connection established", {
             component: this.name,
             method: "waitForConnection",
             port: this.config.port,
@@ -894,8 +892,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
           });
           return;
         }
-      } catch (error) {
-        logger.consoleInfo(`[${this.instanceId}] Daemon not ready yet, retrying...`);
+      } catch {
+        console.log(`[${this.instanceId}] Daemon not ready yet, retrying...`);
         // Continue waiting
       }
 
@@ -914,14 +912,14 @@ export class AudioPlaybackDaemon extends EventEmitter {
     }
 
     const wsUrl = `ws://localhost:${this.config.port}`;
-    logger.consoleInfo(`[${this.instanceId}] Establishing WebSocket connection to:`, wsUrl);
+    console.log(`[${this.instanceId}] Establishing WebSocket connection to:`, wsUrl);
 
     return new Promise<void>((resolve, reject) => {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.on("open", () => {
-        logger.consoleInfo(`[${this.instanceId}] WebSocket connection established`);
-        logger.consoleInfo("WebSocket connection established", {
+        console.log(`[${this.instanceId}] WebSocket connection established`);
+        console.log("WebSocket connection established", {
           component: this.name,
           method: "establishWebSocketConnection",
           url: wsUrl,
@@ -930,8 +928,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
       });
 
       this.ws.on("error", (error: Error) => {
-        logger.consoleInfo(`[${this.instanceId}] WebSocket connection error:`, error);
-        logger.error("WebSocket connection error", {
+        console.log(`[${this.instanceId}] WebSocket connection error:`, error);
+        console.error("WebSocket connection error", {
           component: this.name,
           method: "establishWebSocketConnection",
           error: error.message,
@@ -940,10 +938,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
       });
 
       this.ws.on("close", (code: number, reason: string) => {
-        logger.consoleInfo(
+        console.log(
           `[${this.instanceId}] WebSocket connection closed - code: ${code} reason: ${reason}`
         );
-        logger.debug("WebSocket connection closed", {
+        console.warn("WebSocket connection closed", {
           component: this.name,
           method: "establishWebSocketConnection",
           code,
@@ -956,14 +954,14 @@ export class AudioPlaybackDaemon extends EventEmitter {
       this.ws.on("message", (data: Buffer) => {
         try {
           const message = JSON.parse(data.toString());
-          logger.consoleInfo(`[${this.instanceId}] Received message from daemon:`, message.type);
+          console.log(`[${this.instanceId}] Received message from daemon:`, message.type);
           this.handleIncomingMessage(message);
         } catch (error) {
-          logger.consoleInfo(
+          console.log(
             `[${this.instanceId}] Failed to parse WebSocket message:`,
             JSON.stringify(error)
           );
-          logger.error("Failed to parse WebSocket message", {
+          console.error("Failed to parse WebSocket message", {
             component: this.name,
             method: "establishWebSocketConnection",
             error: error instanceof Error ? error.message : "Unknown error",
@@ -984,7 +982,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Configure audio settings with the daemon
    */
   private async configureAudio(): Promise<void> {
-    logger.consoleInfo("Configuring audio settings", {
+    console.log("Configuring audio settings", {
       component: this.name,
       method: "configureAudio",
       format: this.currentAudioFormat,
@@ -1005,7 +1003,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     await this.sendMessage(configMessage);
 
-    logger.consoleInfo("Audio configuration sent to daemon", {
+    console.log("Audio configuration sent to daemon", {
       component: this.name,
       method: "configureAudio",
     });
@@ -1019,7 +1017,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       throw new Error("Daemon not connected");
     }
 
-    logger.consoleInfo("Starting audio playback", {
+    console.log("Starting audio playback", {
       component: this.name,
       method: "startPlayback",
     });
@@ -1036,7 +1034,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     this.isPlaying = true;
     this.isPaused = false;
 
-    logger.consoleInfo("Audio playback started", {
+    console.log("Audio playback started", {
       component: this.name,
       method: "startPlayback",
     });
@@ -1050,7 +1048,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       throw new Error("Daemon not connected");
     }
 
-    logger.debug("Writing audio chunk to daemon", {
+    console.warn("Writing audio chunk to daemon", {
       component: this.name,
       method: "writeChunk",
       chunkSize: chunk.length,
@@ -1075,7 +1073,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     await this.sendMessage(audioMessage);
 
-    logger.debug("Audio chunk sent to daemon", {
+    console.warn("Audio chunk sent to daemon", {
       component: this.name,
       method: "writeChunk",
       chunkSize: chunk.length,
@@ -1088,14 +1086,14 @@ export class AudioPlaybackDaemon extends EventEmitter {
    */
   async endStream(): Promise<void> {
     if (!this.daemonProcess?.isConnected) {
-      logger.warn("Cannot end stream - daemon not connected", {
+      console.warn("Cannot end stream - daemon not connected", {
         component: this.name,
         method: "endStream",
       });
       return;
     }
 
-    logger.consoleInfo("Ending audio stream", {
+    console.log("Ending audio stream", {
       component: this.name,
       method: "endStream",
       totalChunks: this.stats.chunksReceived,
@@ -1122,7 +1120,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     this.stats.streamingDuration = Date.now() - (this.stats.streamingDuration || Date.now());
     this.stats.efficiency = this.calculateEfficiency();
 
-    logger.consoleInfo("Audio stream ended", {
+    console.log("Audio stream ended", {
       component: this.name,
       method: "endStream",
       streamingDuration: this.stats.streamingDuration,
@@ -1136,7 +1134,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
   private async waitForAudioCompletion(): Promise<void> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        logger.warn("Audio completion timeout - forcing stop", {
+        console.warn("Audio completion timeout - forcing stop", {
           component: this.name,
           method: "waitForAudioCompletion",
         });
@@ -1174,7 +1172,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Force stop the audio playback (used as fallback)
    */
   private async forceStop(): Promise<void> {
-    logger.warn("Forcing audio playback stop", {
+    console.warn("Forcing audio playback stop", {
       component: this.name,
       method: "forceStop",
     });
@@ -1197,14 +1195,14 @@ export class AudioPlaybackDaemon extends EventEmitter {
    */
   async pause(): Promise<void> {
     if (!this.daemonProcess?.isConnected) {
-      logger.warn("Cannot pause - daemon not connected", {
+      console.warn("Cannot pause - daemon not connected", {
         component: this.name,
         method: "pause",
       });
       return;
     }
 
-    logger.consoleInfo("Pausing audio playback", {
+    console.log("Pausing audio playback", {
       component: this.name,
       method: "pause",
     });
@@ -1221,7 +1219,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     this.isPaused = true;
     this.isPlaying = false;
 
-    logger.consoleInfo("Audio playback paused", {
+    console.log("Audio playback paused", {
       component: this.name,
       method: "pause",
     });
@@ -1232,14 +1230,14 @@ export class AudioPlaybackDaemon extends EventEmitter {
    */
   async resume(): Promise<void> {
     if (!this.daemonProcess?.isConnected) {
-      logger.warn("Cannot resume - daemon not connected", {
+      console.warn("Cannot resume - daemon not connected", {
         component: this.name,
         method: "resume",
       });
       return;
     }
 
-    logger.consoleInfo("Resuming audio playback", {
+    console.log("Resuming audio playback", {
       component: this.name,
       method: "resume",
     });
@@ -1256,7 +1254,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     this.isPlaying = true;
     this.isPaused = false;
 
-    logger.consoleInfo("Audio playback resumed", {
+    console.log("Audio playback resumed", {
       component: this.name,
       method: "resume",
     });
@@ -1266,7 +1264,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Stop audio playback
    */
   async stop(): Promise<void> {
-    logger.consoleInfo("Stopping audio playback", {
+    console.log("Stopping audio playback", {
       component: this.name,
       method: "stop",
     });
@@ -1287,7 +1285,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     this.isPaused = false;
     this.sequenceNumber = 0;
 
-    logger.consoleInfo("Audio playback stopped", {
+    console.log("Audio playback stopped", {
       component: this.name,
       method: "stop",
     });
@@ -1305,7 +1303,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       throw new Error("WebSocket connection not open");
     }
 
-    logger.debug("Sending message to daemon", {
+    console.warn("Sending message to daemon", {
       component: this.name,
       method: "sendMessage",
       messageType: message.type,
@@ -1314,7 +1312,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     // Serialize the message to JSON
     const messageJson = JSON.stringify(message);
-    logger.consoleDebug("Sending message to daemon:", message.type);
+    console.warn("Sending message to daemon:", message.type);
 
     this.ws.send(messageJson);
   }
@@ -1324,28 +1322,33 @@ export class AudioPlaybackDaemon extends EventEmitter {
    */
   private handleIncomingMessage(message: DaemonMessage): void {
     switch (message.type) {
-      case "audio_chunk":
+      case "audio_chunk": {
         const audioChunk = message as AudioChunkMessage;
         this.handleAudioChunk(audioChunk);
         break;
-      case "status":
+      }
+      case "status": {
         const status = message as DaemonMessage; // Assuming status messages are just status updates
         this.handleStatusUpdate(status);
         break;
-      case "heartbeat":
-        const heartbeat = message as DaemonMessage;
-        // this.handleHeartbeat(heartbeat);
+      }
+      case "heartbeat": {
+        const _heartbeat = message as DaemonMessage;
+        // this.handleHeartbeat(_heartbeat);
         break;
-      case "completed":
+      }
+      case "completed": {
         const completed = message as DaemonMessage;
         this.handleCompleted(completed);
         break;
-      case "error":
+      }
+      case "error": {
         const error = message as DaemonMessage;
         this.handleDaemonError(new Error(error.data as string));
         break;
+      }
       default:
-        logger.warn("Received unknown message type from daemon", {
+        console.warn("Received unknown message type from daemon", {
           component: this.name,
           method: "handleIncomingMessage",
           messageType: message.type,
@@ -1357,7 +1360,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Handle audio chunk messages from the daemon
    */
   private handleAudioChunk(message: AudioChunkMessage): void {
-    logger.debug("Handling audio chunk message", {
+    console.warn("Handling audio chunk message", {
       component: this.name,
       method: "handleAudioChunk",
       chunkSize: message.data.chunk.length,
@@ -1394,14 +1397,14 @@ export class AudioPlaybackDaemon extends EventEmitter {
   /**
    * Handle status update messages from the daemon
    */
-  private handleStatusUpdate(message: DaemonMessage): void {
-    // logger.debug("Handling status update message", {
+  private handleStatusUpdate(_message: DaemonMessage): void {
+    // console.warn("Handling status update message", {
     //   component: this.name,
     //   method: "handleStatusUpdate",
     //   status: message.data,
     // });
     // For now, we'll just log the status
-    // logger.consoleInfo("Received status update from daemon", {
+    // console.log("Received status update from daemon", {
     //   component: this.name,
     //   method: "handleStatusUpdate",
     //   status: message.data,
@@ -1412,7 +1415,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Handle heartbeat messages from the daemon
    */
   private handleHeartbeat(message: DaemonMessage): void {
-    logger.debug("Handling heartbeat message", {
+    console.warn("Handling heartbeat message", {
       component: this.name,
       method: "handleHeartbeat",
       timestamp: message.timestamp,
@@ -1425,7 +1428,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Handle completed message from daemon
    */
   private handleCompleted(message: DaemonMessage): void {
-    logger.consoleInfo("Audio playback completed naturally", {
+    console.log("Audio playback completed naturally", {
       component: this.name,
       method: "handleCompleted",
       timestamp: message.timestamp,
@@ -1442,7 +1445,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Handle daemon process errors
    */
   private handleDaemonError(error: Error): void {
-    logger.error("Daemon process error", {
+    console.error("Daemon process error", {
       component: this.name,
       method: "handleDaemonError",
       error: error.message,
@@ -1460,7 +1463,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Handle daemon process exit
    */
   private handleDaemonExit(code: number | null, signal: string | null): void {
-    logger.consoleInfo("Daemon process exited", {
+    console.log("Daemon process exited", {
       component: this.name,
       method: "handleDaemonExit",
       code,
@@ -1490,7 +1493,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    */
   private async attemptReconnect(): Promise<void> {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error("Max reconnection attempts reached", {
+      console.error("Max reconnection attempts reached", {
         component: this.name,
         method: "attemptReconnect",
         attempts: this.reconnectAttempts,
@@ -1500,7 +1503,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     }
 
     this.reconnectAttempts++;
-    logger.consoleInfo("Attempting daemon reconnection", {
+    console.log("Attempting daemon reconnection", {
       component: this.name,
       method: "attemptReconnect",
       attempt: this.reconnectAttempts,
@@ -1515,12 +1518,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
       await this.configureAudio();
 
       this.reconnectAttempts = 0;
-      logger.consoleInfo("Daemon reconnection successful", {
+      console.log("Daemon reconnection successful", {
         component: this.name,
         method: "attemptReconnect",
       });
     } catch (error) {
-      logger.error("Daemon reconnection failed", {
+      console.error("Daemon reconnection failed", {
         component: this.name,
         method: "attemptReconnect",
         attempt: this.reconnectAttempts,
@@ -1540,7 +1543,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       return;
     }
 
-    logger.consoleInfo("Stopping daemon process", {
+    console.log("Stopping daemon process", {
       component: this.name,
       method: "stopDaemon",
       pid: this.daemonProcess.process.pid,
@@ -1561,12 +1564,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
         });
       });
 
-      logger.consoleInfo("Daemon process stopped", {
+      console.log("Daemon process stopped", {
         component: this.name,
         method: "stopDaemon",
       });
     } catch (error) {
-      logger.error("Failed to stop daemon process", {
+      console.error("Failed to stop daemon process", {
         component: this.name,
         method: "stopDaemon",
         error: error instanceof Error ? error.message : "Unknown error",
@@ -1629,7 +1632,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Clean up resources
    */
   async cleanup(): Promise<void> {
-    logger.consoleInfo("Cleaning up audio daemon controller", {
+    console.log("Cleaning up audio daemon controller", {
       component: this.name,
       method: "cleanup",
     });
@@ -1641,7 +1644,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     this.reconnectAttempts = 0;
     this.reconnectDelay = 1000;
 
-    logger.consoleInfo("Audio daemon controller cleanup complete", {
+    console.log("Audio daemon controller cleanup complete", {
       component: this.name,
       method: "cleanup",
     });

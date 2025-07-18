@@ -335,7 +335,7 @@ class DualSessionManager:
 
         self.logger = logging.getLogger(__name__ + ".DualSessionManager")
 
-        # Initialize capabilities
+        # Initialize capabilities once and cache them
         self.capabilities = detect_apple_silicon_capabilities()
 
         # Initialize sessions
@@ -343,48 +343,61 @@ class DualSessionManager:
 
     def _initialize_sessions(self):
         """Initialize optimized sessions for different hardware targets."""
-        try:
-            # Only initialize dual sessions if we have Apple Silicon with Neural Engine
-            if not self.capabilities.get('has_neural_engine', False):
-                self.logger.info("No Neural Engine detected, using single session mode")
-                self._initialize_single_session()
-                return
+        self.logger.info("Initializing session manager...")
+        
+        # Consolidate hardware detection logging
+        if self.capabilities.get('has_neural_engine'):
+            self.logger.info(
+                f"Apple Silicon system detected: "
+                f"Hardware: {self.capabilities.get('hardware_name', 'Unknown')} | "
+                f"Neural Engine: ✅ | "
+                f"Provider: {self.capabilities.get('recommended_provider', 'CoreMLExecutionProvider')}"
+            )
+            self.logger.info("Initializing ANE, GPU, and CPU sessions for concurrent processing...")
+        else:
+            self.logger.info("No Neural Engine detected, initializing with single session mode.")
 
-            self.logger.info("Initializing dual session manager for Apple Silicon")
+        initialized_sessions = []
+        
+        # Initialize ANE session if available
+        if self.capabilities.get('has_neural_engine'):
+            if self._initialize_ane_session():
+                initialized_sessions.append("ane")
 
-            # Initialize ANE-optimized session
-            self._initialize_ane_session()
+        # Initialize GPU session if available
+        if self.capabilities.get('has_gpu'):
+            if self._initialize_gpu_session():
+                initialized_sessions.append("gpu")
 
-            # Initialize GPU-optimized session
-            self._initialize_gpu_session()
+        # Always initialize CPU fallback session
+        if self._initialize_cpu_session():
+            initialized_sessions.append("cpu")
 
-            # Initialize CPU fallback session
-            self._initialize_cpu_session()
-
-            # Log summary of available sessions
-            available_sessions = [k for k, v in self.sessions.items() if v is not None]
-            self.logger.info(f"✅ Dual session manager initialized with sessions: {', '.join(available_sessions)}")
-
-        except Exception as e:
-            self.logger.error(f"Failed to initialize dual sessions: {e}")
-            # Fallback to single session mode
-            self._initialize_single_session()
+        if initialized_sessions:
+            self.logger.info(f"✅ Session manager initialized successfully with sessions: {', '.join(initialized_sessions)}")
+        else:
+            self.logger.error("❌ Failed to initialize any session.")
+            self._initialize_single_session() # Fallback
 
     def _initialize_single_session(self):
         """Initialize single session fallback mode."""
-        self.logger.info("Initializing single session fallback mode")
+        self.logger.warning("Falling back to single session mode.")
 
         # Use the existing model as CPU session
         global kokoro_model
         if kokoro_model:
             self.sessions['cpu'] = kokoro_model
-            self.logger.info("Using existing model as CPU session")
+            self.logger.info("✅ Using existing model as CPU session.")
         else:
             # Create new CPU session
-            self._initialize_cpu_session()
+            if self._initialize_cpu_session():
+                self.logger.info("✅ CPU fallback session initialized successfully.")
+            else:
+                self.logger.error("❌ Critical error: Failed to initialize even the CPU fallback session.")
 
-    def _initialize_ane_session(self):
+    def _initialize_ane_session(self) -> bool:
         """Initialize Neural Engine optimized session."""
+        self.logger.debug("Attempting to initialize ANE session...")
         try:
             # Create ANE-specific session options
             session_options = create_optimized_session_options(self.capabilities)
@@ -414,13 +427,16 @@ class DualSessionManager:
             )
 
             self.logger.debug("✅ ANE session initialized successfully")
+            return True
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize ANE session: {e}")
+            self.logger.warning(f"⚠️ Failed to initialize ANE session, will proceed without it. Reason: {e}")
             self.sessions['ane'] = None
+            return False
 
-    def _initialize_gpu_session(self):
+    def _initialize_gpu_session(self) -> bool:
         """Initialize GPU optimized session."""
+        self.logger.debug("Attempting to initialize GPU session...")
         try:
             # Create GPU-specific session options
             session_options = create_optimized_session_options(self.capabilities)
@@ -450,13 +466,16 @@ class DualSessionManager:
             )
 
             self.logger.debug("✅ GPU session initialized successfully")
+            return True
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize GPU session: {e}")
+            self.logger.warning(f"⚠️ Failed to initialize GPU session, will proceed without it. Reason: {e}")
             self.sessions['gpu'] = None
+            return False
 
-    def _initialize_cpu_session(self):
+    def _initialize_cpu_session(self) -> bool:
         """Initialize CPU fallback session."""
+        self.logger.debug("Attempting to initialize CPU session...")
         try:
             # Create CPU-specific session options
             session_options = create_optimized_session_options(self.capabilities)
@@ -475,10 +494,12 @@ class DualSessionManager:
             )
 
             self.logger.debug("✅ CPU session initialized successfully")
+            return True
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize CPU session: {e}")
+            self.logger.error(f"❌ Failed to initialize CPU session. Reason: {e}")
             self.sessions['cpu'] = None
+            return False
 
     def calculate_segment_complexity(self, text: str) -> float:
         """
@@ -2059,113 +2080,33 @@ def initialize_model():
     """
     global kokoro_model, model_loaded, _active_provider
     if model_loaded:
+        logger.debug("Model already loaded, skipping initialization.")
         return
 
     logger.info("Initializing TTS model with enhanced optimization...")
     initialization_start = time.perf_counter()
 
-    # Detect hardware capabilities for optimization
-    capabilities = detect_apple_silicon_capabilities()
-
     try:
-        # Get optimal provider with hardware-specific optimizations
-        optimal_provider, benchmark_results = benchmark_providers()
-        _active_provider = optimal_provider
+        # Phase 3 Optimization: Initialize the dual session manager, which now handles its own logging.
+        logger.info("Initializing dual session manager for concurrent processing...")
+        initialize_dual_session_manager()
 
-        logger.info(f"Initializing model with provider: {optimal_provider}")
-
-        # Try to initialize with optimal provider first
-        success = False
-        providers_to_try = [optimal_provider]
-        
-        # Add CPU fallback if optimal provider is CoreML
-        if optimal_provider == "CoreMLExecutionProvider" and "CPUExecutionProvider" not in providers_to_try:
-            providers_to_try.append("CPUExecutionProvider")
-
-        for provider_attempt in providers_to_try:
-            try:
-                logger.info(f"Attempting initialization with provider: {provider_attempt}")
-                
-                # Set up local temp directory for CoreML to avoid permission issues
-                if provider_attempt == "CoreMLExecutionProvider":
-                    setup_coreml_temp_directory()
-                
-                # Create optimized session options using dedicated function
-                session_options = create_optimized_session_options(capabilities)
-
-                # Configure provider options based on hardware
-                provider_options = {}
-                if provider_attempt == "CoreMLExecutionProvider":
-                    # Enhanced CoreML provider options
-                    if capabilities.get('neural_engine_cores', 0) >= 32:  # M1 Max / M2 Max
-                        provider_options = {
-                            "MLComputeUnits": "CPUAndNeuralEngine",  # Prefer Neural Engine
-                            "ModelFormat": "MLProgram",              # Use MLProgram for newer devices
-                            "AllowLowPrecisionAccumulationOnGPU": "1"  # Enable FP16 optimization
-                        }
-                        logger.info("Using M1/M2 Max optimized CoreML configuration")
-                    elif capabilities.get('neural_engine_cores', 0) >= 16:  # M1 / M2
-                        provider_options = {
-                            "MLComputeUnits": "CPUAndNeuralEngine",
-                            "ModelFormat": "MLProgram"
-                        }
-                        logger.info("Using M1/M2 optimized CoreML configuration")
-                    else:  # Other Apple Silicon
-                        provider_options = {
-                            "MLComputeUnits": "CPUAndGPU"
-                        }
-                        logger.info("Using standard Apple Silicon CoreML configuration")
-
-                # Create the ONNX Runtime session with optimizations
-                providers = [(provider_attempt, provider_options)] if provider_options else [provider_attempt]
-                
-                logger.info(f"Creating optimized ONNX Runtime session with provider: {provider_attempt}")
-                session = ort.InferenceSession(
-                    TTSConfig.MODEL_PATH,
-                    sess_options=session_options,
-                    providers=providers
-                )
-
-                # Initialize Kokoro with the optimized session
-                logger.info(f"Initializing Kokoro with optimized session")
-                kokoro_model = Kokoro.from_session(
-                    session=session,
-                    voices_path=TTSConfig.VOICES_PATH
-                )
-
-                # Update active provider to successful one
-                _active_provider = provider_attempt
-                success = True
-                
-                logger.info(f"✅ Successfully initialized with provider: {provider_attempt}")
-                break
-                
-            except Exception as provider_error:
-                logger.error(f"Failed to initialize with provider {provider_attempt}: {provider_error}")
-                
-                # Check if this is the CoreML permission error
-                if "Operation not permitted" in str(provider_error) or "iostream_category" in str(provider_error):
-                    logger.warning(f"⚠️ CoreML permission error detected - this is common on macOS with security restrictions")
-                    logger.info("ℹ️ Falling back to CPU provider for reliable operation")
-                elif "CoreMLExecutionProvider" in provider_attempt:
-                    logger.warning(f"⚠️ CoreML provider failed - falling back to CPU provider")
-                
-                # Continue to next provider in fallback chain
-                continue
-
-        if not success:
-            raise RuntimeError("All provider initialization attempts failed")
-
-        # Log hardware-specific optimizations (these are applied at the ONNX Runtime level)
-        if capabilities.get('neural_engine_cores', 0) >= 32:  # M1 Max
-            logger.info("✅ M1 Max specific optimizations applied at ONNX Runtime level")
-        elif capabilities.get('is_apple_silicon', False):
-            logger.info("✅ Apple Silicon optimizations applied at ONNX Runtime level")
+        # The DualSessionManager now handles session creation, so we can simplify this part.
+        # We'll get the main model from the manager's CPU session.
+        global dual_session_manager
+        if dual_session_manager and dual_session_manager.sessions.get('cpu'):
+            kokoro_model = dual_session_manager.sessions['cpu']
+            _active_provider = get_active_provider_from_sessions()
+            model_loaded = True
+            logger.info(f"✅ Main model extracted from session manager's CPU session.")
         else:
-            logger.info("✅ Standard CPU optimizations applied at ONNX Runtime level")
+            # Fallback to the old method if dual session manager fails
+            logger.warning("Dual session manager failed, attempting legacy initialization.")
+            legacy_initialize()
+            return # Exit after legacy init
 
         # Model warmup for better performance
-        logger.info(" Warming up model for optimal performance...")
+        logger.info("Warming up model for optimal performance...")
         warmup_start = time.perf_counter()
         try:
             # Perform warmup inference
@@ -2177,60 +2118,77 @@ def initialize_model():
         except Exception as e:
             logger.warning(f"⚠️ Model warmup failed: {e}")
 
-        model_loaded = True
         initialization_time = time.perf_counter() - initialization_start
-
-        logger.info(f"✅ TTS model initialized successfully with {_active_provider} provider in {initialization_time:.3f}s")
-
-        # Log performance information
-        if benchmark_results:
-            logger.info(f" Benchmark results: {benchmark_results}")
+        logger.info(f"✅ TTS model initialized successfully with provider(s) in {initialization_time:.3f}s")
 
         # Set up resource management
         atexit.register(cleanup_model)
 
-        # PHASE 3 OPTIMIZATION: Initialize dual session manager
-        try:
-            logger.info("Initializing dual session manager for Phase 3 optimization...")
-            initialize_dual_session_manager()
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to initialize dual session manager: {e}")
-            logger.warning("Continuing with single session mode")
-
-        # PHASE 4 OPTIMIZATION: Initialize dynamic memory manager
-        try:
-            logger.info("Initializing dynamic memory manager for Phase 4 optimization...")
-            initialize_dynamic_memory_manager()
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to initialize dynamic memory manager: {e}")
-            logger.warning("Continuing with static memory configuration")
-
-        # PHASE 4 OPTIMIZATION: Initialize pipeline warmer
-        try:
-            logger.info("Initializing pipeline warmer for Phase 4 optimization...")
-            initialize_pipeline_warmer()
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to initialize pipeline warmer: {e}")
-            logger.warning("Continuing without pipeline warming")
-
-        # PHASE 4 OPTIMIZATION: Initialize real-time optimizer
-        try:
-            logger.info("Initializing real-time optimizer for Phase 4 optimization...")
-            from api.performance.optimization import initialize_real_time_optimizer
-            initialize_real_time_optimizer()
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to initialize real-time optimizer: {e}")
-            logger.warning("Continuing without real-time optimization")
+        # Further optimizations can now be initialized
+        initialize_further_optimizations()
 
     except Exception as e:
-        logger.critical(f" Critical error during model initialization: {e}", exc_info=True)
+        logger.critical(f"❌ CRITICAL: Model initialization failed: {e}", exc_info=True)
         model_loaded = False
-        kokoro_model = None
-        raise RuntimeError(f"Model initialization failed: {e}")
 
+
+def get_active_provider_from_sessions() -> str:
+    """Gets the active provider string from the session manager."""
+    global dual_session_manager
+    if not dual_session_manager:
+        return "CPUExecutionProvider"
+    
+    active_sessions = [s for s, session in dual_session_manager.sessions.items() if session]
+    if 'ane' in active_sessions or 'gpu' in active_sessions:
+        return "CoreMLExecutionProvider"
+    return "CPUExecutionProvider"
+
+
+def legacy_initialize():
+    """Legacy initialization logic as a fallback."""
+    global kokoro_model, model_loaded, _active_provider
+    logger.info("Executing legacy initialization...")
+    capabilities = detect_apple_silicon_capabilities()
+    # Simplified version of the original logic
+    try:
+        session_options = create_optimized_session_options(capabilities)
+        session = ort.InferenceSession(
+            TTSConfig.MODEL_PATH,
+            sess_options=session_options,
+            providers=["CPUExecutionProvider"]
+        )
+        kokoro_model = Kokoro.from_session(session=session, voices_path=TTSConfig.VOICES_PATH)
+        _active_provider = "CPUExecutionProvider"
+        model_loaded = True
+        logger.info("✅ Legacy initialization with CPU provider successful.")
+    except Exception as e:
+        logger.error(f"❌ Legacy initialization failed: {e}")
+
+
+def initialize_further_optimizations():
+    """Initializes Phase 4 and other optimizations."""
+    logger.info("Initializing further optimizations (Phase 4)...")
+    try:
+        logger.debug("Initializing dynamic memory manager...")
+        initialize_dynamic_memory_manager()
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to initialize dynamic memory manager: {e}")
+
+    try:
+        logger.debug("Initializing pipeline warmer...")
+        initialize_pipeline_warmer()
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to initialize pipeline warmer: {e}")
+
+    try:
+        logger.debug("Initializing real-time optimizer...")
+        from api.performance.optimization import initialize_real_time_optimizer
+        initialize_real_time_optimizer()
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to initialize real-time optimizer: {e}")
 
 def cleanup_model():
-    """Cleans up the model resources."""
+    """Cleans up resources used by the model and its managers."""
     global kokoro_model, dual_session_manager, dynamic_memory_manager, pipeline_warmer
 
     if kokoro_model:

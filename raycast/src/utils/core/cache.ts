@@ -18,7 +18,7 @@
 
 import { LRUCache } from "lru-cache";
 import { createHash } from "crypto";
-import type { TTSRequestParams, VoiceOption, TTSProcessorConfig } from "../validation/tts-types";
+import type { TTSRequestParams, VoiceOption, TTSProcessorConfig } from "../validation/tts-types.js";
 
 /**
  * Configuration for different cache types

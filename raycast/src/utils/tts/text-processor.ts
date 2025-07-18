@@ -17,7 +17,6 @@
  * @since 2025-07-17
  */
 
-import { logger } from "../core/logger.js";
 // import { ValidationUtils } from "../validation/validation.js";
 import type {
   ITextProcessor,
@@ -26,6 +25,7 @@ import type {
   TTSProcessorConfig,
 } from "../validation/tts-types.js";
 import { TTS_CONSTANTS } from "../validation/tts-types.js";
+import { logger } from "../core/logger.js";
 
 /**
  * Text preprocessing pipeline processor
@@ -94,7 +94,7 @@ export class TextProcessor implements ITextProcessor {
 
     this.initialized = true;
 
-    logger.consoleInfo("Text processor initialized", {
+    console.log("Text processor initialized", {
       component: this.name,
       method: "initialize",
       config: this.config,
@@ -108,7 +108,7 @@ export class TextProcessor implements ITextProcessor {
     this.preprocessors = [];
     this.initialized = false;
 
-    logger.debug("Text processor cleaned up", {
+    console.warn("Text processor cleaned up", {
       component: this.name,
       method: "cleanup",
     });
@@ -184,7 +184,7 @@ export class TextProcessor implements ITextProcessor {
         try {
           processedText = processor.process(processedText);
 
-          logger.debug(`Applied preprocessor: ${processor.name}`, {
+          console.warn(`Applied preprocessor: ${processor.name}`, {
             component: this.name,
             method: "preprocessText",
             processor: processor.name,
@@ -192,7 +192,7 @@ export class TextProcessor implements ITextProcessor {
             lengthAfter: processedText.length,
           });
         } catch (error) {
-          logger.warn(`Preprocessor failed: ${processor.name}`, {
+          console.warn(`Preprocessor failed: ${processor.name}`, {
             component: this.name,
             method: "preprocessText",
             processor: processor.name,
@@ -241,7 +241,7 @@ export class TextProcessor implements ITextProcessor {
       segmentationStrategy: this.determineSegmentationStrategy(text, maxLength),
     };
 
-    logger.consoleInfo("Text segmentation completed", {
+    console.log("Text segmentation completed", {
       component: this.name,
       method: "segmentText",
       stats: this.stats,
@@ -288,7 +288,7 @@ export class TextProcessor implements ITextProcessor {
 
     const isValid = errors.length === 0;
 
-    logger.debug("Text validation completed", {
+    console.warn("Text validation completed", {
       component: this.name,
       method: "validateText",
       textLength: trimmedText.length,
@@ -539,7 +539,7 @@ export class TextProcessor implements ITextProcessor {
     this.config = { ...this.config, ...config };
     this.initializePreprocessors();
 
-    logger.consoleInfo("Text processor configuration updated", {
+    console.log("Text processor configuration updated", {
       component: this.name,
       method: "updateConfig",
       config: this.config,
@@ -554,7 +554,7 @@ export class TextProcessor implements ITextProcessor {
     if (processor) {
       processor.enabled = enabled;
 
-      logger.debug(`Preprocessor ${name} ${enabled ? "enabled" : "disabled"}`, {
+      console.warn(`Preprocessor ${name} ${enabled ? "enabled" : "disabled"}`, {
         component: this.name,
         method: "configurePreprocessor",
         processor: name,

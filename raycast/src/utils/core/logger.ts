@@ -71,7 +71,7 @@ interface LoggerConfig {
  */
 class DebugModeManager {
   private static instance: DebugModeManager;
-  private debugMode: boolean = false;
+  private debugMode: boolean = false; // Will be set by initializeDebugMode()
 
   private constructor() {
     this.initializeDebugMode();
@@ -91,11 +91,17 @@ class DebugModeManager {
     // Check environment variables
     const envDebug = process.env.DEBUG === "true" || process.env.DEBUG === "1";
     const nodeEnvDebug = process.env.NODE_ENV === "development";
+    const isProduction = process.env.NODE_ENV === "production";
 
     // Check for specific debug flags
     const hasKokoroDebug = process.env.KOKORO_DEBUG === "true" || process.env.KOKORO_DEBUG === "1";
 
-    this.debugMode = hasDebugFlag || envDebug || nodeEnvDebug || hasKokoroDebug;
+    // Check for explicit disable flags
+    const explicitlyDisabled =
+      process.env.KOKORO_DEBUG === "false" || process.env.KOKORO_DEBUG === "0";
+
+    // Enable debug mode by default UNLESS explicitly disabled or in production
+    this.debugMode = !explicitlyDisabled && !isProduction;
 
     if (this.debugMode) {
       console.log("🔧 Debug mode enabled via:", {
@@ -103,7 +109,12 @@ class DebugModeManager {
         envDebug,
         nodeEnvDebug,
         hasKokoroDebug,
+        isProduction,
+        explicitlyDisabled,
+        defaultEnabled: !isProduction && !explicitlyDisabled,
       });
+    } else {
+      console.log("ℹ️ Debug mode disabled. Enable with KOKORO_DEBUG=1 or --debug flag");
     }
   }
 
@@ -176,7 +187,7 @@ export class TTSLogger {
     const debugManager = DebugModeManager.getInstance();
 
     const defaultConfig: LoggerConfig = {
-      level: LogLevel.INFO,
+      level: config.level || LogLevel.INFO,
       developmentMode:
         typeof process !== "undefined" && process.env
           ? process.env.NODE_ENV !== "production"
@@ -443,7 +454,7 @@ export class TTSLogger {
 
 // Create default logger instance
 const defaultLogger = new TTSLogger({
-  level: LogLevel.INFO,
+  level: LogLevel.DEBUG,
   developmentMode:
     typeof process !== "undefined" && process.env ? process.env.NODE_ENV !== "production" : true,
 });
