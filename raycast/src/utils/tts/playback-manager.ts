@@ -26,7 +26,6 @@
  * @since 2025-07-17
  */
 
-import { logger } from "../core/logger.js";
 import type {
   PlaybackContext,
   PlaybackState,
@@ -35,6 +34,7 @@ import type {
   TTSProcessorConfig,
 } from "../validation/tts-types.js";
 import { AudioPlaybackDaemon } from "./streaming/audio-playback-daemon.js";
+import { logger } from "../core/logger.js";
 
 /**
  * Playback session information
@@ -89,7 +89,7 @@ export class PlaybackManager implements IPlaybackManager {
     await this.audioDaemon.initialize();
     this.initialized = true;
 
-    logger.consoleInfo("Playback manager initialized", {
+    console.log("Playback manager initialized", {
       component: this.name,
       method: "initialize",
       config: this.config,
@@ -104,7 +104,7 @@ export class PlaybackManager implements IPlaybackManager {
     this.playbackQueue = [];
     this.initialized = false;
 
-    logger.debug("Playback manager cleaned up", {
+    console.warn("Playback manager cleaned up", {
       component: this.name,
       method: "cleanup",
     });
@@ -121,8 +121,8 @@ export class PlaybackManager implements IPlaybackManager {
    * Play audio with memory-based playback
    */
   async playAudio(context: PlaybackContext, _signal: AbortSignal): Promise<void> {
-    logger.consoleInfo(" [PLAYBACK-MANAGER] === PLAY AUDIO START ===");
-    logger.consoleInfo(" [PLAYBACK-MANAGER] Audio playback request:", {
+    console.log(" [PLAYBACK-MANAGER] === PLAY AUDIO START ===");
+    console.log(" [PLAYBACK-MANAGER] Audio playback request:", {
       audioSize: context.audioData.length,
       voice: context.metadata.voice,
       speed: context.metadata.speed,
@@ -130,12 +130,12 @@ export class PlaybackManager implements IPlaybackManager {
     });
 
     if (!this.initialized) {
-      logger.consoleInfo(" [PLAYBACK-MANAGER]  Playback manager not initialized");
+      console.log(" [PLAYBACK-MANAGER]  Playback manager not initialized");
       throw new Error("Playback manager not initialized");
     }
 
     const sessionId = `playback-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    logger.consoleInfo(" [PLAYBACK-MANAGER]  Created session:", sessionId);
+    console.log(" [PLAYBACK-MANAGER]  Created session:", sessionId);
 
     const timerId = logger.startTiming("audio-playback", {
       component: this.name,
@@ -146,11 +146,11 @@ export class PlaybackManager implements IPlaybackManager {
     });
 
     // Stop any existing playback
-    logger.consoleInfo(" [PLAYBACK-MANAGER]  Stopping any existing playback");
+    console.log(" [PLAYBACK-MANAGER]  Stopping any existing playback");
     await this.stop();
 
     // Create new playback session
-    logger.consoleInfo(" [PLAYBACK-MANAGER]  Creating new playback session");
+    console.log(" [PLAYBACK-MANAGER]  Creating new playback session");
     this.currentSession = {
       id: sessionId,
       context,
@@ -166,21 +166,17 @@ export class PlaybackManager implements IPlaybackManager {
 
     try {
       // Send audio data to daemon in one chunk, then end stream
-      logger.consoleInfo(" [PLAYBACK-MANAGER]  Sending audio data to daemon");
-      logger.consoleInfo(
-        " [PLAYBACK-MANAGER]  Audio data size:",
-        context.audioData.length,
-        "bytes"
-      );
+      console.log(" [PLAYBACK-MANAGER]  Sending audio data to daemon");
+      console.log(" [PLAYBACK-MANAGER]  Audio data size:", context.audioData.length, "bytes");
 
       try {
         await this.audioDaemon.writeChunk(context.audioData);
-        logger.consoleInfo(" [PLAYBACK-MANAGER] ✅ Audio chunk sent to daemon");
+        console.log(" [PLAYBACK-MANAGER] ✅ Audio chunk sent to daemon");
 
         await this.audioDaemon.endStream();
-        logger.consoleInfo(" [PLAYBACK-MANAGER] ✅ Audio stream ended");
+        console.log(" [PLAYBACK-MANAGER] ✅ Audio stream ended");
       } catch (error) {
-        logger.error("Audio daemon playback failed", {
+        console.error("Audio daemon playback failed", {
           component: this.name,
           method: "playAudio",
           error: error instanceof Error ? error.message : "Unknown error",
@@ -194,13 +190,13 @@ export class PlaybackManager implements IPlaybackManager {
         audioSize: context.audioData.length,
       });
 
-      logger.consoleInfo(" [PLAYBACK-MANAGER]  Audio playback completed:", {
+      console.log(" [PLAYBACK-MANAGER]  Audio playback completed:", {
         sessionId,
         duration: `${duration}ms`,
         audioSize: context.audioData.length,
       });
 
-      logger.consoleInfo("Audio playback completed", {
+      console.log("Audio playback completed", {
         component: this.name,
         method: "playAudio",
         sessionId,
@@ -208,7 +204,7 @@ export class PlaybackManager implements IPlaybackManager {
         audioSize: context.audioData.length,
       });
     } catch (error) {
-      logger.consoleError("Audio playback failed", {
+      console.error("Audio playback failed", {
         component: this.name,
         method: "playAudio",
         sessionId,
@@ -221,13 +217,16 @@ export class PlaybackManager implements IPlaybackManager {
   /**
    * Start streaming playback and return control interface
    */
-  async startStreamingPlayback(signal: AbortSignal): Promise<any> {
-    logger.consoleInfo("[PLAYBACK-MANAGER] startStreamingPlayback() called");
+  async startStreamingPlayback(_signal: AbortSignal): Promise<{
+    writeChunk: (chunk: Uint8Array) => Promise<void>;
+    endStream: () => Promise<void>;
+  }> {
+    console.log("[PLAYBACK-MANAGER] startStreamingPlayback() called");
     if (!this.initialized) {
       throw new Error("Playback manager not initialized");
     }
 
-    logger.consoleInfo("Starting streaming playback", {
+    console.log("Starting streaming playback", {
       component: this.name,
       method: "startStreamingPlayback",
     });
@@ -246,14 +245,14 @@ export class PlaybackManager implements IPlaybackManager {
         await this.audioDaemon.endStream();
       },
       onProcessEnd: (normalTermination: boolean) => {
-        logger.consoleInfo("Streaming playback ended", {
+        console.log("Streaming playback ended", {
           component: this.name,
           method: "startStreamingPlayback",
           normalTermination,
         });
       },
     };
-    logger.consoleInfo("[PLAYBACK-MANAGER] Streaming playback started");
+    console.log("[PLAYBACK-MANAGER] Streaming playback started");
     return playback;
   }
 
@@ -262,7 +261,7 @@ export class PlaybackManager implements IPlaybackManager {
    */
   pause(): void {
     if (!this.currentSession || this.currentSession.isStopped) {
-      logger.warn("Cannot pause - no active session", {
+      console.warn("Cannot pause - no active session", {
         component: this.name,
         method: "pause",
       });
@@ -270,7 +269,7 @@ export class PlaybackManager implements IPlaybackManager {
     }
 
     if (this.currentSession.isPaused) {
-      logger.debug("Playback already paused", {
+      console.warn("Playback already paused", {
         component: this.name,
         method: "pause",
         sessionId: this.currentSession.id,
@@ -278,7 +277,7 @@ export class PlaybackManager implements IPlaybackManager {
       return;
     }
 
-    logger.consoleInfo("Pausing playback", {
+    console.log("Pausing playback", {
       component: this.name,
       method: "pause",
       sessionId: this.currentSession.id,
@@ -289,14 +288,14 @@ export class PlaybackManager implements IPlaybackManager {
 
     // Pause the audio daemon
     this.audioDaemon.pause().catch((error) => {
-      logger.error("Failed to pause audio daemon", {
+      console.error("Failed to pause audio daemon", {
         component: this.name,
         method: "pause",
         error: error instanceof Error ? error.message : "Unknown error",
       });
     });
 
-    logger.consoleInfo("Playback paused", {
+    console.log("Playback paused", {
       component: this.name,
       method: "pause",
       sessionId: this.currentSession.id,
@@ -308,7 +307,7 @@ export class PlaybackManager implements IPlaybackManager {
    */
   resume(): void {
     if (!this.currentSession || this.currentSession.isStopped) {
-      logger.warn("Cannot resume - no active session", {
+      console.warn("Cannot resume - no active session", {
         component: this.name,
         method: "resume",
       });
@@ -316,7 +315,7 @@ export class PlaybackManager implements IPlaybackManager {
     }
 
     if (!this.currentSession.isPaused) {
-      logger.debug("Playback not paused", {
+      console.warn("Playback not paused", {
         component: this.name,
         method: "resume",
         sessionId: this.currentSession.id,
@@ -324,7 +323,7 @@ export class PlaybackManager implements IPlaybackManager {
       return;
     }
 
-    logger.consoleInfo("Resuming playback", {
+    console.log("Resuming playback", {
       component: this.name,
       method: "resume",
       sessionId: this.currentSession.id,
@@ -335,14 +334,14 @@ export class PlaybackManager implements IPlaybackManager {
 
     // Resume the audio daemon
     this.audioDaemon.resume().catch((error) => {
-      logger.error("Failed to resume audio daemon", {
+      console.error("Failed to resume audio daemon", {
         component: this.name,
         method: "resume",
         error: error instanceof Error ? error.message : "Unknown error",
       });
     });
 
-    logger.consoleInfo("Playback resumed", {
+    console.log("Playback resumed", {
       component: this.name,
       method: "resume",
       sessionId: this.currentSession.id,
@@ -353,7 +352,7 @@ export class PlaybackManager implements IPlaybackManager {
    * Stop playback
    */
   async stop(): Promise<void> {
-    logger.consoleInfo("Stopping playback", {
+    console.log("Stopping playback", {
       component: this.name,
       method: "stop",
       sessionId: this.currentSession?.id,
@@ -368,7 +367,7 @@ export class PlaybackManager implements IPlaybackManager {
       this.currentSession.isStopped = true;
     }
 
-    logger.consoleInfo("Playback stopped", {
+    console.log("Playback stopped", {
       component: this.name,
       method: "stop",
     });
@@ -412,7 +411,7 @@ export class PlaybackManager implements IPlaybackManager {
    */
   enqueueAudio(context: PlaybackContext): void {
     this.playbackQueue.push(context);
-    logger.debug("Audio enqueued", {
+    console.warn("Audio enqueued", {
       component: this.name,
       method: "enqueueAudio",
       queueLength: this.playbackQueue.length,
@@ -421,7 +420,7 @@ export class PlaybackManager implements IPlaybackManager {
 
     if (!this.isProcessingQueue) {
       this.processQueue().catch((error) => {
-        logger.error("Queue processing failed", {
+        console.error("Queue processing failed", {
           component: this.name,
           method: "enqueueAudio",
           error: error instanceof Error ? error.message : "Unknown error",
@@ -445,7 +444,7 @@ export class PlaybackManager implements IPlaybackManager {
       try {
         await this.playAudio(context, new AbortController().signal);
       } catch (error) {
-        logger.error("Failed to play queued audio", {
+        console.error("Failed to play queued audio", {
           component: this.name,
           method: "processQueue",
           error: error instanceof Error ? error.message : "Unknown error",
@@ -463,7 +462,7 @@ export class PlaybackManager implements IPlaybackManager {
     this.playbackQueue = [];
     this.isProcessingQueue = false;
 
-    logger.consoleInfo("Audio queue cleared", {
+    console.log("Audio queue cleared", {
       component: this.name,
       method: "clearQueue",
     });
@@ -523,7 +522,7 @@ export class PlaybackManager implements IPlaybackManager {
   ): void {
     this.config = { ...this.config, ...config };
 
-    logger.consoleInfo("Playback manager configuration updated", {
+    console.log("Playback manager configuration updated", {
       component: this.name,
       method: "updateConfig",
       config: this.config,
@@ -584,7 +583,7 @@ export class PlaybackManager implements IPlaybackManager {
     try {
       return this.audioDaemon.getCurrentPort();
     } catch (error) {
-      logger.warn("Failed to get daemon port", {
+      console.warn("Failed to get daemon port", {
         component: this.name,
         method: "getDaemonPort",
         error: error instanceof Error ? error.message : "Unknown error",

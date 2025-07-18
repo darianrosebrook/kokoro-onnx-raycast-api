@@ -17,7 +17,6 @@
  * @since 2025-07-17
  */
 
-import { logger } from "../core/logger.js";
 import { ValidationUtils } from "../validation/validation.js";
 import type {
   IPerformanceMonitor,
@@ -135,7 +134,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
       this.startPeriodicReporting();
     }
 
-    logger.consoleInfo("Performance monitor initialized", {
+    console.log("Performance monitor initialized", {
       component: this.name,
       method: "initialize",
       config: this.config,
@@ -151,7 +150,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     this.eventListeners.clear();
     this.initialized = false;
 
-    logger.debug("Performance monitor cleaned up", {
+    console.warn("Performance monitor cleaned up", {
       component: this.name,
       method: "cleanup",
     });
@@ -186,7 +185,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     this.activeSessions.set(requestId, session);
     this.globalMetrics.requestStart = session.startTime;
 
-    logger.debug("Performance tracking started", {
+    console.warn("Performance tracking started", {
       component: this.name,
       method: "startTracking",
       requestId,
@@ -241,7 +240,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     // Validate metrics
     const validation = ValidationUtils.validatePerformanceMetrics(finalMetrics);
     if (!validation.success) {
-      logger.warn("Performance metrics validation failed", {
+      console.warn("Performance metrics validation failed", {
         component: this.name,
         method: "endTracking",
         requestId,
@@ -283,7 +282,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     const activeSessions = this.activeSessions.size;
     const sessionDuration = (performance.now() - metrics.sessionStart) / 1000;
 
-    logger.consoleInfo("Performance Report", {
+    console.log("Performance Report", {
       component: this.name,
       method: "logPerformanceReport",
       sessionDuration: `${sessionDuration.toFixed(2)}s`,
@@ -335,7 +334,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     };
 
     // Log event
-    logger.debug(`Performance event: ${event}`, {
+    console.warn(`Performance event: ${event}`, {
       component: this.name,
       method: "emitEvent",
       event,
@@ -350,7 +349,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
         try {
           listener(eventData);
         } catch (error) {
-          logger.error("Event listener error", {
+          console.error("Event listener error", {
             component: this.name,
             method: "emitEvent",
             event,
@@ -375,7 +374,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
   updateThresholds(thresholds: Partial<PerformanceThresholds>): void {
     this.thresholds = { ...this.thresholds, ...thresholds };
 
-    logger.consoleInfo("Performance thresholds updated", {
+    console.log("Performance thresholds updated", {
       component: this.name,
       method: "updateThresholds",
       thresholds: this.thresholds,
@@ -628,7 +627,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     metrics: PerformanceMetrics,
     duration: number
   ): void {
-    logger.consoleInfo("Performance Summary", {
+    console.log("Performance Summary", {
       component: this.name,
       method: "logPerformanceSummary",
       requestId,
@@ -651,7 +650,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     requestId: string,
     recommendations: PerformanceRecommendation[]
   ): void {
-    logger.consoleInfo("Performance Recommendations", {
+    console.log("Performance Recommendations", {
       component: this.name,
       method: "logRecommendations",
       requestId,
@@ -697,7 +696,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
     const count = this.activeSessions.size;
     this.activeSessions.clear();
 
-    logger.consoleInfo("All performance sessions cleared", {
+    console.log("All performance sessions cleared", {
       component: this.name,
       method: "clearSessions",
       clearedCount: count,
@@ -736,7 +735,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
       timestamp: performance.now(),
     });
 
-    logger.debug("Buffer adjustment recorded", {
+    console.warn("Buffer adjustment recorded", {
       component: this.name,
       method: "recordBufferAdjustment",
       oldBufferMs,
@@ -829,7 +828,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
       timestamp: performance.now(),
     });
 
-    logger.consoleInfo("Adaptive buffer configuration updated", {
+    console.log("Adaptive buffer configuration updated", {
       component: this.name,
       method: "updateAdaptiveBufferConfig",
       newConfig: bufferConfig,

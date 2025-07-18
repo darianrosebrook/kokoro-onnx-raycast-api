@@ -1,0 +1,120 @@
+# LLM Rule set for AI Agent code contribution
+---
+## Implementation Details
+
+### Design Implementation Rules
+1. Source UI Components from @qualtrics/ui-react first before creating bespoke components
+We have our Design System components sourced from `@qualtrics/ui-react` a dependency added to the project. Ensure it is searched for the right component before creating bespoke components or utilities.
+
+2. Utilize existing design tokens to style our system components. 
+Design tokens can be found in `@qualtrics/ui-react/dist/design-tokens`. Use this as the initial source of styling decisions before implementing bespoke, hard-coded values. Prefer semantic tokens over primitives.
+
+3. Update or Create an implementation plan in @/docs/implementation before starting work
+When starting a task, check to make sure that we have the task broken down into a bite-sized implementation plan as a markdown checklist. Update this list with details of progress, with necessary references to location of files, key functions, or types.
+e.g.
+`# Interaction Context Refactor Plan
+> **Status:**
+> All interaction logic is now unified in [...] is updated and passing build/lint.
+## Goal
+Unify all user interaction tracking[...]and interaction patterns.
+---
+## Current State
+### 1. Mouse Events
+- **File:** `context/MouseEventContext.tsx` (**Removed**; logic unified in `InteractionContext.tsx`)
+- **Uses:** GSAP Observer for mouse, pointer, wheel, scroll events.
+- **Provides:** Mouse position, velocity, pressed/dragging state.
+---
+## Problems Identified
+- **Duplication:** Mouse and reduced motion logic in both context and hooks. (**Resolved**)
+---
+## Implementation and Refactor plan
+### 1. Unify Reduced Motion
+- [x] Use only `context/ReducedMotionContext.tsx`.
+[...]
+- [x] Update all imports to use context version.
+---
+## Code References
+- **MouseEventContext:**
+  - Uses GSAP Observer: `import { Observer } from 'gsap/Observer';`
+[...]
+  - Provides: `getPosition`, `isPressed`, `isDragging` (now unified)
+---`
+
+4.  Document Typescript and Javascript in JSDoc format
+When documenting the functionality of code, prioritize JSDoc format for consistent in-file documentation. Additional '//' inline documentation is still fine for supplemental information 
+
+5. Iterate implementing fixes on errors until resolved
+
+6. Assume training data is not currently up to date. This repo was created in June,2025
+
+7. Prioritize and utilize '@' aliased imports for local typescript and tsx modules
+Utilize aliased '@' imports for relative imports from 'src'
+
+8. Prioritize app-level interfaces & types in a single source of truth.
+Our types are in the src/types, update those as we progress. If a type doesn't exist, we should prioritize and check within that src/types folder first. Duplicate declarations can cause further problems so we want to condense where possible.
+
+9. Scope component-level interface & type definitions in their respective files.
+
+10. Safe Defaults & Fail-Fast Guards
+> **Purpose**
+> 1. Prevent `undefined`/`null` errors by supplying defaults.
+> 2. Exit early from any conditional when prerequisites aren’t met, keeping main logic flat.
+> 3. **Encourage defaults in signatures**: catches missing data even before you enter the function.
+
+11. Nullish Coalescing + Optional Chaining
+
+- **Guard deep property access**: always use `?.` before you touch a potentially missing object.
+- **Supply a default with `??`**: whenever a value could be `null`/`undefined`, fall back immediately.
+- **Declare defaults in signatures**: for function params that might be omitted.
+
+```ts
+// ✔️ Safe property access + default
+const username = response.user?.name ?? "guest";
+
+// ✔️ Default param
+function send(message: string, options: SendOptions = {}) {
+  const retries = options.retries ?? 3;
+  // …
+}
+```
+
+12. Early Return / Guard Clauses
+
+- At the top of **any** block—functions, loops, `if`/`else`, `switch` cases—check your preconditions and return (or throw) immediately on failure.
+- This “fail-fast” style:
+  1. Avoids deeply nested logic
+  2. Makes it impossible to run downstream code on bad inputs
+  3. Signals exactly where you handled the invalid state
+
+```ts
+function processOrder(order?: Order) {
+  @nullish-coalescing.mdc
+  if (!order) {
+    console.error('No order provided');
+    return;                  // ← early return
+  }
+
+  // Now safe to use order.id, order.items, etc.
+  const count = order.items?.length ?? 0;
+  // …
+}
+
+// In loops:
+for (let i = 0, len = items?.length ?? 0; i < len; i++) {
+  if (!items[i].price) {
+    @nullish-coalescing.mdc
+    continue;                // skip malformed entry
+  }
+  // …
+}
+
+// In switch:
+switch (status) {
+  case 'ready':
+    // …
+    break;
+  default:
+    @nullish-coalescing.mdc
+    return handleUnknown(status);
+}
+```

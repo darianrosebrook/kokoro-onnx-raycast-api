@@ -19,12 +19,12 @@ import { TTSSpeechProcessor } from "./utils/tts/tts-processor";
 import { getValidatedVoice } from "./utils/tts/voice-manager";
 import type { StatusUpdate } from "./types";
 import { logger } from "./utils/core/logger";
-
 /**
  * Raycast command to speak currently selected text using the TTS processor
  */
 export default async function SpeakSelection() {
   let processor: TTSSpeechProcessor | undefined;
+  logger.consoleDebug("SpeakSelection");
 
   const onStatusUpdate = (status: StatusUpdate) => {
     const toastOptions: Toast.Options = {
@@ -49,6 +49,11 @@ export default async function SpeakSelection() {
     let text: string;
     try {
       text = await getSelectedText();
+      logger.debug("[SPEAK-SELECTION] Selected text:", {
+        length: text.length,
+        preview: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
+      });
+      logger.consoleDebug("Text successfully retrieved from selection");
     } catch {
       await showToast({
         style: Toast.Style.Failure,
@@ -74,7 +79,7 @@ export default async function SpeakSelection() {
     // Get user preferences with enhanced validation
     const prefs = getPreferenceValues();
     const serverUrl = prefs.serverUrl || "http://localhost:8000";
-
+    logger.consoleDebug("Validating voice configuration");
     // Validate and get the best available voice
     const validatedVoice = await getValidatedVoice(prefs.voice || "af_heart", serverUrl);
 
@@ -89,16 +94,16 @@ export default async function SpeakSelection() {
       onStatusUpdate,
     });
 
-    logger.consoleInfo(" [SPEAK-SELECTION] === START TTS ===");
-    logger.consoleInfo(" [SPEAK-SELECTION] Selected text:", {
+    logger.debug("[SPEAK-SELECTION] === START TTS ===");
+    logger.debug("[SPEAK-SELECTION] Selected text:", {
       length: text.length,
       preview: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
     });
-    logger.consoleInfo(" [SPEAK-SELECTION] TTS processor config:", processor.config);
+    logger.debug("[SPEAK-SELECTION] TTS processor created with config");
 
     // This will await until playback is completely finished
     await processor.speak(text);
-    logger.consoleInfo(" [SPEAK-SELECTION] ✅ TTS processing completed successfully");
+    logger.info("[SPEAK-SELECTION] ✅ TTS processing completed successfully");
 
     // The 'speak' method now resolves when finished, paused, or stopped.
     // We only show "Finished" if it wasn't stopped.
@@ -110,7 +115,7 @@ export default async function SpeakSelection() {
       });
     }
   } catch (error) {
-    console.error(" [SPEAK-SELECTION]  TTS processing failed:", error);
+    logger.error("[SPEAK-SELECTION] TTS processing failed:", {}, error as Error);
 
     await showToast({
       style: Toast.Style.Failure,
@@ -120,6 +125,6 @@ export default async function SpeakSelection() {
   } finally {
     // The processor will handle its own cleanup when playback completes naturally
     // Calling processor.stop() here would prematurely terminate ongoing playback
-    logger.consoleInfo(" [SPEAK-SELECTION] === END TTS ===");
+    logger.debug("[SPEAK-SELECTION] === END TTS ===");
   }
 }

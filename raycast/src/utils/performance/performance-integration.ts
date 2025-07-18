@@ -18,9 +18,13 @@
 
 import { PerformanceMonitor } from "./performance-monitor.js";
 import { AdaptiveBufferManager } from "../tts/streaming/adaptive-buffer-manager.js";
-import { TTSBenchmark } from "./performance-benchmark.js";
-import { logger } from "../core/logger.js";
-import type { TTSProcessorConfig, BufferConfig } from "../validation/tts-types.js";
+import { ttsBenchmark } from "./performance-benchmark.js";
+import type {
+  TTSProcessorConfig,
+  BufferConfig,
+  PerformanceMetrics,
+} from "../validation/tts-types.js";
+import type { PerformanceStats } from "./performance-benchmark.js";
 
 /**
  * Integrated performance management system
@@ -29,7 +33,7 @@ export class PerformanceIntegration {
   private readonly name = "PerformanceIntegration";
   private performanceMonitor: PerformanceMonitor;
   private adaptiveBufferManager: AdaptiveBufferManager;
-  private benchmark: TTSBenchmark;
+  private benchmark: typeof ttsBenchmark;
   private initialized = false;
 
   constructor(config: Partial<TTSProcessorConfig> = {}) {
@@ -40,12 +44,12 @@ export class PerformanceIntegration {
     this.adaptiveBufferManager = new AdaptiveBufferManager();
 
     // Initialize benchmark system
-    this.benchmark = new TTSBenchmark();
+    this.benchmark = ttsBenchmark;
 
     // Set up integrations
     this.setupIntegrations();
 
-    logger.consoleInfo("Performance integration system created", {
+    console.log("Performance integration system created", {
       component: this.name,
       method: "constructor",
     });
@@ -63,7 +67,7 @@ export class PerformanceIntegration {
 
     this.initialized = true;
 
-    logger.consoleInfo("Performance integration system initialized", {
+    console.log("Performance integration system initialized", {
       component: this.name,
       method: "initialize",
     });
@@ -80,7 +84,7 @@ export class PerformanceIntegration {
     this.benchmark.setPerformanceMonitor(this.performanceMonitor);
     this.benchmark.setAdaptiveBufferManager(this.adaptiveBufferManager);
 
-    logger.debug("Cross-system integrations established", {
+    console.warn("Cross-system integrations established", {
       component: this.name,
       method: "setupIntegrations",
     });
@@ -122,8 +126,15 @@ export class PerformanceIntegration {
    * Run performance benchmark and update configurations
    */
   async runBenchmark(serverUrl: string): Promise<{
-    stats: any;
-    optimalConfig: any;
+    stats: PerformanceStats;
+    optimalConfig: {
+      targetBufferMs: number;
+      bufferSize: number;
+      chunkSize: number;
+      deliveryRate: number;
+      confidence: number;
+      reasoning: string[];
+    };
   }> {
     // Run benchmark suite
     const stats = await this.benchmark.runBenchmarkSuite(serverUrl);
@@ -131,7 +142,7 @@ export class PerformanceIntegration {
     // Generate optimal configuration from benchmark results
     const optimalConfig = this.benchmark.generateOptimalBufferConfig();
 
-    logger.consoleInfo("Benchmark completed and configurations updated", {
+    console.log("Benchmark completed and configurations updated", {
       component: this.name,
       method: "runBenchmark",
       stats,
@@ -146,8 +157,14 @@ export class PerformanceIntegration {
    */
   getIntegratedReport(): {
     bufferConfig: BufferConfig;
-    performanceMetrics: any;
-    recommendations: any[];
+    performanceMetrics: PerformanceMetrics;
+    recommendations: {
+      type: string;
+      priority: string;
+      message: string;
+      action: string;
+      expectedImpact: string;
+    }[];
     health: {
       status: string;
       score: number;
@@ -178,7 +195,7 @@ export class PerformanceIntegration {
     this.adaptiveBufferManager.stopMonitoring();
     this.initialized = false;
 
-    logger.debug("Performance integration system cleaned up", {
+    console.warn("Performance integration system cleaned up", {
       component: this.name,
       method: "cleanup",
     });

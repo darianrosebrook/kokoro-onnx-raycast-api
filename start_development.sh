@@ -3,7 +3,7 @@
 # This script ensures the application runs with optimal settings for a development environment.
 
 # --- Configuration ---
-HOST=${HOST:-"0.0.0.0"}
+HOST=${HOST:-"127.0.0.1"}
 PORT=${PORT:-8000}
 LOG_LEVEL=${LOG_LEVEL:-"info"}
 # Automatically enable reload in development, unless explicitly disabled.

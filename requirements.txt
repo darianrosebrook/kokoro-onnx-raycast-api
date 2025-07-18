@@ -8,7 +8,14 @@ starlette>=0.27.0
 kokoro-onnx>=0.4.9
 soundfile>=0.12.0
 pyaudio>=0.2.11
-misaki[en]>=0.1.0  # Kokoro-specific G2P engine (replaces phonemizer-fork)
+
+# Text processing and G2P engines
+# NOTE: For Python 3.13 compatibility, install these in order:
+# 1. First install spacy (which provides compatible blis wheel)
+# 2. Then install misaki dependencies
+spacy>=3.8.0  # Provides compatible blis wheel for Python 3.13
+num2words>=0.5.0  # Required by misaki[en]
+misaki>=0.1.0  # Kokoro-specific G2P engine
 phonemizer-fork>=0.1.0  # Fallback compatibility
 espeakng-loader>=0.1.0  # Required for eSpeak integration
 

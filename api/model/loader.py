@@ -150,6 +150,30 @@ import onnxruntime as ort
 from api.model.patch import apply_all_patches
 apply_all_patches()
 
+# Set up CoreML temp directory early to avoid permission issues
+def _setup_early_temp_directory():
+    """Set up temp directory immediately on module import."""
+    try:
+        cache_dir = os.path.join(os.getcwd(), ".cache")
+        local_temp_dir = os.path.join(cache_dir, "coreml_temp")
+        os.makedirs(local_temp_dir, exist_ok=True)
+        os.chmod(local_temp_dir, 0o755)
+        
+        # Set environment variables early
+        os.environ['TMPDIR'] = local_temp_dir
+        os.environ['TMP'] = local_temp_dir 
+        os.environ['TEMP'] = local_temp_dir
+        os.environ['COREML_TEMP_DIR'] = local_temp_dir
+        os.environ['ONNXRUNTIME_TEMP_DIR'] = local_temp_dir
+        
+        import tempfile
+        tempfile.tempdir = local_temp_dir
+        
+    except Exception:
+        pass  # Fail silently on import, will try again during initialization
+
+# Set up temp directory immediately
+_setup_early_temp_directory()
 
 logger = logging.getLogger(__name__)
 
@@ -1244,27 +1268,11 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> dict:
         # Use MLProgram format for better performance on newer Apple devices (iOS 15+, macOS 12+)
         'ModelFormat': 'MLProgram',
 
-        # PHASE 2 OPTIMIZATION: Enable static input shapes for phoneme-based tensor consistency
-        # This enables CoreML graph reuse and 2-5x performance improvement through consistent tensor shapes
-        'RequireStaticInputShapes': '1',
-
         # Enable subgraph optimization for better performance
         'EnableOnSubgraphs': '1',
 
-        # Optimize for fast prediction (ideal for TTS)
-        'SpecializationStrategy': 'FastPrediction',
-
-        # Disable compute plan profiling for production (enable for debugging if needed)
-        'ProfileComputePlan': '0',
-
         # Use float16 for GPU acceleration when possible
-        'AllowLowPrecisionAccumulationOnGPU': '1',
-
-        # PHASE 2 OPTIMIZATION: Phoneme-based shape configuration for CoreML reuse
-        'MaxSequenceLength': '256',  # Based on phoneme vectors, not text length
-        'EnableCoreMLSpecialization': '1',
-        'StaticInputShapes': '1',  # Force static input shapes for consistent tensor dimensions
-        'PhonemeBasedPadding': '1',  # Enable phoneme-based padding strategy
+        'AllowLowPrecisionAccumulationOnGPU': '1'
     }
 
     # PHASE 2 OPTIMIZATION: Hardware-specific MLComputeUnits configuration
@@ -1817,6 +1825,81 @@ def benchmark_providers():
     return optimal_provider, benchmark_results
 
 
+def setup_coreml_temp_directory():
+    """
+    Set up a local temporary directory for CoreML to avoid permission issues.
+    
+    macOS security restrictions can cause permission issues with CoreML temporary files
+    in the default system temp directory. This function creates a local temp directory
+    within the project and configures both Python and ONNX Runtime to use it.
+    """
+    import tempfile
+    
+    # Create local temp directory for CoreML within .cache (which should already exist)
+    cache_dir = os.path.join(os.getcwd(), ".cache")
+    local_temp_dir = os.path.join(cache_dir, "coreml_temp")
+    os.makedirs(local_temp_dir, exist_ok=True)
+    
+    # Set proper permissions to ensure writeability
+    os.chmod(local_temp_dir, 0o755)
+    
+    # Set environment variables to use local temp directory
+    # These are used by Python's tempfile module and various libraries
+    os.environ['TMPDIR'] = local_temp_dir
+    os.environ['TMP'] = local_temp_dir
+    os.environ['TEMP'] = local_temp_dir
+    
+    # Set CoreML and ONNX Runtime specific environment variables
+    os.environ['COREML_TEMP_DIR'] = local_temp_dir
+    os.environ['ONNXRUNTIME_TEMP_DIR'] = local_temp_dir
+    
+    # Set Python's tempfile default directory
+    tempfile.tempdir = local_temp_dir
+    
+    # Ensure the directory is world-writable to avoid permission issues
+    try:
+        # Create a test file to verify writeability
+        test_file = os.path.join(local_temp_dir, "writetest.tmp")
+        with open(test_file, 'w') as f:
+            f.write("test")
+        os.remove(test_file)
+        logger.info(f"📁 CoreML temp directory configured and verified: {local_temp_dir}")
+    except Exception as e:
+        logger.warning(f"⚠️ CoreML temp directory may not be fully writable: {e}")
+    
+    return local_temp_dir
+
+
+def cleanup_coreml_temp_directory():
+    """
+    Clean up the CoreML temporary directory to free up space.
+    
+    Note: We don't actually remove the directory itself since other processes
+    like phonemizer/eSpeak may still need it. We just clean up old files.
+    """
+    try:
+        local_temp_dir = os.path.join(os.getcwd(), ".cache", "coreml_temp")
+        if os.path.exists(local_temp_dir):
+            # Clean up old files but keep the directory structure
+            import glob
+            import time
+            
+            # Remove files older than 1 hour
+            current_time = time.time()
+            for file_path in glob.glob(os.path.join(local_temp_dir, "*")):
+                try:
+                    if os.path.isfile(file_path):
+                        file_age = current_time - os.path.getmtime(file_path)
+                        if file_age > 3600:  # 1 hour
+                            os.remove(file_path)
+                except Exception:
+                    pass  # Ignore errors for individual files
+            
+            logger.debug(f"🧹 Cleaned up old files in CoreML temp directory: {local_temp_dir}")
+    except Exception as e:
+        logger.debug(f"Could not clean up CoreML temp directory: {e}")
+
+
 def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.SessionOptions:
     """
     Create highly optimized ONNX Runtime session options for Apple Silicon.
@@ -1845,6 +1928,13 @@ def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.Sessio
     logger.info("Creating optimized ONNX Runtime session options...")
 
     session_options = ort.SessionOptions()
+
+    # Set up local temp directory for ONNX Runtime artifacts
+    local_temp_dir = os.path.join(os.getcwd(), ".cache", "coreml_temp")
+    if os.path.exists(local_temp_dir):
+        # Configure session to use local temp directory
+        session_options.add_session_config_entry("session.use_env_allocators", "1")
+        session_options.add_session_config_entry("session.temp_dir_path", local_temp_dir)
 
     # PHASE 2 OPTIMIZATION: Graph optimization based on workload
     # BASIC provides best performance balance for TTS, ALL can cause diminishing returns
@@ -1963,6 +2053,7 @@ def initialize_model():
     - Enhanced resource management and cleanup
     - Better error handling and recovery
     - Memory-efficient processing
+    - Automatic fallback from CoreML to CPU on permission/initialization errors
 
     Reference: DEPENDENCY_RESEARCH.md section 5.1
     """
@@ -1973,73 +2064,105 @@ def initialize_model():
     logger.info("Initializing TTS model with enhanced optimization...")
     initialization_start = time.perf_counter()
 
+    # Detect hardware capabilities for optimization
+    capabilities = detect_apple_silicon_capabilities()
+
     try:
         # Get optimal provider with hardware-specific optimizations
         optimal_provider, benchmark_results = benchmark_providers()
         _active_provider = optimal_provider
 
-        # Detect hardware capabilities for optimization
-        capabilities = detect_apple_silicon_capabilities()
-
         logger.info(f"Initializing model with provider: {optimal_provider}")
 
-        # PHASE 2 OPTIMIZATION: Enhanced Kokoro model initialization with optimized session
-        logger.info(
-            f"Creating optimized ONNX Runtime session with provider: {optimal_provider}")
+        # Try to initialize with optimal provider first
+        success = False
+        providers_to_try = [optimal_provider]
+        
+        # Add CPU fallback if optimal provider is CoreML
+        if optimal_provider == "CoreMLExecutionProvider" and "CPUExecutionProvider" not in providers_to_try:
+            providers_to_try.append("CPUExecutionProvider")
 
-        # Create optimized session options using dedicated function
-        session_options = create_optimized_session_options(capabilities)
+        for provider_attempt in providers_to_try:
+            try:
+                logger.info(f"Attempting initialization with provider: {provider_attempt}")
+                
+                # Set up local temp directory for CoreML to avoid permission issues
+                if provider_attempt == "CoreMLExecutionProvider":
+                    setup_coreml_temp_directory()
+                
+                # Create optimized session options using dedicated function
+                session_options = create_optimized_session_options(capabilities)
 
-        # Configure provider options based on hardware
-        provider_options = {}
-        if optimal_provider == "CoreMLExecutionProvider":
-            # Enhanced CoreML provider options
-            if capabilities.get('neural_engine_cores', 0) >= 32:  # M1 Max / M2 Max
-                provider_options = {
-                    "MLComputeUnits": "CPUAndNeuralEngine",  # Prefer Neural Engine
-                    "ModelFormat": "MLProgram",              # Use MLProgram for newer devices
-                    "AllowLowPrecisionAccumulationOnGPU": "1"  # Enable FP16 optimization
-                }
-                logger.info("Using M1/M2 Max optimized CoreML configuration")
-            elif capabilities.get('neural_engine_cores', 0) >= 16:  # M1 / M2
-                provider_options = {
-                    "MLComputeUnits": "CPUAndNeuralEngine",
-                    "ModelFormat": "MLProgram"
-                }
-                logger.info("Using M1/M2 optimized CoreML configuration")
-            else:  # Other Apple Silicon
-                provider_options = {
-                    "MLComputeUnits": "CPUAndGPU"
-                }
-                logger.info(
-                    "Using standard Apple Silicon CoreML configuration")
+                # Configure provider options based on hardware
+                provider_options = {}
+                if provider_attempt == "CoreMLExecutionProvider":
+                    # Enhanced CoreML provider options
+                    if capabilities.get('neural_engine_cores', 0) >= 32:  # M1 Max / M2 Max
+                        provider_options = {
+                            "MLComputeUnits": "CPUAndNeuralEngine",  # Prefer Neural Engine
+                            "ModelFormat": "MLProgram",              # Use MLProgram for newer devices
+                            "AllowLowPrecisionAccumulationOnGPU": "1"  # Enable FP16 optimization
+                        }
+                        logger.info("Using M1/M2 Max optimized CoreML configuration")
+                    elif capabilities.get('neural_engine_cores', 0) >= 16:  # M1 / M2
+                        provider_options = {
+                            "MLComputeUnits": "CPUAndNeuralEngine",
+                            "ModelFormat": "MLProgram"
+                        }
+                        logger.info("Using M1/M2 optimized CoreML configuration")
+                    else:  # Other Apple Silicon
+                        provider_options = {
+                            "MLComputeUnits": "CPUAndGPU"
+                        }
+                        logger.info("Using standard Apple Silicon CoreML configuration")
 
-        # Create the ONNX Runtime session with optimizations
-        providers = [(optimal_provider, provider_options)
-                     ] if provider_options else [optimal_provider]
-        session = ort.InferenceSession(
-            TTSConfig.MODEL_PATH,
-            sess_options=session_options,
-            providers=providers
-        )
+                # Create the ONNX Runtime session with optimizations
+                providers = [(provider_attempt, provider_options)] if provider_options else [provider_attempt]
+                
+                logger.info(f"Creating optimized ONNX Runtime session with provider: {provider_attempt}")
+                session = ort.InferenceSession(
+                    TTSConfig.MODEL_PATH,
+                    sess_options=session_options,
+                    providers=providers
+                )
 
-        # Initialize Kokoro with the optimized session
-        logger.info(f"Initializing Kokoro with optimized session")
-        kokoro_model = Kokoro.from_session(
-            session=session,
-            voices_path=TTSConfig.VOICES_PATH
-        )
+                # Initialize Kokoro with the optimized session
+                logger.info(f"Initializing Kokoro with optimized session")
+                kokoro_model = Kokoro.from_session(
+                    session=session,
+                    voices_path=TTSConfig.VOICES_PATH
+                )
+
+                # Update active provider to successful one
+                _active_provider = provider_attempt
+                success = True
+                
+                logger.info(f"✅ Successfully initialized with provider: {provider_attempt}")
+                break
+                
+            except Exception as provider_error:
+                logger.error(f"Failed to initialize with provider {provider_attempt}: {provider_error}")
+                
+                # Check if this is the CoreML permission error
+                if "Operation not permitted" in str(provider_error) or "iostream_category" in str(provider_error):
+                    logger.warning(f"⚠️ CoreML permission error detected - this is common on macOS with security restrictions")
+                    logger.info("ℹ️ Falling back to CPU provider for reliable operation")
+                elif "CoreMLExecutionProvider" in provider_attempt:
+                    logger.warning(f"⚠️ CoreML provider failed - falling back to CPU provider")
+                
+                # Continue to next provider in fallback chain
+                continue
+
+        if not success:
+            raise RuntimeError("All provider initialization attempts failed")
 
         # Log hardware-specific optimizations (these are applied at the ONNX Runtime level)
         if capabilities.get('neural_engine_cores', 0) >= 32:  # M1 Max
-            logger.info(
-                "✅ M1 Max specific optimizations applied at ONNX Runtime level")
+            logger.info("✅ M1 Max specific optimizations applied at ONNX Runtime level")
         elif capabilities.get('is_apple_silicon', False):
-            logger.info(
-                "✅ Apple Silicon optimizations applied at ONNX Runtime level")
+            logger.info("✅ Apple Silicon optimizations applied at ONNX Runtime level")
         else:
-            logger.info(
-                "✅ Standard CPU optimizations applied at ONNX Runtime level")
+            logger.info("✅ Standard CPU optimizations applied at ONNX Runtime level")
 
         # Model warmup for better performance
         logger.info(" Warming up model for optimal performance...")
@@ -2057,8 +2180,7 @@ def initialize_model():
         model_loaded = True
         initialization_time = time.perf_counter() - initialization_start
 
-        logger.info(
-            f" TTS model initialized successfully with {optimal_provider} provider in {initialization_time:.3f}s")
+        logger.info(f"✅ TTS model initialized successfully with {_active_provider} provider in {initialization_time:.3f}s")
 
         # Log performance information
         if benchmark_results:
@@ -2101,8 +2223,7 @@ def initialize_model():
             logger.warning("Continuing without real-time optimization")
 
     except Exception as e:
-        logger.critical(
-            f" Critical error during model initialization: {e}", exc_info=True)
+        logger.critical(f" Critical error during model initialization: {e}", exc_info=True)
         model_loaded = False
         kokoro_model = None
         raise RuntimeError(f"Model initialization failed: {e}")
@@ -2116,6 +2237,9 @@ def cleanup_model():
         logger.info("Cleaning up model resources...")
         kokoro_model = None
         gc.collect()
+    
+    # Clean up old files in CoreML temp directory but keep the directory
+    cleanup_coreml_temp_directory()
 
     # PHASE 3 OPTIMIZATION: Cleanup dual session manager
     if dual_session_manager:
@@ -3102,12 +3226,13 @@ class InferencePipelineWarmer:
                     else:
                         # Fallback to single model
                         provider = get_active_provider()
-                        local_model = _get_cached_model(provider)
-                        await asyncio.get_event_loop().run_in_executor(
-                            None,
-                            local_model.create,
-                            dummy_text, "af_bella", 1.0, "en-us"
-                        )
+                        local_model = get_model()  # Use the main model directly
+                        if local_model:
+                            await asyncio.get_event_loop().run_in_executor(
+                                None,
+                                local_model.create,
+                                dummy_text, "af_bella", 1.0, "en-us"
+                            )
                         results['providers_tested'].append(provider)
 
                     results['graphs_compiled'] += 1
@@ -3172,11 +3297,12 @@ class InferencePipelineWarmer:
                             else:
                                 # Fallback to single model
                                 provider = get_active_provider()
-                                local_model = _get_cached_model(provider)
-                                await asyncio.get_event_loop().run_in_executor(
-                                    None,
-                                    local_model.create,
-                                    pattern, voice, 1.0, "en-us"
+                                local_model = get_model()  # Use the main model directly
+                                if local_model:
+                                    await asyncio.get_event_loop().run_in_executor(
+                                        None,
+                                        local_model.create,
+                                        pattern, voice, 1.0, "en-us"
                                 )
 
                             results['patterns_cached'] += 1
@@ -3203,9 +3329,8 @@ class InferencePipelineWarmer:
                 self.logger.debug(f"Could not get phoneme cache stats: {e}")
 
             try:
-                inference_stats = get_inference_cache_stats()
-                results['inference_cache_size'] = inference_stats.get(
-                    'cache_size', 0)
+                # Fallback: provide basic inference stats without circular import
+                results['inference_cache_size'] = 0  # Default value
             except Exception as e:
                 self.logger.debug(f"Could not get inference cache stats: {e}")
 

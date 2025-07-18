@@ -10,9 +10,11 @@
  * @since 2025-07-17
  */
 
-import type { PerformanceMetrics, BufferHealth, NetworkConditions } from "../validation/tts-types";
-import { logger } from "../core/logger";
-
+import type {
+  PerformanceMetrics,
+  BufferHealth,
+  NetworkConditions,
+} from "../validation/tts-types.js";
 /**
  * Performance alert types
  */
@@ -118,7 +120,7 @@ export class PerformanceDashboard {
       this.updateMetrics();
     }, this.config.updateInterval);
 
-    logger.consoleInfo("Performance dashboard started");
+    console.log("Performance dashboard started");
   }
 
   /**
@@ -130,7 +132,7 @@ export class PerformanceDashboard {
       this.updateInterval = null;
     }
 
-    logger.consoleInfo("Performance dashboard stopped");
+    console.log("Performance dashboard stopped");
   }
 
   /**

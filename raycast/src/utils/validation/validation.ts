@@ -18,8 +18,6 @@
  */
 
 import { z } from "zod";
-import { logger } from "../core/logger.js";
-
 /**
  * Voice option validation schema
  */
@@ -170,7 +168,7 @@ export class ValidationUtils {
     try {
       const validated = TTSRequestSchema.parse(data);
 
-      logger.debug("TTS request validation successful", {
+      console.warn("TTS request validation successful", {
         component: "ValidationUtils",
         method: "validateTTSRequest",
         textLength: validated.text.length,
@@ -185,7 +183,7 @@ export class ValidationUtils {
     } catch (error) {
       const errors = this.extractZodErrors(error);
 
-      logger.warn("TTS request validation failed", {
+      console.warn("TTS request validation failed", {
         component: "ValidationUtils",
         method: "validateTTSRequest",
         errors,
@@ -210,7 +208,7 @@ export class ValidationUtils {
     try {
       const validated = TTSResponseSchema.parse(data);
 
-      logger.debug("TTS response validation successful", {
+      console.warn("TTS response validation successful", {
         component: "ValidationUtils",
         method: "validateTTSResponse",
         format: validated.format,
@@ -224,7 +222,7 @@ export class ValidationUtils {
     } catch (error) {
       const errors = this.extractZodErrors(error);
 
-      logger.error("TTS response validation failed", {
+      console.error("TTS response validation failed", {
         component: "ValidationUtils",
         method: "validateTTSResponse",
         errors,
@@ -248,7 +246,7 @@ export class ValidationUtils {
     try {
       const validated = TTSConfigSchema.parse(data);
 
-      logger.debug("TTS config validation successful", {
+      console.warn("TTS config validation successful", {
         component: "ValidationUtils",
         method: "validateTTSConfig",
         voice: validated.voice,
@@ -263,7 +261,7 @@ export class ValidationUtils {
     } catch (error) {
       const errors = this.extractZodErrors(error);
 
-      logger.warn("TTS config validation failed, using defaults", {
+      console.warn("TTS config validation failed, using defaults", {
         component: "ValidationUtils",
         method: "validateTTSConfig",
         errors,
@@ -295,7 +293,7 @@ export class ValidationUtils {
     } catch (error) {
       const errors = this.extractZodErrors(error);
 
-      logger.warn("Performance metrics validation failed", {
+      console.warn("Performance metrics validation failed", {
         component: "ValidationUtils",
         method: "validatePerformanceMetrics",
         errors,
@@ -325,7 +323,7 @@ export class ValidationUtils {
     } catch (error) {
       const errors = this.extractZodErrors(error);
 
-      logger.warn("Server health validation failed", {
+      console.warn("Server health validation failed", {
         component: "ValidationUtils",
         method: "validateServerHealth",
         errors,

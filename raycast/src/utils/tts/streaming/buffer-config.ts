@@ -10,8 +10,6 @@
  * @since 2025-07-17
  */
 
-import { logger } from "../../core/logger";
-
 /**
  * Optimal buffer configuration based on benchmark results
  */
@@ -259,7 +257,7 @@ export function applyBufferConfig(config: OptimalBufferConfig): void {
   const validation = validateBufferConfig(config);
 
   if (!validation.isValid) {
-    logger.error("Invalid buffer configuration", {
+    console.error("Invalid buffer configuration", {
       component: "BufferConfig",
       method: "applyBufferConfig",
       errors: validation.errors,
@@ -268,14 +266,14 @@ export function applyBufferConfig(config: OptimalBufferConfig): void {
   }
 
   if (validation.warnings.length > 0) {
-    logger.warn("Buffer configuration warnings", {
+    console.warn("Buffer configuration warnings", {
       component: "BufferConfig",
       method: "applyBufferConfig",
       warnings: validation.warnings,
     });
   }
 
-  logger.consoleInfo("Buffer configuration applied", {
+  console.log("Buffer configuration applied", {
     component: "BufferConfig",
     method: "applyBufferConfig",
     config: {

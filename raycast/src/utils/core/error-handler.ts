@@ -3,8 +3,6 @@
  * @author @darianrosebrook
  */
 
-import { logger } from "./logger";
-
 /**
  * Error types that can be presented to users
  */
@@ -121,7 +119,7 @@ export class TTSErrorHandler {
     error: Error,
     context?: { component?: string; method?: string; [key: string]: unknown }
   ): UserError {
-    logger.error("Creating user error from technical error", {
+    console.error("Creating user error from technical error", {
       component: "TTSErrorHandler",
       method: "createUserError",
       error: error.message,
@@ -220,7 +218,7 @@ export class TTSErrorHandler {
     error: Error,
     context?: { component?: string; method?: string; [key: string]: unknown }
   ): void {
-    logger.error("TTS Error occurred", {
+    console.error("TTS Error occurred", {
       component: context?.component ?? "Unknown",
       method: context?.method ?? "Unknown",
       error: error.message,

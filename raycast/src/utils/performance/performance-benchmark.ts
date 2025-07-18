@@ -20,7 +20,8 @@
 import { showToast, Toast } from "@raycast/api";
 import type { TTSRequestParams, VoiceOption } from "../validation/tts-types.js";
 import { cacheManager } from "../core/cache.js";
-import { logger } from "../core/logger";
+import type { AdaptiveBufferManager } from "../tts/streaming/adaptive-buffer-manager.js";
+import type { PerformanceMonitor } from "./performance-monitor.js";
 
 /**
  * Performance metrics for a single TTS request
@@ -126,23 +127,23 @@ class PrecisionTimer {
 class TTSBenchmark {
   private metrics: TTSPerformanceMetrics[] = [];
   private isCollecting = false;
-  private adaptiveBufferManager: any = null; // Will be set via integration
-  private performanceMonitor: any = null; // Will be set via integration
+  private adaptiveBufferManager: AdaptiveBufferManager | null = null; // Will be set via integration
+  private performanceMonitor: PerformanceMonitor | null = null; // Will be set via integration
 
   /**
    * Set adaptive buffer manager for integration
    */
-  setAdaptiveBufferManager(bufferManager: any): void {
+  setAdaptiveBufferManager(bufferManager: AdaptiveBufferManager): void {
     this.adaptiveBufferManager = bufferManager;
-    logger.consoleInfo("Adaptive buffer manager integrated with benchmark system");
+    console.log("Adaptive buffer manager integrated with benchmark system");
   }
 
   /**
    * Set performance monitor for integration
    */
-  setPerformanceMonitor(monitor: any): void {
+  setPerformanceMonitor(monitor: PerformanceMonitor): void {
     this.performanceMonitor = monitor;
-    logger.consoleInfo("Performance monitor integrated with benchmark system");
+    console.log("Performance monitor integrated with benchmark system");
   }
 
   /**
@@ -151,7 +152,7 @@ class TTSBenchmark {
   startCollection(): void {
     this.isCollecting = true;
     this.metrics = [];
-    logger.consoleInfo(" TTS Performance benchmarking started");
+    console.log(" TTS Performance benchmarking started");
   }
 
   /**
@@ -160,7 +161,7 @@ class TTSBenchmark {
   stopCollection(): PerformanceStats {
     this.isCollecting = false;
     const stats = this.generateStats();
-    logger.consoleInfo(" TTS Performance benchmarking completed");
+    console.log(" TTS Performance benchmarking completed");
     return stats;
   }
 
@@ -439,11 +440,11 @@ class TTSBenchmark {
     voice: VoiceOption = "af_heart",
     speed: number = 1.0
   ): Promise<TTSPerformanceMetrics> {
-    logger.consoleInfo(`\n STREAMING TIMING DIAGNOSIS`);
-    logger.consoleInfo(`Text: "${text.substring(0, 50)}${text.length > 50 ? "..." : ""}"`);
-    logger.consoleInfo(`Voice: ${voice}, Speed: ${speed}`);
-    logger.consoleInfo(`Server: ${serverUrl}`);
-    logger.consoleInfo(`${"=".repeat(60)}`);
+    console.log(`\n STREAMING TIMING DIAGNOSIS`);
+    console.log(`Text: "${text.substring(0, 50)}${text.length > 50 ? "..." : ""}"`);
+    console.log(`Voice: ${voice}, Speed: ${speed}`);
+    console.log(`Server: ${serverUrl}`);
+    console.log(`${"=".repeat(60)}`);
 
     const request: TTSRequestParams = {
       text,
@@ -455,64 +456,60 @@ class TTSBenchmark {
     };
 
     const metrics = await this.benchmarkTTSRequest(request, serverUrl, (stage, elapsed) => {
-      logger.consoleInfo(` ${stage.padEnd(25)}: ${elapsed.toFixed(2)}ms`);
+      console.log(` ${stage.padEnd(25)}: ${elapsed.toFixed(2)}ms`);
     });
 
     // Print detailed timing breakdown
-    logger.consoleInfo(`\n DETAILED TIMING BREAKDOWN:`);
-    logger.consoleInfo(`   Request Send Time:        ${metrics.sendTime.toFixed(2)}ms`);
-    logger.consoleInfo(`   Network Latency:          ${metrics.networkLatency.toFixed(2)}ms`);
-    logger.consoleInfo(`   Server Processing Time:   ${metrics.processingTime.toFixed(2)}ms`);
-    logger.consoleInfo(
-      `   Time to First Chunk:      ${metrics.timeToFirstAudioChunk.toFixed(2)}ms`
-    );
-    logger.consoleInfo(`   Stream-to-Play Delay:     ${metrics.streamToPlayDelay.toFixed(2)}ms`);
-    logger.consoleInfo(`   First Audio Play Time:    ${metrics.firstAudioPlayTime.toFixed(2)}ms`);
-    logger.consoleInfo(`   Total Response Time:      ${metrics.totalResponseTime.toFixed(2)}ms`);
+    console.log(`\n DETAILED TIMING BREAKDOWN:`);
+    console.log(`   Request Send Time:        ${metrics.sendTime.toFixed(2)}ms`);
+    console.log(`   Network Latency:          ${metrics.networkLatency.toFixed(2)}ms`);
+    console.log(`   Server Processing Time:   ${metrics.processingTime.toFixed(2)}ms`);
+    console.log(`   Time to First Chunk:      ${metrics.timeToFirstAudioChunk.toFixed(2)}ms`);
+    console.log(`   Stream-to-Play Delay:     ${metrics.streamToPlayDelay.toFixed(2)}ms`);
+    console.log(`   First Audio Play Time:    ${metrics.firstAudioPlayTime.toFixed(2)}ms`);
+    console.log(`   Total Response Time:      ${metrics.totalResponseTime.toFixed(2)}ms`);
 
-    logger.consoleInfo(`\n PERFORMANCE ANALYSIS:`);
-    logger.consoleInfo(`   Chunks Received:          ${metrics.chunkCount}`);
-    logger.consoleInfo(
-      `   Audio Data Size:          ${(metrics.audioDataSize / 1024).toFixed(2)} KB`
-    );
-    logger.consoleInfo(`   Cache Hit:                ${metrics.cacheHit ? "Yes" : "No"}`);
+    console.log(`\n PERFORMANCE ANALYSIS:`);
+    console.log(`   Chunks Received:          ${metrics.chunkCount}`);
+    console.log(`   Audio Data Size:          ${(metrics.audioDataSize / 1024).toFixed(2)} KB`);
+    console.log(`   Cache Hit:                ${metrics.cacheHit ? "Yes" : "No"}`);
 
     // Performance analysis
-    logger.consoleInfo(`\n PERFORMANCE INSIGHTS:`);
+    console.log(`\n PERFORMANCE INSIGHTS:`);
 
     if (metrics.networkLatency > 100) {
-      logger.consoleWarn(
+      console.warn(
         `   ⚠️  High network latency (${metrics.networkLatency.toFixed(2)}ms) - Consider local server`
       );
     }
 
     if (metrics.processingTime > 1000) {
-      logger.consoleWarn(
+      console.warn(
         `   ⚠️  Slow server processing (${metrics.processingTime.toFixed(2)}ms) - Check server resources`
       );
     }
 
     if (metrics.streamToPlayDelay > 100) {
-      logger.consoleWarn(
+      console.warn(
         `   ⚠️  High stream-to-play delay (${metrics.streamToPlayDelay.toFixed(2)}ms) - Audio processing bottleneck`
       );
     }
 
     if (metrics.firstAudioPlayTime < 500) {
-      logger.consoleInfo(
+      console.log(
         `   ✅ Excellent streaming performance - First audio in ${metrics.firstAudioPlayTime.toFixed(2)}ms`
       );
     } else if (metrics.firstAudioPlayTime < 1000) {
-      logger.consoleInfo(
+      console.log(
         `   ✅ Good streaming performance - First audio in ${metrics.firstAudioPlayTime.toFixed(2)}ms`
       );
     } else {
-      logger.consoleWarn(
+      console.warn(
         `   ⚠️  Slow streaming performance - First audio in ${metrics.firstAudioPlayTime.toFixed(2)}ms`
       );
     }
 
-    logger.consoleInfo(`${"=".repeat(60)}\n`);
+    console.log(`${"=".repeat(60)}\n`);
 
     return metrics;
   }
@@ -526,11 +523,11 @@ class TTSBenchmark {
     voice: VoiceOption = "af_heart",
     speed: number = 1.0
   ): Promise<{ streaming: TTSPerformanceMetrics; nonStreaming: TTSPerformanceMetrics }> {
-    logger.consoleInfo(`\n STREAMING vs NON-STREAMING COMPARISON`);
-    logger.consoleInfo(`${"=".repeat(60)}`);
+    console.log(`\n STREAMING vs NON-STREAMING COMPARISON`);
+    console.log(`${"=".repeat(60)}`);
 
     // Test streaming
-    logger.consoleInfo(`\n Testing STREAMING mode...`);
+    console.log(`\n Testing STREAMING mode...`);
     const streamingRequest: TTSRequestParams = {
       text,
       voice,
@@ -542,7 +539,7 @@ class TTSBenchmark {
     const streamingMetrics = await this.benchmarkTTSRequest(streamingRequest, serverUrl);
 
     // Test non-streaming
-    logger.consoleInfo(`\n Testing NON-STREAMING mode...`);
+    console.log(`\n Testing NON-STREAMING mode...`);
     const nonStreamingRequest: TTSRequestParams = {
       text,
       voice,
@@ -554,17 +551,15 @@ class TTSBenchmark {
     const nonStreamingMetrics = await this.benchmarkTTSRequest(nonStreamingRequest, serverUrl);
 
     // Compare results
-    logger.consoleInfo(`\n COMPARISON RESULTS:`);
-    logger.consoleInfo(
-      `   Streaming First Audio:    ${streamingMetrics.firstAudioPlayTime.toFixed(2)}ms`
-    );
-    logger.consoleInfo(
+    console.log(`\n COMPARISON RESULTS:`);
+    console.log(`   Streaming First Audio:    ${streamingMetrics.firstAudioPlayTime.toFixed(2)}ms`);
+    console.log(
       `   Non-Streaming Total:      ${nonStreamingMetrics.totalResponseTime.toFixed(2)}ms`
     );
-    logger.consoleInfo(
+    console.log(
       `   Streaming Advantage:      ${(nonStreamingMetrics.totalResponseTime - streamingMetrics.firstAudioPlayTime).toFixed(2)}ms faster`
     );
-    logger.consoleInfo(
+    console.log(
       `   Streaming Efficiency:     ${(nonStreamingMetrics.totalResponseTime / streamingMetrics.firstAudioPlayTime).toFixed(2)}x faster`
     );
 
@@ -625,10 +620,10 @@ class TTSBenchmark {
 
     for (let i = 0; i < streamingTestCases.length; i++) {
       const testCase = streamingTestCases[i];
-      logger.consoleInfo(
+      console.log(
         `\n Streaming Test ${i + 1}/${streamingTestCases.length}: "${testCase.text.substring(0, 30)}..."`
       );
-      logger.consoleInfo(`   Voice: ${testCase.voice}, Speed: ${testCase.speed}`);
+      console.log(`   Voice: ${testCase.voice}, Speed: ${testCase.speed}`);
 
       const request: TTSRequestParams = {
         text: testCase.text,
@@ -640,7 +635,7 @@ class TTSBenchmark {
       };
 
       await this.benchmarkTTSRequest(request, serverUrl, (stage, elapsed) => {
-        logger.consoleInfo(`    ${stage}: ${elapsed.toFixed(2)}ms`);
+        console.log(`    ${stage}: ${elapsed.toFixed(2)}ms`);
       });
 
       // Small delay between tests
@@ -709,9 +704,7 @@ class TTSBenchmark {
 
     for (let i = 0; i < testCases.length; i++) {
       const testCase = testCases[i];
-      logger.consoleInfo(
-        `\n Test ${i + 1}/${testCases.length}: "${testCase.text.substring(0, 30)}..."`
-      );
+      console.log(`\n Test ${i + 1}/${testCases.length}: "${testCase.text.substring(0, 30)}..."`);
 
       const request: TTSRequestParams = {
         text: testCase.text,
@@ -723,7 +716,7 @@ class TTSBenchmark {
       };
 
       await this.benchmarkTTSRequest(request, serverUrl, (stage, elapsed) => {
-        logger.consoleInfo(`   ${stage}: ${elapsed.toFixed(2)}ms`);
+        console.log(`   ${stage}: ${elapsed.toFixed(2)}ms`);
       });
 
       // Small delay between tests
@@ -769,7 +762,7 @@ class TTSBenchmark {
 
     let targetBufferMs = 400;
     let bufferSize = 2 * 1024 * 1024;
-    let chunkSize = 2400;
+    const chunkSize = 2400;
     let deliveryRate = 40;
     const reasoning: string[] = [];
     let confidence = 0.5;
@@ -943,57 +936,49 @@ class TTSBenchmark {
    * Print detailed performance report to console
    */
   printReport(stats: PerformanceStats): void {
-    logger.consoleInfo("\n" + "=".repeat(60));
-    logger.consoleInfo(" TTS PERFORMANCE BENCHMARK REPORT");
-    logger.consoleInfo("=".repeat(60));
+    console.log("\n" + "=".repeat(60));
+    console.log(" TTS PERFORMANCE BENCHMARK REPORT");
+    console.log("=".repeat(60));
 
-    logger.consoleInfo(`\n OVERALL STATISTICS:`);
-    logger.consoleInfo(`   Total Requests: ${stats.totalRequests}`);
-    logger.consoleInfo(
+    console.log(`\n OVERALL STATISTICS:`);
+    console.log(`   Total Requests: ${stats.totalRequests}`);
+    console.log(
       `   Successful: ${stats.successfulRequests} (${((stats.successfulRequests / stats.totalRequests) * 100).toFixed(1)}%)`
     );
-    logger.consoleInfo(`   Cache Hit Rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
+    console.log(`   Cache Hit Rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
 
-    logger.consoleInfo(`\n⏱️  TIMING PERFORMANCE:`);
-    logger.consoleInfo(`   Average Send Time: ${stats.averageSendTime.toFixed(2)}ms`);
-    logger.consoleInfo(`   Average Network Latency: ${stats.averageLatency.toFixed(2)}ms`);
-    logger.consoleInfo(`   Average Time to First Byte: ${stats.averageTTFB.toFixed(2)}ms`);
-    logger.consoleInfo(`   Average Processing Time: ${stats.averageProcessingTime.toFixed(2)}ms`);
-    logger.consoleInfo(
-      `   Average Stream-to-Play Delay: ${stats.averageStreamToPlayDelay.toFixed(2)}ms`
-    );
-    logger.consoleInfo(
+    console.log(`\n⏱️  TIMING PERFORMANCE:`);
+    console.log(`   Average Send Time: ${stats.averageSendTime.toFixed(2)}ms`);
+    console.log(`   Average Network Latency: ${stats.averageLatency.toFixed(2)}ms`);
+    console.log(`   Average Time to First Byte: ${stats.averageTTFB.toFixed(2)}ms`);
+    console.log(`   Average Processing Time: ${stats.averageProcessingTime.toFixed(2)}ms`);
+    console.log(`   Average Stream-to-Play Delay: ${stats.averageStreamToPlayDelay.toFixed(2)}ms`);
+    console.log(
       `   Average First Audio Play Time: ${stats.averageFirstAudioPlayTime.toFixed(2)}ms`
     );
-    logger.consoleInfo(`   Average Total Response Time: ${stats.averageTotalTime.toFixed(2)}ms`);
+    console.log(`   Average Total Response Time: ${stats.averageTotalTime.toFixed(2)}ms`);
 
-    logger.consoleInfo(`\n CACHE PERFORMANCE:`);
-    logger.consoleInfo(`   Cached Response Time: ${stats.cachedResponseTime.toFixed(2)}ms`);
-    logger.consoleInfo(`   Network Response Time: ${stats.networkResponseTime.toFixed(2)}ms`);
+    console.log(`\n CACHE PERFORMANCE:`);
+    console.log(`   Cached Response Time: ${stats.cachedResponseTime.toFixed(2)}ms`);
+    console.log(`   Network Response Time: ${stats.networkResponseTime.toFixed(2)}ms`);
     if (stats.cacheSpeedup > 0) {
-      logger.consoleInfo(`   Cache Speedup: ${stats.cacheSpeedup.toFixed(2)}x faster`);
-      logger.consoleInfo(
+      console.log(`   Cache Speedup: ${stats.cacheSpeedup.toFixed(2)}x faster`);
+      console.log(
         `   Time Saved: ${(stats.networkResponseTime - stats.cachedResponseTime).toFixed(2)}ms per cached request`
       );
     }
 
-    logger.consoleInfo(`\n STREAMING PERFORMANCE:`);
-    logger.consoleInfo(`   Average Chunk Count: ${stats.averageChunkCount.toFixed(0)}`);
+    console.log(`\n STREAMING PERFORMANCE:`);
+    console.log(`   Average Chunk Count: ${stats.averageChunkCount.toFixed(0)}`);
     if (stats.averageTotalTime > 0 && stats.averageTotalTime > 0) {
-      logger.consoleInfo(
-        `   Streaming Efficiency: ${stats.streamingEfficiency.toFixed(2)}x faster`
-      );
+      console.log(`   Streaming Efficiency: ${stats.streamingEfficiency.toFixed(2)}x faster`);
     }
 
-    logger.consoleInfo(`\n DATA TRANSFER:`);
-    logger.consoleInfo(
-      `   Total Data Transferred: ${(stats.totalDataTransferred / 1024).toFixed(2)} KB`
-    );
-    logger.consoleInfo(
-      `   Average Response Size: ${(stats.averageResponseSize / 1024).toFixed(2)} KB`
-    );
+    console.log(`\n DATA TRANSFER:`);
+    console.log(`   Total Data Transferred: ${(stats.totalDataTransferred / 1024).toFixed(2)} KB`);
+    console.log(`   Average Response Size: ${(stats.averageResponseSize / 1024).toFixed(2)} KB`);
 
-    logger.consoleInfo("\n" + "=".repeat(60));
+    console.log("\n" + "=".repeat(60));
   }
 }
 

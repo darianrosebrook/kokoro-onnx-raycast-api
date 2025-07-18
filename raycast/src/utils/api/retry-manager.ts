@@ -17,7 +17,6 @@
  * @since 2025-07-17
  */
 
-import { logger } from "../core/logger";
 import type {
   RetryConfig,
   RetryStrategy,
@@ -110,7 +109,7 @@ export class RetryManager {
 
     this.initialized = true;
 
-    logger.consoleInfo("Retry manager initialized", {
+    console.log("Retry manager initialized", {
       component: this.name,
       method: "initialize",
       config: this.config,
@@ -123,7 +122,7 @@ export class RetryManager {
   async cleanup(): Promise<void> {
     this.initialized = false;
 
-    logger.debug("Retry manager cleaned up", {
+    console.warn("Retry manager cleaned up", {
       component: this.name,
       method: "cleanup",
     });
@@ -179,7 +178,7 @@ export class RetryManager {
         const totalTime = performance.now() - startTime;
         this.updateMetrics(attempt, totalTime);
 
-        logger.consoleInfo("Operation succeeded", {
+        console.log("Operation succeeded", {
           component: this.name,
           method: "executeWithRetry",
           context,
@@ -213,7 +212,7 @@ export class RetryManager {
         };
         attempts.push(retryAttempt);
 
-        logger.warn("Operation failed", {
+        console.warn("Operation failed", {
           component: this.name,
           method: "executeWithRetry",
           context,
@@ -239,7 +238,7 @@ export class RetryManager {
         const delay = this.calculateDelay(attempt, config);
         retryAttempt.delay = delay;
 
-        logger.consoleInfo("Retrying operation", {
+        console.log("Retrying operation", {
           component: this.name,
           method: "executeWithRetry",
           context,
@@ -256,7 +255,7 @@ export class RetryManager {
     const totalTime = performance.now() - startTime;
     this.updateMetrics(attempts.length, totalTime);
 
-    logger.error("All retry attempts failed", {
+    console.error("All retry attempts failed", {
       component: this.name,
       method: "executeWithRetry",
       context,
@@ -315,7 +314,7 @@ export class RetryManager {
       circuitBreakerTrips: 0,
     };
 
-    logger.consoleInfo("Retry metrics reset", {
+    console.log("Retry metrics reset", {
       component: this.name,
       method: "resetMetrics",
     });
@@ -340,7 +339,7 @@ export class RetryManager {
       successCount: 0,
     };
 
-    logger.consoleInfo("Circuit breaker reset", {
+    console.log("Circuit breaker reset", {
       component: this.name,
       method: "resetCircuitBreaker",
     });
@@ -352,7 +351,7 @@ export class RetryManager {
   updateConfig(config: Partial<RetryConfig>): void {
     this.config = { ...this.config, ...config };
 
-    logger.consoleInfo("Retry configuration updated", {
+    console.log("Retry configuration updated", {
       component: this.name,
       method: "updateConfig",
       config: this.config,
@@ -399,7 +398,7 @@ export class RetryManager {
     if (this.circuitBreaker.isOpen) {
       this.circuitBreaker.isOpen = false;
 
-      logger.consoleInfo("Circuit breaker closed after success", {
+      console.log("Circuit breaker closed after success", {
         component: this.name,
         method: "recordSuccess",
         successCount: this.circuitBreaker.successCount,
@@ -420,7 +419,7 @@ export class RetryManager {
       this.circuitBreaker.nextAttemptTime = performance.now() + this.config.circuitBreakerTimeout;
       this.retryMetrics.circuitBreakerTrips++;
 
-      logger.warn("Circuit breaker opened", {
+      console.warn("Circuit breaker opened", {
         component: this.name,
         method: "recordFailure",
         failureCount: this.circuitBreaker.failureCount,
@@ -567,7 +566,7 @@ export class RetryManager {
     const metrics = this.getRetryMetrics();
     const circuitState = this.getCircuitBreakerState();
 
-    logger.consoleInfo("Retry Statistics", {
+    console.log("Retry Statistics", {
       component: this.name,
       method: "logRetryStats",
       metrics: {

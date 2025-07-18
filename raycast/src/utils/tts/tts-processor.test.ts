@@ -6,7 +6,7 @@ import { PlaybackManager } from "./playback-manager.js";
 import { RetryManager } from "../api/retry-manager.js";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager.js";
 import { PerformanceMonitor } from "../performance/performance-monitor.js";
-import { StatusUpdate } from "../../types";
+import { StatusUpdate } from "../../types.js";
 import { TextSegment } from "../validation/tts-types.js";
 
 // Mock logger

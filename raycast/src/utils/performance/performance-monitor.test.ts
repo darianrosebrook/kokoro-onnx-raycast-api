@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { PerformanceMonitor } from "./performance-monitor";
-import { TTSEvent, TTSProcessorConfig } from "../validation/tts-types";
+import { PerformanceMonitor } from "./performance-monitor.js";
+import { TTSEvent, TTSProcessorConfig } from "../validation/tts-types.js";
 
 // Mock logger
 vi.mock("../core/logger", () => ({
