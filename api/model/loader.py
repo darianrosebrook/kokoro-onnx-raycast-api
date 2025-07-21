@@ -395,7 +395,6 @@ class DualSessionManager:
                 "ModelFormat": "MLProgram",
                 "AllowLowPrecisionAccumulationOnGPU": "1",
                 "RequireStaticInputShapes": "1",
-                "MaxSequenceLength": "256",
                 "StaticInputShapes": "1"
             }
 
@@ -430,7 +429,6 @@ class DualSessionManager:
                 "ModelFormat": "MLProgram",
                 "AllowLowPrecisionAccumulationOnGPU": "1",
                 "RequireStaticInputShapes": "1",
-                "MaxSequenceLength": "256",
                 "StaticInputShapes": "1"
             }
 
