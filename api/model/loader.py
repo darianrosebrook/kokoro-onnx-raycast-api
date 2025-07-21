@@ -396,8 +396,7 @@ class DualSessionManager:
                 "AllowLowPrecisionAccumulationOnGPU": "1",
                 "RequireStaticInputShapes": "1",
                 "MaxSequenceLength": "256",
-                "StaticInputShapes": "1",
-                "PhonemeBasedPadding": "1"
+                "StaticInputShapes": "1"
             }
 
             # Create ONNX session
@@ -432,8 +431,7 @@ class DualSessionManager:
                 "AllowLowPrecisionAccumulationOnGPU": "1",
                 "RequireStaticInputShapes": "1",
                 "MaxSequenceLength": "256",
-                "StaticInputShapes": "1",
-                "PhonemeBasedPadding": "1"
+                "StaticInputShapes": "1"
             }
 
             # Create ONNX session
