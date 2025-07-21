@@ -133,6 +133,18 @@ coreml_performance_stats = {
     'phase1_ttfa_target': 800,       # TTFA target in milliseconds
     'phase1_rtf_target': 1.0,        # RTF target (must be < 1.0)
     'phase1_efficiency_target': 0.90, # Streaming efficiency target (must be > 90%)
+
+    # PHASE 1 TTFA OPTIMIZATION: Fast-path processing metrics
+    'fast_path_requests': 0,         # Number of requests using fast-path processing
+    'fast_path_ttfa_average': 0.0,   # Average TTFA for fast-path requests (ms)
+    'fast_path_success_rate': 0.0,   # Percentage of fast-path requests meeting TTFA target
+    'phonemizer_preinitialized': False, # Whether phonemizer was pre-initialized
+    'text_processing_method_counts': {  # Count of processing methods used
+        'fast_path': 0,
+        'misaki': 0, 
+        'phonemizer': 0,
+        'character': 0
+    },
 }
 
 # New phonemizer stats tracking
@@ -1140,3 +1152,103 @@ def get_dynamic_memory_optimization_stats():
             'performance_impact': 'unknown',
             'recommendation': 'Error retrieving optimization statistics'
         } 
+
+
+def update_fast_path_performance_stats(
+    processing_method: str, 
+    ttfa_ms: float, 
+    success: bool = True,
+    **kwargs
+):
+    """
+    Update fast-path processing performance statistics for TTFA optimization tracking.
+    
+    This function tracks the performance of the PHASE 1 TTFA optimizations including:
+    - Fast-path text processing performance
+    - Pre-initialized phonemizer backend effectiveness
+    - Text processing method distribution
+    - TTFA improvement metrics
+    
+    Args:
+        processing_method (str): Method used ('fast_path', 'misaki', 'phonemizer', 'character')
+        ttfa_ms (float): Time to First Audio in milliseconds
+        success (bool): Whether the processing was successful
+        **kwargs: Additional metrics for future extensions
+    
+    Examples:
+        >>> update_fast_path_performance_stats(
+        ...     processing_method="fast_path",
+        ...     ttfa_ms=150,
+        ...     success=True
+        ... )
+    """
+    global coreml_performance_stats
+    
+    try:
+        # Update method-specific counters
+        if processing_method in coreml_performance_stats['text_processing_method_counts']:
+            coreml_performance_stats['text_processing_method_counts'][processing_method] += 1
+        
+        # Track fast-path specific metrics
+        if processing_method == 'fast_path':
+            coreml_performance_stats['fast_path_requests'] += 1
+            
+            # Update fast-path TTFA average
+            current_average = coreml_performance_stats['fast_path_ttfa_average']
+            current_count = coreml_performance_stats['fast_path_requests']
+            
+            new_average = ((current_average * (current_count - 1)) + ttfa_ms) / current_count
+            coreml_performance_stats['fast_path_ttfa_average'] = new_average
+            
+            # Update fast-path success rate
+            if ttfa_ms < coreml_performance_stats['phase1_ttfa_target']:
+                # This is a success
+                success_count = int(coreml_performance_stats['fast_path_success_rate'] * (current_count - 1))
+                success_count += 1
+                coreml_performance_stats['fast_path_success_rate'] = success_count / current_count
+            else:
+                # Update success rate without incrementing success count
+                success_count = int(coreml_performance_stats['fast_path_success_rate'] * (current_count - 1))
+                coreml_performance_stats['fast_path_success_rate'] = success_count / current_count
+        
+        # Log performance improvements periodically
+        total_fast_path = coreml_performance_stats['fast_path_requests']
+        if total_fast_path > 0 and total_fast_path % 5 == 0:
+            avg_ttfa = coreml_performance_stats['fast_path_ttfa_average']
+            success_rate = coreml_performance_stats['fast_path_success_rate'] * 100
+            target = coreml_performance_stats['phase1_ttfa_target']
+            
+            logger.info(f"Fast-Path Performance Summary (last {total_fast_path} requests):")
+            logger.info(f"  Average TTFA: {avg_ttfa:.1f}ms (target: <{target}ms)")
+            logger.info(f"  Success Rate: {success_rate:.1f}%")
+            logger.info(f"  Processing Method Distribution: {coreml_performance_stats['text_processing_method_counts']}")
+            
+            if avg_ttfa < target:
+                improvement = ((target - avg_ttfa) / target) * 100
+                logger.info(f"  ✅ TTFA Improvement: {improvement:.1f}% better than target")
+            else:
+                shortfall = ((avg_ttfa - target) / target) * 100
+                logger.warning(f"  ⚠️ TTFA Shortfall: {shortfall:.1f}% above target")
+        
+        # Log warnings for performance issues
+        if processing_method == 'fast_path' and ttfa_ms > 200:
+            logger.warning(f"Fast-path TTFA slower than expected: {ttfa_ms:.1f}ms > 200ms")
+        
+        if processing_method in ['misaki', 'phonemizer'] and ttfa_ms > 1000:
+            logger.warning(f"Complex text processing taking too long: {processing_method} {ttfa_ms:.1f}ms > 1000ms")
+            
+    except Exception as e:
+        logger.error(f"Error updating fast-path performance stats: {e}")
+
+
+def mark_phonemizer_preinitialized():
+    """
+    Mark that the phonemizer backend was successfully pre-initialized.
+    
+    This is called when the phonemizer backend is pre-initialized during
+    module startup to track the effectiveness of this optimization.
+    """
+    global coreml_performance_stats
+    
+    coreml_performance_stats['phonemizer_preinitialized'] = True
+    logger.info("✅ TTFA OPTIMIZATION: Phonemizer pre-initialization recorded in performance stats") 

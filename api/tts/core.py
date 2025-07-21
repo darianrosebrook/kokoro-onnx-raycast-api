@@ -200,36 +200,56 @@ def get_inference_cache_stats() -> Dict[str, Any]:
 
 def should_use_phoneme_preprocessing() -> bool:
     """
-    Determine whether to use phoneme preprocessing for optimization.
-    
-    This function checks if phoneme preprocessing should be enabled based on:
-    1. Active provider (CoreML benefits most from consistent tensor shapes)
-    2. Configuration settings
-    3. Hardware capabilities
+    Determine if phoneme preprocessing should be enabled.
     
     Returns:
-        bool: True if phoneme preprocessing should be used
+        bool: True if phoneme preprocessing is enabled and beneficial
     """
+    # PHASE 1 TTFA OPTIMIZATION: Disable phoneme preprocessing for streaming requests
+    # to reduce first-chunk latency. This check can be extended to consider request context.
+    
     try:
-        # Check if CoreML provider is active (benefits most from consistent tensor shapes)
-        active_provider = get_active_provider()
-        if active_provider == "CoreMLExecutionProvider":
-            logger.debug("✅ Phoneme preprocessing enabled for CoreML optimization")
-            return True
+        from api.config import TTSConfig
         
-        # Check for environment variable override
-        if os.environ.get('KOKORO_ENABLE_PHONEME_PREPROCESSING', '').lower() == 'true':
-            logger.debug("✅ Phoneme preprocessing enabled via environment variable")
-            return True
+        # Check if we're in a high-performance mode where we want to skip preprocessing
+        # for faster TTFA (this can be controlled via environment variables)
+        if hasattr(TTSConfig, 'FAST_STREAMING_MODE'):
+            return not TTSConfig.FAST_STREAMING_MODE
         
-        # Default: disabled for other providers (can be enabled in future)
-        logger.debug("ℹ️ Phoneme preprocessing disabled (not using CoreML)")
-        return False
+        # Default behavior: use preprocessing for quality
+        return True
         
-    except Exception as e:
-        logger.warning(f"Could not determine phoneme preprocessing status: {e}")
+    except ImportError:
         return False
 
+# PHASE 1 TTFA OPTIMIZATION: Fast segment processing for simple text
+def _is_simple_segment(text: str) -> bool:
+    """
+    Determine if a text segment is simple enough for fast processing.
+    
+    This is used during streaming to identify segments that can bypass
+    heavy preprocessing and get audio chunks out faster.
+    """
+    if not text or len(text.strip()) > 150:
+        return False
+    
+    # Simple criteria: basic ASCII text without complex patterns
+    import re
+    
+    # Check for complex patterns
+    complex_patterns = [
+        r'\d{4}-\d{2}-\d{2}',  # Dates
+        r'\d{2}:\d{2}:\d{2}',  # Times
+        r'[^\x00-\x7F]',       # Non-ASCII
+        r'[{}[\]()@#$%^&*+=<>]',  # Special chars
+        r'\d+\.\d+',           # Decimal numbers
+    ]
+    
+    for pattern in complex_patterns:
+        if re.search(pattern, text):
+            return False
+    
+    return True
 
 def get_tts_processing_stats() -> Dict[str, Any]:
     """
@@ -412,6 +432,88 @@ def _generate_audio_segment(
         return idx, None, str(e)
 
 
+def _fast_generate_audio_segment(
+    idx: int, text: str, voice: str, speed: float, lang: str
+) -> Tuple[int, Optional[np.ndarray], str]:
+    """
+    Fast audio segment generation for simple text with minimal preprocessing.
+    
+    This bypasses heavy phoneme preprocessing for simple text to achieve
+    faster TTFA performance. Used for the first segment in streaming requests.
+    """
+    if not text or len(text.strip()) < 3:
+        return idx, None, "Text too short (minimum 3 characters required)"
+
+    try:
+        # Skip heavy preprocessing for simple text
+        processed_text = text.strip()
+        
+        # Create simple cache key  
+        import hashlib
+        cache_key = hashlib.md5(f"{processed_text}:{voice}:{speed}:{lang}".encode()).hexdigest()[:16]
+        
+        # Check inference cache
+        cached_result = _get_cached_inference(cache_key)
+        if cached_result is not None:
+            samples, provider = cached_result
+            logger.debug(f"[{idx}] Fast path cache hit for: {processed_text[:50]}...")
+            return idx, samples, f"{provider} (fast-cached)"
+        
+        # Generate audio directly without preprocessing
+        # PHASE 3 OPTIMIZATION: Use dual session manager if available
+        dual_session_manager = get_dual_session_manager()
+        
+        if dual_session_manager:
+            logger.debug(f"[{idx}] Fast generation using dual session manager: {processed_text[:50]}...")
+            start_time = time.perf_counter()
+            
+            try:
+                samples, _ = dual_session_manager.process_segment_concurrent(
+                    processed_text, voice, speed, lang
+                )
+                
+                inference_time = time.perf_counter() - start_time
+                
+                if samples is not None and samples.size > 0:
+                    # Cache the successful result
+                    _cache_inference_result(cache_key, samples, "DualSession-Fast")
+                    
+                    logger.info(f"[{idx}] Fast segment processed in {inference_time:.4f}s using DualSession-Fast")
+                    return idx, samples, "DualSession-Fast"
+                else:
+                    logger.warning(f"[{idx}] Fast dual session returned empty audio")
+                    
+            except Exception as e:
+                logger.warning(f"[{idx}] Fast dual session failed: {e}")
+                # Fall through to single model
+        
+        # Fallback to single model
+        provider = get_active_provider()
+        local_model = _get_cached_model(provider)
+        
+        logger.debug(f"[{idx}] Fast generation using single model: {processed_text[:50]}...")
+        start_time = time.perf_counter()
+        
+        samples, _ = local_model.create(processed_text, voice, speed, lang)
+        
+        inference_time = time.perf_counter() - start_time
+        update_performance_stats(inference_time, f"{provider}-Fast")
+        
+        if samples is not None and samples.size > 0:
+            # Cache the result
+            _cache_inference_result(cache_key, samples, f"{provider}-Fast")
+            
+            logger.info(f"[{idx}] Fast segment processed in {inference_time:.4f}s using {provider}-Fast")
+            return idx, samples, f"{provider}-Fast"
+        else:
+            logger.warning(f"[{idx}] Fast processing returned empty audio")
+            return idx, None, "Empty audio returned"
+
+    except Exception as e:
+        logger.error(f"[{idx}] Fast TTS generation failed: {e}", exc_info=True)
+        return idx, None, str(e)
+
+
 async def stream_tts_audio(
     text: str, voice: str, speed: float, lang: str, format: str, request: Request
 ) -> AsyncGenerator[bytes, None]:
@@ -514,12 +616,23 @@ async def stream_tts_audio(
         for i, seg_text in enumerate(segments):
             logger.debug(f"[{request_id}] Processing segment {i+1}/{total_segments}: '{seg_text[:30]}...'")
             
+            # PHASE 1 TTFA OPTIMIZATION: Use fast processing for first simple segment
+            use_fast_processing = (i == 0 and _is_simple_segment(seg_text))
+            
             # Generate audio for this segment immediately
             try:
                 segment_start_time = time.perf_counter()
-                idx, audio_np, provider = await run_in_threadpool(
-                    _generate_audio_segment, i, seg_text, voice, speed, lang
-                )
+                
+                if use_fast_processing:
+                    logger.debug(f"[{request_id}] Using fast processing for first segment to improve TTFA")
+                    idx, audio_np, provider = await run_in_threadpool(
+                        _fast_generate_audio_segment, i, seg_text, voice, speed, lang
+                    )
+                else:
+                    idx, audio_np, provider = await run_in_threadpool(
+                        _generate_audio_segment, i, seg_text, voice, speed, lang
+                    )
+                
                 segment_duration = time.perf_counter() - segment_start_time
                 
                 logger.debug(f"[{request_id}] Segment {idx} completed in {segment_duration:.2f}s by {provider}")
