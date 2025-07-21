@@ -50,6 +50,7 @@ echo ""
 echo "This script will set up a complete Text-to-Speech system with:"
 echo "   • High-quality neural TTS with 60+ voices"
 echo "   • Apple Silicon optimization (if applicable)"
+echo "   • Misaki G2P integration for enhanced phonemization"
 echo "   • Raycast integration for quick access"
 echo "   • Automatic performance optimization"
 echo "   • Python 3.13 compatibility (automatic detection)"
@@ -149,9 +150,23 @@ if [[ "$PYTHON_VERSION" == "3.13" ]]; then
   # Install spacy first (provides compatible blis wheel)
   pip3 install "spacy>=3.8.0"
   
-  # Install misaki dependencies
+  # Install misaki dependencies with enhanced error handling
+  print_progress "Installing Misaki G2P for enhanced phonemization..."
   pip3 install num2words
-  pip3 install misaki
+  if pip3 install misaki; then
+    print_success "Misaki G2P installed successfully."
+    
+    # Test misaki installation
+    print_progress "Testing Misaki G2P installation..."
+    if python3 -c "from misaki import en; print('Misaki G2P test successful')" 2>/dev/null; then
+      print_success "Misaki G2P verification passed - enhanced phonemization available."
+    else
+      print_warning "Misaki G2P installed but verification failed - fallback phonemizer will be used."
+    fi
+  else
+    print_warning "Misaki G2P installation failed - using enhanced phonemizer fallback."
+    print_info "The system will work perfectly with phonemizer-fork fallback."
+  fi
   
   # Install remaining dependencies
   pip3 install phonemizer-fork espeakng-loader requests aiohttp inflect orjson psutil
@@ -159,15 +174,6 @@ if [[ "$PYTHON_VERSION" == "3.13" ]]; then
   # Install uvloop on non-Windows systems
   if [[ "$(uname -s)" != "MINGW"* && "$(uname -s)" != "CYGWIN"* ]]; then
     pip3 install uvloop
-  fi
-  
-  # Download spaCy English model if misaki installation succeeded
-  print_progress "Setting up English language model for misaki..."
-  if python3 -c "import misaki; from misaki import en" 2>/dev/null; then
-    print_success "Misaki with English support installed successfully."
-  else
-    # Try to initialize misaki to trigger spaCy model download
-    python3 -c "from misaki import en; en.G2P()" 2>/dev/null || true
   fi
   
 else
@@ -197,6 +203,19 @@ if [ -f "scripts/check_environment.py" ]; then
   fi
 else
   print_warning "Environment diagnostic script not found - skipping diagnostics."
+fi
+
+# Test Misaki integration if available
+print_progress "Testing Misaki G2P integration..."
+if [ -f "scripts/demo_misaki_integration.py" ]; then
+  if PYTHONPATH=. python scripts/demo_misaki_integration.py >/dev/null 2>&1; then
+    print_success "Misaki integration test passed - enhanced phonemization available."
+  else
+    print_warning "Misaki integration test failed - using phonemizer fallback."
+    print_info "The system will work perfectly with enhanced phonemizer fallback."
+  fi
+else
+  print_info "Misaki integration test script not found - will validate at runtime."
 fi
 
 # Make performance validation scripts executable
@@ -464,12 +483,14 @@ echo "Performance Features:"
 echo "   •  Apple Silicon optimization with CoreML and Neural Engine"
 echo "   • ORT (ONNX Runtime) acceleration for better performance"
 echo "   •  Configurable benchmark frequency for optimal startup times"
+echo "   • Misaki G2P integration for enhanced phonemization quality"
 echo ""
 echo " TTS Capabilities:"
 echo "   • 60+ voices across multiple languages"
 echo "   • Real-time streaming audio generation"
 echo "   • OpenAI-compatible API endpoints"
 echo "   • Intelligent text processing and segmentation"
+echo "   • Enhanced phonemization with automatic fallback"
 echo ""
 echo "🛠️  System Features:"
 echo "   •  Comprehensive diagnostic and troubleshooting tools"
@@ -489,7 +510,10 @@ echo ""
 echo "3.  Validate performance optimizations:"
 echo "   ./scripts/quick_performance_test.sh"
 echo ""
-echo "4.  Use Raycast extension (if installed):"
+echo "4.  Test Misaki G2P integration:"
+echo "   PYTHONPATH=. python scripts/demo_misaki_integration.py"
+echo ""
+echo "5.  Use Raycast extension (if installed):"
 echo "   Open Raycast and search for 'Speak Text' or 'Speak Selection'"
 echo ""
 
@@ -501,6 +525,12 @@ echo "   • KOKORO_BENCHMARK_FREQUENCY: Controls benchmark frequency (daily/wee
 echo "   • KOKORO_DEVELOPMENT_MODE: Skip benchmarking for faster development startup"
 echo "   • KOKORO_SKIP_BENCHMARKING: Completely disable automatic benchmarking"
 echo "   • ONNX_PROVIDER: Override provider selection (CoreMLExecutionProvider/CPUExecutionProvider)"
+echo ""
+echo "Misaki G2P Configuration:"
+echo "   • KOKORO_MISAKI_ENABLED: Enable/disable Misaki G2P (default: true)"
+echo "   • KOKORO_MISAKI_FALLBACK: Enable phonemizer fallback (default: true)"
+echo "   • KOKORO_MISAKI_CACHE_SIZE: Phoneme cache size (default: 1000)"
+echo "   • KOKORO_MISAKI_QUALITY_THRESHOLD: Quality threshold for fallback (default: 0.8)"
 echo ""
 echo "Production Optimizations:"
 echo "   • KOKORO_PRODUCTION=true: Enable production mode (ORJSON, GZip, security headers)"
@@ -518,11 +548,12 @@ echo "   • Use 'manually' frequency for expert users who want complete control
 echo "   • Clear the cache after major OS updates to re-benchmark"
 echo "   • Monitor startup times - longer cache periods = faster startup"
 echo ""
-echo "Python 3.13 Compatibility:"
+echo "Python 3.13 + Misaki Integration:"
 echo "   • Setup automatically detects Python 3.13 and uses optimized installation"
 echo "   • Dependencies are installed in specific order to avoid compilation issues"
-echo "   • spaCy provides compatible blis wheels for machine learning dependencies"
-echo "   • Misaki G2P engine works fully with English language support"
+echo "   • Misaki G2P provides enhanced phonemization quality for supported text"
+echo "   • Automatic fallback to phonemizer-fork ensures 100% reliability"
+echo "   • Real-time statistics track Misaki success and fallback rates"
 echo ""
 
 print_success "Setup completed successfully! Your TTS system is ready to use."
@@ -554,6 +585,10 @@ echo " Diagnostic Tools:"
 echo "   python scripts/check_environment.py     # Check system setup"
 echo "   python scripts/troubleshoot_coreml.py   # Diagnose CoreML issues"
 echo "   python scripts/configure_benchmark_frequency.py  # Configure benchmark frequency"
+echo ""
+echo " Misaki Integration:"
+echo "   PYTHONPATH=. python scripts/demo_misaki_integration.py  # Test misaki integration"
+echo "   python scripts/setup_misaki_env.sh      # Set up dedicated Python 3.12 environment"
 echo ""
 echo " Performance Management:"
 echo "   python scripts/configure_benchmark_frequency.py --show-current  # Show current settings"

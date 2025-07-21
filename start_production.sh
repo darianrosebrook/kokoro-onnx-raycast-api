@@ -39,6 +39,12 @@ source .venv/bin/activate
 # Enable production optimizations
 export KOKORO_PRODUCTION=true
 
+# Misaki G2P configuration for production
+export KOKORO_MISAKI_ENABLED="${KOKORO_MISAKI_ENABLED:-true}"
+export KOKORO_MISAKI_FALLBACK="${KOKORO_MISAKI_FALLBACK:-true}"
+export KOKORO_MISAKI_CACHE_SIZE="${KOKORO_MISAKI_CACHE_SIZE:-1000}"
+export KOKORO_MISAKI_QUALITY_THRESHOLD="${KOKORO_MISAKI_QUALITY_THRESHOLD:-0.8}"
+
 # Set production defaults if not already configured
 export KOKORO_GRAPH_OPT_LEVEL=${KOKORO_GRAPH_OPT_LEVEL:-"BASIC"}
 export KOKORO_MEMORY_ARENA_SIZE_MB=${KOKORO_MEMORY_ARENA_SIZE_MB:-"512"}
@@ -57,6 +63,7 @@ echo "   • GZip compression: ✅"
 echo "   • Security headers: ✅"
 echo "   • Graph optimization: ${KOKORO_GRAPH_OPT_LEVEL}"
 echo "   • Memory arena: ${KOKORO_MEMORY_ARENA_SIZE_MB}MB"
+echo "   • Misaki G2P enabled: ${KOKORO_MISAKI_ENABLED}"
 [[ "$(uname -m)" == "arm64" ]] && echo "   • CoreML optimization: ✅"
 
 # --- Server Execution ---

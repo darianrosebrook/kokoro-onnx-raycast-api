@@ -426,6 +426,16 @@ class TTSConfig:
     APPLE_SILICON_ORT_PREFERRED = os.environ.get("KOKORO_APPLE_SILICON_ORT_PREFERRED", "true").lower() == "true"
     ORT_COMPUTE_UNITS = ["CPUAndNeuralEngine", "CPUAndGPU", "CPUOnly", "ALL"]
     
+    # Enhanced Phonemizer Configuration - Phase 1 Optimization
+    PHONEMIZER_BACKEND = os.environ.get("KOKORO_PHONEMIZER_BACKEND", "espeak")
+    PHONEMIZER_LANGUAGE = os.environ.get("KOKORO_PHONEMIZER_LANGUAGE", "en-us")
+    PHONEMIZER_PRESERVE_PUNCTUATION = os.environ.get("KOKORO_PHONEMIZER_PRESERVE_PUNCTUATION", "true").lower() == "true"
+    PHONEMIZER_STRIP_STRESS = os.environ.get("KOKORO_PHONEMIZER_STRIP_STRESS", "false").lower() == "true"
+    PHONEMIZER_WORD_SEPARATOR = os.environ.get("KOKORO_PHONEMIZER_WORD_SEPARATOR", " ")
+    PHONEMIZER_QUALITY_MODE = os.environ.get("KOKORO_PHONEMIZER_QUALITY_MODE", "true").lower() == "true"
+    PHONEMIZER_ERROR_TOLERANCE = float(os.environ.get("KOKORO_PHONEMIZER_ERROR_TOLERANCE", "0.1"))
+    TEXT_NORMALIZATION_AGGRESSIVE = os.environ.get("KOKORO_TEXT_NORMALIZATION_AGGRESSIVE", "false").lower() == "true"
+    
     # Misaki G2P Configuration - Kokoro-specific phonemization
     MISAKI_ENABLED = os.environ.get("KOKORO_MISAKI_ENABLED", "true").lower() == "true"
     MISAKI_DEFAULT_LANG = os.environ.get("KOKORO_MISAKI_LANG", "en")
@@ -541,6 +551,37 @@ class TTSConfig:
             logger.warning("⚠️ MAX_SEGMENT_LENGTH cannot exceed MAX_TEXT_LENGTH")
             cls.MAX_SEGMENT_LENGTH = min(cls.MAX_SEGMENT_LENGTH, cls.MAX_TEXT_LENGTH)
         
+        # Validate Enhanced Phonemizer Configuration
+        logger.info(" Verifying Enhanced Phonemizer configuration...")
+        
+        # Validate phonemizer backend
+        valid_backends = ["espeak", "espeak-ng", "festival", "flite"]
+        if cls.PHONEMIZER_BACKEND not in valid_backends:
+            logger.warning(f"⚠️ PHONEMIZER_BACKEND '{cls.PHONEMIZER_BACKEND}' not in valid backends, using 'espeak'")
+            cls.PHONEMIZER_BACKEND = "espeak"
+        
+        # Validate phonemizer language
+        valid_languages = ["en-us", "en-gb", "en", "ja", "zh", "ko", "vi", "es", "fr", "hi", "it", "pt"]
+        if cls.PHONEMIZER_LANGUAGE not in valid_languages:
+            logger.warning(f"⚠️ PHONEMIZER_LANGUAGE '{cls.PHONEMIZER_LANGUAGE}' not supported, using 'en-us'")
+            cls.PHONEMIZER_LANGUAGE = "en-us"
+        
+        # Validate error tolerance
+        if cls.PHONEMIZER_ERROR_TOLERANCE < 0.0:
+            logger.warning("⚠️ PHONEMIZER_ERROR_TOLERANCE cannot be negative, setting to 0.0")
+            cls.PHONEMIZER_ERROR_TOLERANCE = 0.0
+        elif cls.PHONEMIZER_ERROR_TOLERANCE > 1.0:
+            logger.warning("⚠️ PHONEMIZER_ERROR_TOLERANCE too high, setting to 1.0")
+            cls.PHONEMIZER_ERROR_TOLERANCE = 1.0
+        
+        logger.info(f"✅ Enhanced Phonemizer configuration validated")
+        logger.info(f"   - Backend: {cls.PHONEMIZER_BACKEND}")
+        logger.info(f"   - Language: {cls.PHONEMIZER_LANGUAGE}")
+        logger.info(f"   - Preserve punctuation: {cls.PHONEMIZER_PRESERVE_PUNCTUATION}")
+        logger.info(f"   - Strip stress: {cls.PHONEMIZER_STRIP_STRESS}")
+        logger.info(f"   - Quality mode: {cls.PHONEMIZER_QUALITY_MODE}")
+        logger.info(f"   - Error tolerance: {cls.PHONEMIZER_ERROR_TOLERANCE}")
+        
         # Validate Misaki G2P configuration
         if cls.MISAKI_ENABLED:
             logger.info(" Verifying Misaki G2P configuration...")
@@ -573,7 +614,7 @@ class TTSConfig:
             logger.info(f"   - Quality threshold: {cls.MISAKI_QUALITY_THRESHOLD}")
             logger.info(f"   - Fallback enabled: {cls.MISAKI_FALLBACK_ENABLED}")
         else:
-            logger.info(" Misaki G2P is disabled, using fallback phonemizer")
+            logger.info(" Misaki G2P is disabled, using enhanced phonemizer")
         
         # Log successful validation
         logger.info("✅ Configuration validation completed successfully")

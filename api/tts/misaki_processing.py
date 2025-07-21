@@ -69,7 +69,7 @@ _misaki_stats = MisakiStats()
 
 def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
     """
-    Initialize Misaki G2P backend with lazy loading.
+    Initialize Misaki G2P backend with lazy loading and validation.
     
     Args:
         lang: Language code for Misaki initialization
@@ -82,6 +82,10 @@ def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
     if _misaki_backend is not None:
         return _misaki_backend
     
+    # If we already know it's not available, don't retry
+    if _misaki_available is False:
+        return None
+    
     try:
         # Try to import and initialize Misaki
         from misaki import en
@@ -92,8 +96,24 @@ def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
             british=False,  # American English
             fallback=None  # We'll handle fallback at a higher level
         )
+        
+        # Test the backend with a simple phrase to make sure it works properly
+        test_result = _misaki_backend("hello")
+        if test_result is None or not isinstance(test_result, (tuple, list)) or len(test_result) != 2:
+            logger.error(f"❌ Misaki backend test failed: returned {test_result}")
+            _misaki_backend = None
+            _misaki_available = False
+            return None
+        
+        phonemes, tokens = test_result
+        if phonemes is None or not isinstance(phonemes, str):
+            logger.error(f"❌ Misaki backend test failed: invalid phonemes {phonemes}")
+            _misaki_backend = None
+            _misaki_available = False
+            return None
+        
         _misaki_available = True
-        logger.info("✅ Misaki G2P backend initialized successfully")
+        logger.info("✅ Misaki G2P backend initialized and tested successfully")
         return _misaki_backend
         
     except ImportError as e:
@@ -101,7 +121,7 @@ def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
         _misaki_available = False
         return None
     except Exception as e:
-        logger.error(f" Failed to initialize Misaki G2P: {e}")
+        logger.error(f"❌ Failed to initialize Misaki G2P: {e}")
         _misaki_available = False
         return None
 
@@ -169,10 +189,31 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
     if backend is not None:
         try:
             # Use Misaki for phonemization
-            phonemes, tokens = backend(text)
+            result = backend(text)
+            
+            # Handle misaki result validation
+            if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
+                logger.warning(f"⚠️ Misaki returned invalid result format for '{text[:30]}...': {result}")
+                raise ValueError("Invalid misaki result format")
+            
+            phonemes, tokens = result
+            
+            # Validate phonemes are not None and can be processed
+            if phonemes is None:
+                logger.warning(f"⚠️ Misaki returned None phonemes for '{text[:30]}...'")
+                raise ValueError("Misaki returned None phonemes")
+                
+            if not isinstance(phonemes, str):
+                logger.warning(f"⚠️ Misaki returned non-string phonemes for '{text[:30]}...': {type(phonemes)}")
+                raise ValueError("Misaki returned invalid phoneme type")
             
             # Convert to list format expected by the system
             phoneme_list = list(phonemes.replace(' ', ''))
+            
+            # Validate we have actual phoneme content
+            if not phoneme_list:
+                logger.warning(f"⚠️ Misaki produced empty phoneme list for '{text[:30]}...'")
+                raise ValueError("Empty phoneme result")
             
             # Update success statistics
             _misaki_stats.misaki_successes += 1

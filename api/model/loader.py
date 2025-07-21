@@ -393,11 +393,7 @@ class DualSessionManager:
             ane_provider_options = {
                 "MLComputeUnits": "CPUAndNeuralEngine",
                 "ModelFormat": "MLProgram",
-                "AllowLowPrecisionAccumulationOnGPU": "1",
-                "RequireStaticInputShapes": "1",
-                "MaxSequenceLength": "256",
-                "StaticInputShapes": "1",
-                "PhonemeBasedPadding": "1"
+                "AllowLowPrecisionAccumulationOnGPU": "1"
             }
 
             # Create ONNX session
@@ -429,11 +425,7 @@ class DualSessionManager:
             gpu_provider_options = {
                 "MLComputeUnits": "CPUAndGPU",
                 "ModelFormat": "MLProgram",
-                "AllowLowPrecisionAccumulationOnGPU": "1",
-                "RequireStaticInputShapes": "1",
-                "MaxSequenceLength": "256",
-                "StaticInputShapes": "1",
-                "PhonemeBasedPadding": "1"
+                "AllowLowPrecisionAccumulationOnGPU": "1"
             }
 
             # Create ONNX session
