@@ -11,6 +11,12 @@ UVICORN_RELOAD=${UVICORN_RELOAD:-"1"}
 # Set a flag to indicate development mode for the application logic
 export KOKORO_DEVELOPMENT_MODE="true"
 
+# Misaki G2P configuration for development
+export KOKORO_MISAKI_ENABLED="${KOKORO_MISAKI_ENABLED:-true}"
+export KOKORO_MISAKI_FALLBACK="${KOKORO_MISAKI_FALLBACK:-true}"
+export KOKORO_MISAKI_CACHE_SIZE="${KOKORO_MISAKI_CACHE_SIZE:-1000}"
+export KOKORO_MISAKI_QUALITY_THRESHOLD="${KOKORO_MISAKI_QUALITY_THRESHOLD:-0.8}"
+
 # --- Pre-flight Checks ---
 # Check if .venv exists
 if [ ! -d ".venv" ]; then
@@ -45,6 +51,7 @@ echo "   • API documentation: http://${HOST}:${PORT}/docs"
 echo "   • Standard JSON serialization (not ORJSON)"
 echo "   • No security headers or compression"
 echo "   • Fast startup (reduced benchmarking)"
+echo "   • Misaki G2P with fallback enabled: ${KOKORO_MISAKI_ENABLED}"
 echo ""
 echo "💡 For production optimizations, use: ./start_production.sh"
 
