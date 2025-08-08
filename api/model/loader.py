@@ -563,8 +563,15 @@ class DualSessionManager:
         @param lang: Language code
         @returns: Audio data as bytes
         """
+        global kokoro_model, model_loaded
+        
         # Memory watchdog check
         self.memory_watchdog.cleanup_if_needed()
+
+        # Check if model is available
+        if not model_loaded or kokoro_model is None:
+            self.logger.warning("Model not loaded, cannot process segment concurrently")
+            raise RuntimeError("Model not loaded - use single model processing")
 
         # Calculate segment complexity
         complexity = self.calculate_segment_complexity(text)
@@ -598,7 +605,9 @@ class DualSessionManager:
                         f"Successfully processed segment with {session_type} routing")
                     return audio_data
                 else:
-                    raise RuntimeError("Global model not available")
+                    # Fall back to single model processing if global model not available
+                    self.logger.warning(f"Global model not available for {session_type} routing, falling back to single model")
+                    raise RuntimeError("Global model not available - use single model processing")
 
             except Exception as e:
                 self.logger.error(
