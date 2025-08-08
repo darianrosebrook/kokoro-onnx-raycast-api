@@ -531,7 +531,16 @@ def _generate_audio_segment(
         )
         start_time = time.perf_counter()
 
-        samples, _ = local_model.create(processed_text, voice, speed, lang)
+        result = local_model.create(processed_text, voice, speed, lang)
+        
+        # Handle different return formats
+        if isinstance(result, tuple):
+            if len(result) >= 2:
+                samples = result[0]  # First element is always samples
+            else:
+                samples = result[0]  # Single element tuple
+        else:
+            samples = result  # Direct return
 
         inference_time = time.perf_counter() - start_time
         update_performance_stats(inference_time, provider)
@@ -633,7 +642,16 @@ def _fast_generate_audio_segment(
         )
         start_time = time.perf_counter()
 
-        samples, _ = local_model.create(processed_text, voice, speed, lang)
+        result = local_model.create(processed_text, voice, speed, lang)
+        
+        # Handle different return formats
+        if isinstance(result, tuple):
+            if len(result) >= 2:
+                samples = result[0]  # First element is always samples
+            else:
+                samples = result[0]  # Single element tuple
+        else:
+            samples = result  # Direct return
 
         inference_time = time.perf_counter() - start_time
         update_performance_stats(inference_time, f"{provider}-Fast")
