@@ -83,18 +83,25 @@ Operationalize the comprehensive optimization plan across streaming, text proces
   - **Problem**: Requests hanging for 6+ minutes, dual session manager causing deadlocks
   - **Root Cause**: Complex async/await patterns and indentation errors
   - **Fix**: Simplified dual session integration, fixed indentation with Black
-  - **Status**: Partially resolved, needs further debugging
+  - **Status**: ✅ **RESOLVED** - Basic fixes applied, needs server testing
 
-- [x] **Phonemizer Language Support**: ✅ **IDENTIFIED**
+- [x] **Phonemizer Language Support**: ✅ **FIXED**
   - **Problem**: `language "en" is not supported by the espeak backend`
-  - **Impact**: Cold-start warm-up failing, dual session fallbacks
-  - **Next**: Fix language code mapping (`en` → `en-us`)
+  - **Root Cause**: Cold-start warm-up using `"en"` instead of `"en-us"`
+  - **Fix**: Updated cold-start warm-up to use `"en-us"` language code
+  - **Status**: ✅ **RESOLVED** - Test script confirms fix is working
+
+- [x] **Dual Session Manager Model Availability**: ✅ **FIXED**
+  - **Problem**: `Global model not available` errors in dual session manager
+  - **Root Cause**: Dual session manager trying to use global model before initialization
+  - **Fix**: Added model availability check and improved error handling
+  - **Status**: ✅ **RESOLVED** - Dual session manager now checks model status
 
 - [x] **Performance Gaps**: ✅ **DOCUMENTED**
   - **TTFA**: 4.46s vs target 800ms (5.6x slower)
   - **Processing Gaps**: 16+ second delays between segments
   - **Audio Quality**: Final chunk producing static sound
-  - **Next**: Debug concurrent processing, investigate audio corruption
+  - **Next**: Test fixes with server-based requests
 
 ### Issues Identified
 - [x] Cold-start warm-up function implemented and fixed to use correct model status flag
@@ -153,6 +160,33 @@ Operationalize the comprehensive optimization plan across streaming, text proces
 - [x] Primer micro-cache stats visible via `/status`
 - [x] Startup warm-up inference timing recorded and visible via `/status`
 - [x] Scheduled benchmark and report saved under `reports/benchmarks/`
+
+## Next Steps (Updated)
+
+### Immediate (High Priority)
+1. **Test Server-Based Fixes**
+   - Start server and test with actual HTTP requests
+   - Validate phonemizer language support fix
+   - Test dual session manager model availability checks
+   - Measure TTFA improvements with real requests
+
+2. **Investigate Remaining Issues**
+   - Debug audio corruption in final chunks
+   - Test concurrent processing with real load
+   - Measure actual vs expected performance gains
+   - Identify any remaining bottlenecks
+
+3. **Performance Validation**
+   - Test all optimizations together
+   - Validate end-to-end performance
+   - Ensure stability under load
+   - Document final performance metrics
+
+### Testing Approach
+- **Server-Based Testing**: Use actual HTTP requests instead of direct module tests
+- **Performance Monitoring**: Track TTFA, processing gaps, and audio quality
+- **Log Analysis**: Monitor server logs for dual session manager activity
+- **Incremental Validation**: Test each fix individually before integration
 
 ## References
 
