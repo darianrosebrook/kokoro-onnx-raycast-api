@@ -593,17 +593,16 @@ class DualSessionManager:
 
                 # Use the global model for now (simplified approach)
                 # In the future, we can implement separate sessions for different hardware
-                global kokoro_model
                 if kokoro_model:
                     self.logger.debug(
                         f"Processing with {session_type} routing (complexity: {complexity:.2f})")
 
                     # Create audio using the global model
-                    audio_data = kokoro_model.create(text, voice, speed, lang)
+                    samples, _ = kokoro_model.create(text, voice, speed, lang)
 
                     self.logger.debug(
                         f"Successfully processed segment with {session_type} routing")
-                    return audio_data
+                    return samples
                 else:
                     # Fall back to single model processing if global model not available
                     self.logger.warning(f"Global model not available for {session_type} routing, falling back to single model")
