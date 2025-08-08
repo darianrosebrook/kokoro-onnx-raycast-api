@@ -550,8 +550,11 @@ async def stream_tts_audio(
             length = len(segment_text)
             if length <= 60:
                 return segment_text, ""
-            target = max(40, int(length * 0.05))
-            target = min(target, 300)  # cap early primer size
+            # Increase primer aggressiveness: 10-15% of text, capped to 700 chars
+            # This provides enough audio to begin playback promptly while the rest streams
+            ratio = 0.10 if length < 800 else 0.15
+            target = max(60, int(length * ratio))
+            target = min(target, 700)
             # Find a cut point at whitespace after target up to +60 chars
             cut = -1
             for i in range(target, min(length, target + 60)):
@@ -621,6 +624,18 @@ async def stream_tts_audio(
             # This ensures the client receives the WAV header immediately
             logger.debug(f"[{request_id}] Yielding optimized WAV header ({header_size} bytes) for streaming")
             yield bytes(wav_header)
+
+            # PHASE 1 OPTIMIZATION: Yield a tiny silence primer to force flush and begin playback immediately
+            # 50ms of silence at 24kHz, 16-bit mono → 24000 * 0.05 * 2 = 2400 bytes
+            try:
+                silence_ms = 50
+                silence_samples = int(TTSConfig.SAMPLE_RATE * (silence_ms / 1000))
+                silence_bytes = (np.int16(np.zeros(silence_samples)) * 0).tobytes()
+                if silence_bytes:
+                    logger.debug(f"[{request_id}] Yielding {silence_ms}ms silence primer ({len(silence_bytes)} bytes)")
+                    yield silence_bytes
+            except Exception as e:
+                logger.debug(f"[{request_id}] Silence primer generation skipped: {e}")
             
         except Exception as e:
             logger.error(f"[{request_id}] WAV header generation failed: {e}")
@@ -649,7 +664,8 @@ async def stream_tts_audio(
             logger.debug(f"[{request_id}] Processing segment {i+1}/{total_segments}: '{seg_text[:30]}...'")
             
             # PHASE 1 TTFA OPTIMIZATION: Use fast processing for first simple segment
-            use_fast_processing = (i in fast_indices) or (i == 0 and _is_simple_segment(seg_text))
+            # Force fast-path for primer segment and for first segment regardless of complexity
+            use_fast_processing = (i in fast_indices) or (i == 0)
             
             # Generate audio for this segment immediately
             try:

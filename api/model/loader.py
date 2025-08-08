@@ -3083,16 +3083,19 @@ class InferencePipelineWarmer:
 
         # Common text patterns for warm-up
         self.common_text_patterns = [
-            "Hello world",
+            # Primer-like short texts to precompile early fast path
+            "Primer:",
+            "Hello world.",
+            "Starting stream.",
+            # Short natural sentences
             "How are you today?",
+            "Welcome to our service.",
+            # Medium sentences to heat up graphs
             "This is a test of the text to speech system.",
             "The quick brown fox jumps over the lazy dog.",
-            "Welcome to our service.",
-            "Thank you for using our application.",
             "Please wait while we process your request.",
-            "Your request has been completed successfully.",
-            "Good morning, good afternoon, good evening.",
-            "One, two, three, four, five, six, seven, eight, nine, ten."
+            # Longer sentence to match typical usage
+            "This is a longer sentence intended to demonstrate early primer streaming behavior, enabling the client to begin playback while the remainder is prepared and streamed in order."
         ]
 
         # Common voice patterns for warm-up
