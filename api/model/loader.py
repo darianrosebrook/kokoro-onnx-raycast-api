@@ -584,28 +584,26 @@ class DualSessionManager:
                 else:
                     self.utilization.cpu_requests += 1
 
-                # Process with selected session
-                session = self.sessions[session_type]
-                if session:
+                # Use the global model for now (simplified approach)
+                # In the future, we can implement separate sessions for different hardware
+                global kokoro_model
+                if kokoro_model:
                     self.logger.debug(
-                        f"Processing with {session_type} session (complexity: {complexity:.2f})")
+                        f"Processing with {session_type} routing (complexity: {complexity:.2f})")
 
-                    # Create audio using the selected session
-                    audio_data = session.create(text, voice, speed, lang)
+                    # Create audio using the global model
+                    audio_data = kokoro_model.create(text, voice, speed, lang)
 
                     self.logger.debug(
-                        f"Successfully processed segment with {session_type} session")
+                        f"Successfully processed segment with {session_type} routing")
                     return audio_data
                 else:
-                    raise RuntimeError(f"Session {session_type} not available")
+                    raise RuntimeError("Global model not available")
 
             except Exception as e:
                 self.logger.error(
-                    f"Error processing segment with {session_type} session: {e}")
+                    f"Error processing segment with {session_type} routing: {e}")
                 raise
-            finally:
-                # Release session lock
-                self.session_locks[session_type].release()
 
     def get_utilization_stats(self) -> Dict[str, Any]:
         """Get current session utilization statistics."""

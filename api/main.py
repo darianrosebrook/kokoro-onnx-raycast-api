@@ -188,7 +188,7 @@ import traceback
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 import numpy as np
@@ -211,6 +211,7 @@ from api.model.patch import apply_all_patches, get_patch_status
 from api.model.loader import initialize_model as initialize_model_sync, detect_apple_silicon_capabilities
 from api.performance.stats import get_performance_stats
 from api.tts.core import _generate_audio_segment, stream_tts_audio, get_tts_processing_stats
+from api.tts.core import get_primer_microcache_stats
 from api.utils.cache_cleanup import cleanup_cache, get_cache_info
 from api.tts.text_processing import segment_text
 from api.model.loader import get_model_status, initialize_model, detect_apple_silicon_capabilities
@@ -626,6 +627,11 @@ startup_progress = {
     "completed_at": None
 }
 
+# Global variables for cold-start warm-up tracking
+_cold_start_warmup_completed: bool = False
+_cold_start_warmup_time_ms: float = 0.0
+_cold_start_warmup_error: Optional[str] = None
+
 
 class PerformanceMiddleware(BaseHTTPMiddleware):
     """
@@ -849,6 +855,102 @@ async def initialize_model():
             100, f"Initialization failed: {e}", "error")
 
 
+def get_cold_start_warmup_stats() -> Dict[str, Any]:
+    """
+    Get cold-start warm-up statistics for monitoring.
+    
+    Returns:
+        Dict containing warm-up completion status, timing, and any errors
+    """
+    return {
+        "completed": _cold_start_warmup_completed,
+        "warmup_time_ms": _cold_start_warmup_time_ms,
+        "error": _cold_start_warmup_error
+    }
+
+async def perform_cold_start_warmup():
+    """
+    Perform a cold-start warm-up inference to reduce first request TTFB.
+    
+    This function runs a short inference on a simple text to warm up the model
+    and reduce the time-to-first-audio for subsequent requests.
+    """
+    global _cold_start_warmup_completed, _cold_start_warmup_time_ms, _cold_start_warmup_error
+    
+    try:
+        logger.info("Starting cold-start warm-up inference...")
+        start_time = time.time()
+        
+        # Wait for model to be ready
+        max_wait_time = 60  # Wait up to 60 seconds for model
+        wait_interval = 2   # Check every 2 seconds
+        
+        for attempt in range(max_wait_time // wait_interval):
+            try:
+                if model_initialization_complete:
+                    logger.info("Model is ready, proceeding with warm-up")
+                    break
+                else:
+                    logger.debug(f"Model not ready yet, waiting... (attempt {attempt + 1})")
+                    await asyncio.sleep(wait_interval)
+            except Exception as e:
+                logger.debug(f"Error checking model status: {e}, waiting...")
+                await asyncio.sleep(wait_interval)
+        else:
+            raise Exception("Model did not become ready within timeout")
+        
+        # Import TTS core functions
+        from api.tts.core import _generate_audio_segment
+        from api.tts.text_processing import segment_text
+        
+        # Use a simple, short text for warm-up
+        warmup_text = "Hello world."
+        
+        # Process the warm-up text
+        segments = segment_text(warmup_text, max_len=50)
+        if not segments:
+            segments = [warmup_text]
+        
+        # Generate audio for the first segment only (minimal warm-up)
+        from fastapi.concurrency import run_in_threadpool
+        audio_data = await run_in_threadpool(
+            _generate_audio_segment,
+            0,  # idx
+            segments[0],  # text
+            "af_alloy",  # voice
+            1.0,  # speed
+            "en"  # lang
+        )
+        
+        end_time = time.time()
+        warmup_time_ms = (end_time - start_time) * 1000
+        
+        _cold_start_warmup_completed = True
+        _cold_start_warmup_time_ms = warmup_time_ms
+        _cold_start_warmup_error = None
+        
+        logger.info(f"Cold-start warm-up completed in {warmup_time_ms:.2f}ms")
+        
+    except Exception as e:
+        _cold_start_warmup_completed = False
+        _cold_start_warmup_error = str(e)
+        logger.warning(f"Cold-start warm-up failed: {e}")
+
+async def delayed_cold_start_warmup():
+    """
+    Delayed cold-start warm-up that waits for model initialization to complete.
+    """
+    # Wait for model initialization to complete
+    while not model_initialization_complete:
+        await asyncio.sleep(1)
+    
+    # Additional delay to ensure model is fully ready
+    await asyncio.sleep(5)
+    
+    # Now perform the warm-up
+    await perform_cold_start_warmup()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -859,6 +961,39 @@ async def lifespan(app: FastAPI):
 
     # Start model initialization in background
     asyncio.create_task(initialize_model())
+
+    # Perform startup tasks after model initialization starts
+    validate_dependencies()
+    validate_model_files()
+    validate_environment()
+    validate_patch_status()
+
+    # Proactively load model and trigger pipeline warm-up in background
+    try:
+        from api.model.loader import get_model, get_pipeline_warmer
+        try:
+            get_model()
+        except Exception as e:
+            logger.debug(f"Model preload skipped/failed during startup: {e}")
+        try:
+            pipeline_warmer = get_pipeline_warmer()
+            if pipeline_warmer:
+                asyncio.create_task(pipeline_warmer.trigger_warm_up_if_needed())
+        except Exception as e:
+            logger.debug(f"Pipeline warm-up trigger failed at startup: {e}")
+    except Exception as e:
+        logger.debug(f"Startup warm-up setup failed: {e}")
+
+    # Perform cold-start warm-up inference (delayed to wait for model)
+    asyncio.create_task(delayed_cold_start_warmup())
+
+    # Start scheduled benchmark scheduler
+    try:
+        from api.performance.scheduled_benchmark import start_benchmark_scheduler
+        start_benchmark_scheduler()
+        logger.info("Scheduled benchmark scheduler started")
+    except Exception as e:
+        logger.warning(f"Could not start benchmark scheduler: {e}")
 
     yield
 
@@ -934,29 +1069,7 @@ else:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 
-@app.on_event("startup")
-async def startup_event():
-    # Perform any startup tasks here, e.g., validate dependencies, model files
-    validate_dependencies()
-    validate_model_files()
-    validate_environment()
-    validate_patch_status()
-
-    # Proactively load model and trigger pipeline warm-up in background
-    try:
-        from api.model.loader import get_model, get_pipeline_warmer
-        try:
-            get_model()
-        except Exception as e:
-            logger.debug(f"Model preload skipped/failed during startup: {e}")
-        try:
-            pipeline_warmer = get_pipeline_warmer()
-            if pipeline_warmer:
-                asyncio.create_task(pipeline_warmer.trigger_warm_up_if_needed())
-        except Exception as e:
-            logger.debug(f"Pipeline warm-up trigger failed at startup: {e}")
-    except Exception as e:
-        logger.debug(f"Startup warm-up setup failed: {e}")
+# Startup logic moved to lifespan context manager
 
 
 @app.get("/health")
@@ -1430,6 +1543,25 @@ async def get_status():
         except Exception as e:
             logger.warning(f"⚠️ Could not get TTS processing stats: {e}")
             status["tts_processing"] = {"error": str(e)}
+
+        # PHASE 1 TTFA OPTIMIZATION: Primer micro-cache telemetry
+        try:
+            status["primer_microcache"] = get_primer_microcache_stats()
+        except Exception as e:
+            status["primer_microcache"] = {"error": str(e)}
+
+        # PHASE 1 TTFA OPTIMIZATION: Cold-start warm-up telemetry
+        try:
+            status["cold_start_warmup"] = get_cold_start_warmup_stats()
+        except Exception as e:
+            status["cold_start_warmup"] = {"error": str(e)}
+
+        # PHASE 4 OPTIMIZATION: Scheduled benchmark telemetry
+        try:
+            from api.performance.scheduled_benchmark import get_scheduled_benchmark_stats
+            status["scheduled_benchmark"] = get_scheduled_benchmark_stats()
+        except Exception as e:
+            status["scheduled_benchmark"] = {"error": str(e)}
 
         # PHASE 3 OPTIMIZATION: Add dual session utilization statistics
         try:
