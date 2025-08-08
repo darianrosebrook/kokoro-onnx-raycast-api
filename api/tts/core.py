@@ -21,7 +21,7 @@ import logging
 import re
 import struct
 import time
-from typing import AsyncGenerator, Dict, Optional, Tuple
+from typing import AsyncGenerator, Dict, Optional, Tuple, List, Set
 
 import numpy as np
 from fastapi import HTTPException, Request
@@ -544,6 +544,35 @@ async def stream_tts_audio(
         logger.warning(f"[{request_id}] No segments generated from text, ending stream early.")
         return
 
+    # Early TTFA primer: split first segment to stream ~5% of text ASAP
+    def _split_segment_for_early_ttfa(segment_text: str) -> Tuple[str, str]:
+        try:
+            length = len(segment_text)
+            if length <= 60:
+                return segment_text, ""
+            target = max(40, int(length * 0.05))
+            target = min(target, 300)  # cap early primer size
+            # Find a cut point at whitespace after target up to +60 chars
+            cut = -1
+            for i in range(target, min(length, target + 60)):
+                if segment_text[i].isspace():
+                    cut = i
+                    break
+            if cut == -1:
+                cut = min(length, target)
+            early = segment_text[:cut].strip()
+            rest = segment_text[cut:].strip()
+            return early or segment_text, rest if early else ""
+        except Exception:
+            return segment_text, ""
+
+    fast_indices: Set[int] = set()
+    if segments:
+        early, rest = _split_segment_for_early_ttfa(segments[0])
+        if early and rest:
+            segments = [early, rest] + segments[1:]
+            fast_indices.add(0)  # force fast path for the early primer segment
+
     total_segments = len(segments)
     logger.info(f"[{request_id}] Text split into {total_segments} segments.")
 
@@ -620,7 +649,7 @@ async def stream_tts_audio(
             logger.debug(f"[{request_id}] Processing segment {i+1}/{total_segments}: '{seg_text[:30]}...'")
             
             # PHASE 1 TTFA OPTIMIZATION: Use fast processing for first simple segment
-            use_fast_processing = (i == 0 and _is_simple_segment(seg_text))
+            use_fast_processing = (i in fast_indices) or (i == 0 and _is_simple_segment(seg_text))
             
             # Generate audio for this segment immediately
             try:
@@ -646,8 +675,10 @@ async def stream_tts_audio(
                     segment_bytes = scaled_audio.tobytes()
                     
                     # PHASE 1 OPTIMIZATION: Yield chunks immediately in smaller pieces
-                    # This ensures faster TTFA by not waiting for complete segments
+                    # Smaller initial chunks for primer segment to improve TTFA
                     chunk_size = TTSConfig.CHUNK_SIZE_BYTES
+                    if i in fast_indices:
+                        chunk_size = max(1024, TTSConfig.CHUNK_SIZE_BYTES // 2)
                     offset = 0
                     
                     while offset < len(segment_bytes):
