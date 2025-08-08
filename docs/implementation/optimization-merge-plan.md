@@ -1,9 +1,14 @@
 # Optimization Merge Plan
 > Author: @darianrosebrook  
-> Status: Planning
+> Status: In progress
 
 ## Goal
 Unify work between `feature/audio-daemon-integration` and `optimization-implementation` to deliver near‑instant TTS with a stable streaming pipeline, simplified yet reliable text processing, Misaki G2P integration, and consistent performance telemetry.
+
+## Updates
+- Virtualenv configured (`.venv`) and dependencies installed; tests run in isolated env.
+- Targeted tests executed and passing: long text, washing-instructions, Misaki integration (wrapper path). Upstream Misaki direct call error handled by wrapper fallback.
+- Log noise reduced in `api/tts/misaki_processing.py`; verbose warnings gated behind `KOKORO_VERBOSE_LOGS=true`.
 
 ## Branch Diff Summary
 - **Shared modified files**: `.kokoro-root`, `api/config.py`, `api/performance/stats.py`, `api/tts/core.py`, `api/tts/misaki_processing.py`, `api/tts/text_processing.py`, `raycast/src/utils/tts/streaming/audio-playback-daemon.ts`, `start_development.sh`.
@@ -23,7 +28,7 @@ Unify work between `feature/audio-daemon-integration` and `optimization-implemen
 1. Text Processing Architecture
    - Prefer the simpler, performant `api/tts/text_processing.py` as the execution path to minimize overhead.
    - Selectively port high‑value rules from the modular pipeline (number and abbreviation handling) into the simplified path behind fast regex/rule toggles.
-   - Retain the modular package in a `legacy/` or `experimental/` folder only if specific locales require it; otherwise remove to reduce maintenance.
+   - Retain the modular package in a `legacy/` or `experimental/` folder only if specific locales require it; otherwise remove to reduce maintenance. (Removed)
 
 2. Misaki Integration
    - Keep Misaki as primary G2P with robust fallbacks (text passthrough) and safe defaults.
@@ -42,27 +47,27 @@ Unify work between `feature/audio-daemon-integration` and `optimization-implemen
 
 ## Implementation Checklist
 ### Phase 0 — Prep
-- [ ] Create integration branch: `merge/optimization-audio-daemon`
-- [ ] Export current diffs into `reports/branch-diff-optimization-vs-audio-daemon.md`
+- [x] Create integration branch: `merge/optimization-audio-daemon`
+- [x] Export diffs to `docs/implementation/branch-diff-optimization-vs-audio-daemon.md`
+- [x] Setup venv and install deps
 
 ### Phase 1 — Text Processing
-- [ ] Compare `api/tts/text_processing.py` vs `api/tts/text_processing/**` to enumerate rules used in production
-- [ ] Port essential normalization (numbers, common abbreviations) into fast path with early guards
-- [ ] Add tests covering line breaks, long paragraphs, truncation edge cases
+- [x] Remove modular `api/tts/text_processing/**` and keep simplified path
+- [ ] Port essential normalization (numbers/abbrev) behind fast guards (if needed)
+- [x] Add/Run tests: line breaks, long paragraphs, truncation edge cases
 
 ### Phase 2 — Misaki G2P
-- [ ] Reconcile changes in `api/tts/misaki_processing.py`
-- [ ] Implement safe defaults, fallbacks, and error‑path timing guarantees
-- [ ] Validate with scripts: `test_misaki_*`, `verify_washing_fix.py`, long text tests
+- [x] Reconcile changes in `api/tts/misaki_processing.py` (thread-safe init, robust None handling)
+- [x] Implement safe defaults, fallbacks, and log demotion; `KOKORO_VERBOSE_LOGS` toggle
+- [x] Validate with scripts: `test_misaki_*`, `verify_washing_fix.py`, long text tests
 
 ### Phase 3 — Core & Streaming
-- [ ] Merge `api/tts/core.py` streaming logic; verify chunking, ordering, and cancellation
-- [ ] Align with Raycast daemon: update `raycast/src/utils/tts/streaming/audio-playback-daemon.ts` contract as needed
-- [ ] Measure TTFA and end‑to‑end RTF on reference texts
+- [ ] Validate `/v1/audio/speech` streaming end-to-end (TTFA, chunking, ordering)
+- [ ] Align with Raycast daemon (`raycast/src/utils/tts/streaming/audio-playback-daemon.ts` contract)
 
 ### Phase 4 — Telemetry
-- [ ] Unify `api/performance/stats.py` schema and `/status` endpoint output
-- [ ] Add counters for fallbacks, provider selection, cleanup cycles
+- [ ] Unify `api/performance/stats.py` schema and `/status` outputs
+- [ ] Add counters for fallbacks, provider selection, cleanup cycles (verify)
 
 ### Phase 5 — Docs & Benchmarks
 - [ ] Update `docs/comprehensive-optimization-plan-for-kokoro-backend.md` with final architecture choices
