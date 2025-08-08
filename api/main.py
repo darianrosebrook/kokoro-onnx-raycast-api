@@ -942,6 +942,22 @@ async def startup_event():
     validate_environment()
     validate_patch_status()
 
+    # Proactively load model and trigger pipeline warm-up in background
+    try:
+        from api.model.loader import get_model, get_pipeline_warmer
+        try:
+            get_model()
+        except Exception as e:
+            logger.debug(f"Model preload skipped/failed during startup: {e}")
+        try:
+            pipeline_warmer = get_pipeline_warmer()
+            if pipeline_warmer:
+                asyncio.create_task(pipeline_warmer.trigger_warm_up_if_needed())
+        except Exception as e:
+            logger.debug(f"Pipeline warm-up trigger failed at startup: {e}")
+    except Exception as e:
+        logger.debug(f"Startup warm-up setup failed: {e}")
+
 
 @app.get("/health")
 async def health_check(response: Response):
@@ -1705,11 +1721,16 @@ async def create_speech(request: Request, tts_request: TTSRequest, config: TTSCo
         )
 
         # Create streaming generator for real-time audio delivery
+        # Normalize language to avoid espeak backend errors (e.g., map 'en' -> 'en-us')
+        normalized_lang = (tts_request.lang or "en-us").lower()
+        if normalized_lang in ("en", "en_us", "en-us-001"):
+            normalized_lang = "en-us"
+
         generator = stream_tts_audio(
             tts_request.text,
             tts_request.voice,
             tts_request.speed,
-            tts_request.lang,
+            normalized_lang,
             tts_request.format,
             request,
         )
@@ -1719,6 +1740,11 @@ async def create_speech(request: Request, tts_request: TTSRequest, config: TTSCo
     # Handle non-streaming requests with complete audio generation
     else:
         # Segment text for parallel processing
+        # Normalize language for non-streaming path as well
+        normalized_lang = (tts_request.lang or "en-us").lower()
+        if normalized_lang in ("en", "en_us", "en-us-001"):
+            normalized_lang = "en-us"
+
         segments = segment_text(tts_request.text, config.MAX_SEGMENT_LENGTH)
         if not segments:
             raise HTTPException(
@@ -1730,7 +1756,7 @@ async def create_speech(request: Request, tts_request: TTSRequest, config: TTSCo
         all_audio_np = []
         for i, seg in enumerate(segments):
             _, audio_np, _ = _generate_audio_segment(
-                i, seg, tts_request.voice, tts_request.speed, tts_request.lang
+                i, seg, tts_request.voice, tts_request.speed, normalized_lang
             )
             if audio_np is not None and audio_np.size > 0:
                 all_audio_np.append(audio_np)
