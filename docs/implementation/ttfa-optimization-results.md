@@ -114,7 +114,7 @@ Improvement:          97.9% faster!
 - `_fast_generate_audio_segment()`
 - `update_fast_path_performance_stats()`
 
-## 🧪 Testing Results
+## 🧪 Testing Results (Updated 2025-08-08)
 
 ### Text Classification:
 - ✅ "Hello world" → Simple (fast-path)
@@ -124,8 +124,10 @@ Improvement:          97.9% faster!
 - ✅ Phonemizer pre-initialization: Working
 - ✅ Fast-path detection: Working 
 - ✅ Performance improvement: 97.9% faster
+- ⚠️ Live E2E streaming (lang=en-us): First-byte measured at ~5.3s on first run; non-streaming response ~4.2s for short input. Needs warm-up and CoreML graph pre-heating to meet <800ms.
+- ⚠️ Live E2E streaming (lang=en): Fails due to espeak language mismatch; require `lang="en-us"` in client requests or map `en`→`en-us`.
 
-## 🚀 Next Steps for Validation
+## 🚀 Next Steps for Validation (Additions)
 
 ### 1. **Live Server Testing**
 ```bash
@@ -149,6 +151,8 @@ curl -X POST "http://127.0.0.1:8000/v1/audio/speech" \
 - Monitor fast-path usage rates
 - Track TTFA improvements in logs
 - Validate target achievement (<800ms)
+- Add startup warm-up inference to pre-compile CoreML graphs and reduce first-request TTFB.
+- Consider mapping `lang` aliases (`en`→`en-us`) server-side to avoid espeak errors.
 
 ### 3. **Fine-tuning Opportunities**
 - Adjust simple text thresholds
