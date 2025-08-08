@@ -24,15 +24,18 @@ while maintaining backward compatibility through fallback mechanisms.
 """
 
 import logging
-from typing import List, Dict, Any, Optional, Union
+import re
+import threading
+from typing import List, Dict, Any, Optional, Union, Tuple
 from dataclasses import dataclass
 import time
 
 logger = logging.getLogger(__name__)
 
 # Misaki G2P backend - lazy initialization
+# Use None to indicate uninitialized state, True/False for known availability
 _misaki_backend = None
-_misaki_available = False
+_misaki_available: Optional[bool] = None
 
 # Fallback imports
 try:
@@ -66,6 +69,13 @@ class MisakiStats:
 # Global statistics
 _misaki_stats = MisakiStats()
 
+# Cache for Misaki results to avoid repeated G2P calls
+_misaki_cache: Dict[Tuple[str, str], List[str]] = {}
+_misaki_cache_max_size = 1000  # Maximum cache size
+
+# Thread safety for backend initialization and cache access
+_misaki_lock = threading.Lock()
+
 
 def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
     """
@@ -79,51 +89,54 @@ def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
     """
     global _misaki_backend, _misaki_available
     
-    if _misaki_backend is not None:
-        return _misaki_backend
-    
-    # If we already know it's not available, don't retry
-    if _misaki_available is False:
-        return None
-    
-    try:
-        # Try to import and initialize Misaki
-        from misaki import en
+    # Thread-safe initialization
+    with _misaki_lock:
+        if _misaki_backend is not None:
+            return _misaki_backend
         
-        # Initialize with American English, no transformer, with fallback
-        _misaki_backend = en.G2P(
-            trf=False,  # No transformer for faster processing
-            british=False,  # American English
-            fallback=None  # We'll handle fallback at a higher level
-        )
+        # If we already know it's available, return the backend
+        if _misaki_available is True:
+            return _misaki_backend
         
-        # Test the backend with a simple phrase to make sure it works properly
-        test_result = _misaki_backend("hello")
-        if test_result is None or not isinstance(test_result, (tuple, list)) or len(test_result) != 2:
-            logger.error(f"❌ Misaki backend test failed: returned {test_result}")
-            _misaki_backend = None
+        try:
+            # Try to import and initialize Misaki
+            from misaki import en
+            
+            # Initialize with specified language, no transformer, with fallback
+            _misaki_backend = en.G2P(
+                trf=False,  # No transformer for faster processing
+                british=False,  # American English (for now, can be extended for other languages)
+                fallback=None  # We'll handle fallback at a higher level
+            )
+            
+            # Test the backend with a simple phrase to make sure it works properly
+            test_result = _misaki_backend("hello")
+            if test_result is None or not hasattr(test_result, '__iter__') or len(test_result) < 2:
+                logger.error(f"❌ Misaki backend test failed: returned {test_result}")
+                _misaki_backend = None
+                _misaki_available = False
+                return None
+            
+            # Extract first two elements (phonemes, tokens) - allows for future extensions
+            phonemes, tokens = test_result[:2]
+            if phonemes is None or not isinstance(phonemes, str):
+                logger.error(f"❌ Misaki backend test failed: invalid phonemes {phonemes}")
+                _misaki_backend = None
+                _misaki_available = False
+                return None
+            
+            _misaki_available = True
+            logger.info("✅ Misaki G2P backend initialized and tested successfully")
+            return _misaki_backend
+            
+        except ImportError as e:
+            logger.warning(f"⚠️ Misaki G2P not available: {e}")
             _misaki_available = False
             return None
-        
-        phonemes, tokens = test_result
-        if phonemes is None or not isinstance(phonemes, str):
-            logger.error(f"❌ Misaki backend test failed: invalid phonemes {phonemes}")
-            _misaki_backend = None
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Misaki G2P: {e}")
             _misaki_available = False
             return None
-        
-        _misaki_available = True
-        logger.info("✅ Misaki G2P backend initialized and tested successfully")
-        return _misaki_backend
-        
-    except ImportError as e:
-        logger.warning(f"⚠️ Misaki G2P not available: {e}")
-        _misaki_available = False
-        return None
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize Misaki G2P: {e}")
-        _misaki_available = False
-        return None
 
 
 def is_misaki_available() -> bool:
@@ -160,6 +173,7 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
     - **Better Quality**: Reduced phonemization errors and mismatches
     - **Smart Fallbacks**: Automatic fallback for edge cases
     - **Monitoring**: Comprehensive quality and performance tracking
+    - **Caching**: Results are cached to avoid repeated G2P calls
     
     Args:
         text: Input text to convert to phonemes
@@ -175,28 +189,57 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
         >>> text_to_phonemes_misaki("Kokoro TTS synthesis")
         ['k', 'ˈ', 'o', 'k', 'ə', 'r', 'o', ' ', 't', 'i', 't', 'i', 'ɛ', 's', ' ', 's', 'ɪ', 'n', 'θ', 'ə', 's', 'ɪ', 's']
     """
-    global _misaki_stats
+    global _misaki_stats, _misaki_cache
     
     if not text or not text.strip():
         return []
     
-    start_time = time.time()
-    _misaki_stats.total_requests += 1
+    # Handle line breaks specially to avoid truncation issues
+    if '\n' in text:
+        # Replace line breaks with periods to maintain sentence structure
+        processed_text = re.sub(r'\n+', '. ', text)
+        # Clean up any double periods that might have been created
+        processed_text = re.sub(r'\.+', '.', processed_text)
+        # Ensure proper spacing
+        processed_text = re.sub(r'\s+', ' ', processed_text).strip()
+        logger.info(f"Processed multi-line text for Misaki: '{processed_text[:50]}...'")
+    else:
+        processed_text = text
     
     # Initialize Misaki backend
     backend = _initialize_misaki_backend(lang)
     
+    # Thread-safe processing for stats and cache
+    with _misaki_lock:
+        start_time = time.time()
+        _misaki_stats.total_requests += 1
+        
+        # Check cache first
+        cache_key = (processed_text.strip(), lang)
+        if cache_key in _misaki_cache:
+            logger.debug(f"Cache hit for Misaki phonemization: '{text[:30]}...'")
+            return _misaki_cache[cache_key]
+    
     if backend is not None:
         try:
             # Use Misaki for phonemization
-            result = backend(text)
+            result = backend(processed_text)
+            logger.debug(f"Misaki raw result: {result} (type: {type(result)})")
             
-            # Handle misaki result validation
-            if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
+            # Debug the result structure
+            if hasattr(result, '__iter__'):
+                for i, item in enumerate(result):
+                    logger.debug(f"  Result item {i}: {item} (type: {type(item)})")
+            
+            # Handle misaki result validation - more flexible for future extensions
+            if result is None or not hasattr(result, '__iter__') or len(result) < 2:
                 logger.warning(f"⚠️ Misaki returned invalid result format for '{text[:30]}...': {result}")
                 raise ValueError("Invalid misaki result format")
             
-            phonemes, tokens = result
+            # Extract first two elements (phonemes, tokens) - allows for future extensions
+            phonemes, tokens = result[:2]
+            logger.debug(f"Extracted phonemes: {phonemes} (type: {type(phonemes)})")
+            logger.debug(f"Extracted tokens: {tokens} (type: {type(tokens)})")
             
             # Validate phonemes are not None and can be processed
             if phonemes is None:
@@ -208,7 +251,14 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
                 raise ValueError("Misaki returned invalid phoneme type")
             
             # Convert to list format expected by the system
-            phoneme_list = list(phonemes.replace(' ', ''))
+            # Handle case where phonemes might be None or empty
+            logger.debug(f"Converting phonemes to list: {phonemes}")
+            if phonemes is None:
+                phoneme_list = []
+                logger.debug("Phonemes was None, using empty list")
+            else:
+                phoneme_list = list(phonemes.replace(' ', ''))
+                logger.debug(f"Converted to phoneme list: {phoneme_list[:10]}...")
             
             # Validate we have actual phoneme content
             if not phoneme_list:
@@ -222,6 +272,14 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
                 (_misaki_stats.average_processing_time * (_misaki_stats.total_requests - 1) + processing_time) / 
                 _misaki_stats.total_requests
             )
+            
+            # Cache the successful result
+            if len(_misaki_cache) >= _misaki_cache_max_size:
+                # Remove oldest entry (simple FIFO eviction)
+                oldest_key = next(iter(_misaki_cache))
+                del _misaki_cache[oldest_key]
+            
+            _misaki_cache[cache_key] = phoneme_list
             
             logger.debug(f"✅ Misaki phonemization successful: '{text[:30]}...' -> {len(phoneme_list)} phonemes")
             return phoneme_list
@@ -271,7 +329,10 @@ def get_misaki_stats() -> Dict[str, Any]:
         "average_processing_time": _misaki_stats.average_processing_time,
         "quality_score": _misaki_stats.quality_score,
         "backend_available": _misaki_available,
-        "fallback_available": _fallback_available
+        "fallback_available": _fallback_available,
+        "cache_size": len(_misaki_cache),
+        "cache_max_size": _misaki_cache_max_size,
+        "cache_hit_rate": 0.0  # TODO: Implement cache hit tracking
     }
 
 
@@ -281,9 +342,17 @@ def reset_misaki_stats() -> None:
     _misaki_stats = MisakiStats()
 
 
+def clear_misaki_cache() -> None:
+    """Clear the Misaki phoneme cache."""
+    global _misaki_cache
+    with _misaki_lock:
+        _misaki_cache.clear()
+        logger.info("Misaki phoneme cache cleared")
+
+
 def preprocess_text_for_inference_misaki(
     text: str, 
-    max_phoneme_length: int = 256,
+    max_phoneme_length: int = None,  # Will use TTSConfig.MAX_PHONEME_LENGTH if available
     lang: str = 'en'
 ) -> Dict[str, Any]:
     """
@@ -294,12 +363,20 @@ def preprocess_text_for_inference_misaki(
     
     Args:
         text: Input text to preprocess
-        max_phoneme_length: Maximum phoneme sequence length
+        max_phoneme_length: Maximum phoneme sequence length (defaults to TTSConfig.MAX_PHONEME_LENGTH)
         lang: Language code
         
     Returns:
         Dictionary with phoneme sequence and metadata
     """
+    # Use TTSConfig.MAX_PHONEME_LENGTH if available
+    if max_phoneme_length is None:
+        try:
+            from api.config import TTSConfig
+            max_phoneme_length = TTSConfig.MAX_PHONEME_LENGTH
+        except (ImportError, AttributeError):
+            # Fall back to default if TTSConfig not available
+            max_phoneme_length = 512
     if not text or not text.strip():
         return {
             "phonemes": [],
@@ -312,10 +389,31 @@ def preprocess_text_for_inference_misaki(
     # Convert text to phonemes using Misaki
     phonemes = text_to_phonemes_misaki(text, lang)
     
-    # Pad phoneme sequence to fixed length
+    # Pad phoneme sequence to fixed length with enhanced truncation
     if len(phonemes) > max_phoneme_length:
-        # Truncate if too long
-        padded_phonemes = phonemes[:max_phoneme_length]
+        # Improved truncation with word boundary detection
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Misaki phoneme sequence too long: {len(phonemes)} > {max_phoneme_length}")
+        
+        # Try to find a clean word boundary for truncation
+        last_space_idx = -1
+        search_range = min(100, max_phoneme_length // 4)  # Adaptive search range
+        
+        for i in range(max_phoneme_length - 1, max(0, max_phoneme_length - search_range), -1):
+            if i < len(phonemes) and phonemes[i] == ' ':
+                last_space_idx = i
+                break
+        
+        if last_space_idx > max_phoneme_length - search_range:
+            # Truncate at word boundary
+            padded_phonemes = phonemes[:last_space_idx] + ["_"] * (max_phoneme_length - last_space_idx)
+            logger.debug(f"Truncated at word boundary: position {last_space_idx}")
+        else:
+            # Forced truncation
+            padded_phonemes = phonemes[:max_phoneme_length]
+            logger.warning("Could not find word boundary for clean truncation, forced cut")
+        
         quality_score = 0.8  # Slight quality reduction due to truncation
     else:
         # Pad with padding tokens

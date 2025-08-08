@@ -330,6 +330,9 @@ def _generate_audio_segment(
                     preprocessing_info += " (cached)"
                 if truncated:
                     preprocessing_info += " (truncated)"
+                    # Log detailed truncation warning for debugging
+                    logger.warning(f"[{idx}] Text truncated during phoneme processing: original {original_length} > max {padded_length}")
+                    logger.warning(f"[{idx}] Truncated text may lose content at the end. Consider increasing DEFAULT_MAX_PHONEME_LENGTH")
                     
                 logger.debug(f"[{idx}] Phoneme preprocessing: {preprocessing_info}")
                 
