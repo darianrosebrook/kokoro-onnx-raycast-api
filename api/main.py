@@ -919,7 +919,7 @@ async def perform_cold_start_warmup():
             segments[0],  # text
             "af_alloy",  # voice
             1.0,  # speed
-            "en"  # lang
+            "en-us"  # lang - use normalized language code
         )
         
         end_time = time.time()
