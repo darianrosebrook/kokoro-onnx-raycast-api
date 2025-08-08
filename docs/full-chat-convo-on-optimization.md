@@ -14,6 +14,14 @@ I have not yet done quantization on the model. Looking for the best recommendati
 
 We’re supposed to be enabling streaming with smart fallbacks. Since Raycast has a sandboxed node process, accessing specific audio playback strategies have failed, so our current strategy is deployed, the other options like play were often running into gaps between audio packets that cause our audio playback to get a sigterm signal to close the stream.
 
+Recent implementation highlights (Aug 2025):
+- Language normalization at API: map `en` → `en-us` to prevent eSpeak backend errors for English; applied to streaming and non-streaming paths.
+- Startup warm-up: preload model and trigger pipeline warmer at FastAPI startup to reduce cold-graph cost.
+- Early primer strategy: split first segment (10–15%, capped at 700 chars) with forced fast-path to improve perceived TTFA; primer first-chunk sized smaller.
+- Immediate header + 50 ms silence: stream WAV header and a tiny silence buffer first to flush client playback.
+- Primer micro-cache: cache primer bytes by `(primer_text, voice, speed, lang)` and emit immediately on repeats; observed second-request TTFB ~4–10 ms.
+- Logging noise reduction: gated verbose Misaki logs behind `KOKORO_VERBOSE_LOGS`; demoted non-actionable logs to debug.
+
 For concurrency, while we’re not grabbing multiple sources of text and trying to run it at the same time. (It doesn’t make too much sense for a user to select multiple different things and try to read back 4 different sources at the same time. That would be like having four people talk at you and the user trying to make sure they heard all four and understand it.) I have considered using ANE for the first bit of streaming while immediately opening up additional generation of the next sequence in parallel on the GPU/Cpu 
 
 There is the challenge of keeping streams open for article length text as well as short 1 sentence readback. Especially since the phonemizer has issues with our initial strategy of normalization (100% mismatch of word counts on all lines) 
