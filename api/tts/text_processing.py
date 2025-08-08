@@ -767,14 +767,30 @@ def clean_text(text: str) -> str:
 
     logger.debug(f"Cleaning text: '{text}'")
     
-    # Current implementation is deliberately minimal to preserve text integrity
-    # The text is returned as-is to avoid over-processing that could affect TTS quality
-    # Future enhancements may include:
-    # - Whitespace normalization using WHITESPACE_RE
-    # - Control character removal using CLEAN_TEXT_RE
-    # - Punctuation normalization using MULTI_PUNCT_RE
-    # These features are disabled pending TTS model performance analysis
+    # Step 1: Normalize whitespace (multiple spaces, tabs, newlines → single space)
+    # This handles newlines, tabs, and multiple spaces that can cause tokenization issues
+    text = WHITESPACE_RE.sub(' ', text.strip())
     
+    # Step 2: Remove control characters that can interfere with TTS processing
+    # Keep only printable characters and basic punctuation
+    text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', text)
+    
+    # Step 3: Normalize punctuation that commonly causes issues
+    # Replace multiple punctuation marks with single ones
+    text = MULTI_PUNCT_RE.sub(r'\1', text)
+    
+    # Step 4: Ensure consistent spacing around punctuation
+    # Add space after punctuation if missing (for better word boundary detection)
+    text = re.sub(r'([.!?;:,])([^\s])', r'\1 \2', text)
+    
+    # Step 5: Final whitespace normalization
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # Step 6: Handle edge cases that commonly cause alignment issues
+    # Remove leading/trailing punctuation that can cause off-by-one errors
+    text = re.sub(r'^\W+|\W+$', '', text)
+    
+    logger.debug(f"Cleaned text: '{text}'")
     return text
 
 
