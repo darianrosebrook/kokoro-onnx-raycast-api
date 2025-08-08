@@ -436,6 +436,11 @@ class TTSConfig:
     PHONEMIZER_ERROR_TOLERANCE = float(os.environ.get("KOKORO_PHONEMIZER_ERROR_TOLERANCE", "0.1"))
     TEXT_NORMALIZATION_AGGRESSIVE = os.environ.get("KOKORO_TEXT_NORMALIZATION_AGGRESSIVE", "false").lower() == "true"
     
+    # Phoneme sequence length configuration
+    # This controls the maximum length of phoneme sequences for TTS processing
+    # Increase this value if you experience text truncation during speech synthesis
+    MAX_PHONEME_LENGTH = int(os.environ.get("KOKORO_MAX_PHONEME_LENGTH", "512"))
+    
     # Misaki G2P Configuration - Kokoro-specific phonemization
     MISAKI_ENABLED = os.environ.get("KOKORO_MISAKI_ENABLED", "true").lower() == "true"
     MISAKI_DEFAULT_LANG = os.environ.get("KOKORO_MISAKI_LANG", "en")

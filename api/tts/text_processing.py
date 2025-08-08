@@ -95,7 +95,8 @@ TIME_RE = re.compile(r'(\d{2}:\d{2}:\d{2})')  # Time format (HH:MM:SS)
 
 # Phoneme processing constants
 PHONEME_PADDING_TOKEN = "_"  # Padding token for phoneme sequences
-DEFAULT_MAX_PHONEME_LENGTH = 256  # Maximum phoneme sequence length for CoreML optimization
+# Default value, will be overridden by TTSConfig.MAX_PHONEME_LENGTH if available
+DEFAULT_MAX_PHONEME_LENGTH = 512  # Maximum phoneme sequence length for CoreML optimization (increased from 256 to handle longer texts)
 PHONEME_CACHE_SIZE = 1000  # Maximum size for phoneme conversion cache
 
 # Phoneme conversion cache for performance optimization
@@ -151,8 +152,33 @@ def _initialize_phonemizer_backend_at_startup():
         _phonemizer_backend = None
         return None
 
+# Initialize configuration from TTSConfig if available
+def _initialize_config_from_tts_config():
+    """
+    Initialize module configuration from TTSConfig if available.
+    
+    This function attempts to load configuration values from TTSConfig,
+    falling back to default values if TTSConfig is not available.
+    """
+    global DEFAULT_MAX_PHONEME_LENGTH
+    
+    try:
+        from api.config import TTSConfig
+        
+        # Update phoneme length from config if available
+        if hasattr(TTSConfig, 'MAX_PHONEME_LENGTH'):
+            DEFAULT_MAX_PHONEME_LENGTH = TTSConfig.MAX_PHONEME_LENGTH
+            logger.info(f"Phoneme length configured from TTSConfig: {DEFAULT_MAX_PHONEME_LENGTH}")
+    except ImportError:
+        logger.debug("TTSConfig not available, using default phoneme length")
+    except Exception as e:
+        logger.warning(f"Error loading configuration from TTSConfig: {e}")
+
 # Pre-initialize backend during module import for TTFA optimization
 _initialize_phonemizer_backend_at_startup()
+
+# Initialize configuration from TTSConfig
+_initialize_config_from_tts_config()
 
 # PHASE 1 TTFA OPTIMIZATION: Fast-path detection for simple text
 def _is_simple_text(text: str) -> bool:
@@ -225,28 +251,37 @@ def _preprocess_for_phonemizer(text: str) -> str:
     if not text or not text.strip():
         return ""
     
-    # Step 1: Normalize whitespace (multiple spaces, tabs, newlines → single space)
+    # Step 1: Replace line breaks with periods to maintain sentence boundaries
+    # This helps preserve the structure of the text while ensuring proper phonemization
+    text = re.sub(r'\n+', '. ', text)
+    
+    # Step 2: Normalize whitespace (multiple spaces, tabs → single space)
     text = WHITESPACE_RE.sub(' ', text.strip())
     
-    # Step 2: Normalize punctuation that commonly causes word count issues
+    # Step 3: Normalize punctuation that commonly causes word count issues
     # Replace multiple punctuation marks with single ones
     text = MULTI_PUNCT_RE.sub(r'\1', text)
     
-    # Step 3: Remove or normalize problematic characters
+    # Step 4: Remove or normalize problematic characters
     # Keep only basic punctuation that phonemizer handles well
     text = re.sub(r'[^\w\s.,!?;:\'-]', '', text)
     
-    # Step 4: Ensure consistent spacing around punctuation
+    # Step 5: Ensure consistent spacing around punctuation
     # Add space after punctuation if missing (for better word boundary detection)
     text = re.sub(r'([.!?;:,])([^\s])', r'\1 \2', text)
     
-    # Step 5: Remove excessive spacing that can confuse word counting
+    # Step 6: Remove excessive spacing that can confuse word counting
     text = re.sub(r'\s+', ' ', text).strip()
     
-    # Step 6: Handle edge cases that commonly cause alignment issues
+    # Step 7: Handle edge cases that commonly cause alignment issues
     # Remove leading/trailing punctuation that can cause off-by-one errors
     text = re.sub(r'^\W+|\W+$', '', text)
     
+    # Step 8: Add a period at the end if missing to improve phonemizer behavior
+    if not text.endswith(('.', '!', '?')):
+        text = text + '.'
+    
+    logger.debug(f"Preprocessed text for phonemizer: '{text[:50]}...'")
     return text
 
 
@@ -452,7 +487,19 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
             logger.debug(f"Using pre-initialized phonemizer fallback: '{text[:30]}...'")
             
             # Preprocess text to reduce word count mismatches
-            preprocessed_text = _preprocess_for_phonemizer(text.strip())
+            # Handle line breaks specially to avoid truncation issues
+            if '\n' in text:
+                # Replace line breaks with periods to maintain sentence structure
+                processed_text = re.sub(r'\n+', '. ', text)
+                # Clean up any double periods that might have been created
+                processed_text = re.sub(r'\.+', '.', processed_text)
+                # Ensure proper spacing
+                processed_text = re.sub(r'\s+', ' ', processed_text).strip()
+                logger.info(f"Processed multi-line text for phonemizer: '{processed_text[:50]}...'")
+            else:
+                processed_text = text.strip()
+                
+            preprocessed_text = _preprocess_for_phonemizer(processed_text)
             
             # Use enhanced phonemization with optimized settings and warning suppression
             import warnings
@@ -565,25 +612,31 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
     if not phonemes:
         return [PHONEME_PADDING_TOKEN] * max_len
     
-    # Handle sequences longer than max_len with smart truncation
+    # Handle sequences longer than max_len with enhanced smart truncation
     if len(phonemes) > max_len:
-        logger.debug(f"Truncating phoneme sequence: {len(phonemes)} → {max_len}")
+        logger.warning(f"Truncating phoneme sequence: {len(phonemes)} → {max_len} (consider increasing DEFAULT_MAX_PHONEME_LENGTH)")
         
         # Try to truncate at word boundaries (space characters) for better quality
         truncated = phonemes[:max_len]
         
         # Find the last space within the truncation boundary for cleaner cut
+        # Extended search range from 20 to 50 to better handle longer words
         last_space_idx = -1
-        for i in range(max_len - 1, max(0, max_len - 20), -1):
+        search_range = min(100, max_len // 4)  # Adaptive search range based on max_len
+        
+        for i in range(max_len - 1, max(0, max_len - search_range), -1):
             if i < len(phonemes) and phonemes[i] == ' ':
                 last_space_idx = i
                 break
         
-        # Use word boundary truncation if found near the end
-        if last_space_idx > max_len - 20:
+        # Use word boundary truncation if found within search range
+        if last_space_idx > max_len - search_range:
             truncated = phonemes[:last_space_idx]
             # Pad to exact length
             truncated += [PHONEME_PADDING_TOKEN] * (max_len - len(truncated))
+            logger.debug(f"Truncated at word boundary: position {last_space_idx}")
+        else:
+            logger.warning(f"Could not find word boundary for clean truncation, forced cut at {max_len}")
         
         return truncated
     
