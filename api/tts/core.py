@@ -54,6 +54,37 @@ from typing import Tuple, Optional, Dict, Any
 
 # Inference result cache with TTL-like behavior
 _inference_cache: Dict[str, Tuple[np.ndarray, float, str]] = {}
+
+# Micro-cache for primer phonemes and initial inference to reduce TTFB
+_primer_microcache: Dict[str, Tuple[np.ndarray, float]] = {}
+_primer_microcache_ttl_s: float = 300.0  # 5 minutes
+
+def _get_primer_cache_key(text: str, voice: str, speed: float, lang: str) -> str:
+    return hashlib.md5(f"primer:{text[:700]}:{voice}:{speed}:{lang}".encode('utf-8')).hexdigest()
+
+def _get_cached_primer(key: str) -> Optional[np.ndarray]:
+    entry = _primer_microcache.get(key)
+    if not entry:
+        return None
+    samples, ts = entry
+    if (time.time() - ts) > _primer_microcache_ttl_s:
+        try:
+            del _primer_microcache[key]
+        except Exception:
+            pass
+        return None
+    return samples
+
+def _put_cached_primer(key: str, samples: np.ndarray) -> None:
+    # Keep micro-cache size bounded
+    try:
+        if len(_primer_microcache) > 64:
+            # remove oldest ~8 entries
+            for k in list(_primer_microcache.keys())[:8]:
+                _primer_microcache.pop(k, None)
+        _primer_microcache[key] = (samples, time.time())
+    except Exception:
+        pass
 _inference_cache_lock = threading.Lock()
 _inference_cache_max_size = 1000  # Maximum number of cached results
 _inference_cache_ttl = 3600  # Cache TTL in seconds (1 hour)
@@ -573,8 +604,30 @@ async def stream_tts_audio(
     if segments:
         early, rest = _split_segment_for_early_ttfa(segments[0])
         if early and rest:
-            segments = [early, rest] + segments[1:]
-            fast_indices.add(0)  # force fast path for the early primer segment
+            # Micro-cache lookup for primer inference
+            primer_key = _get_primer_cache_key(early, voice, speed, lang)
+            cached_primer = _get_cached_primer(primer_key)
+            if cached_primer is not None and cached_primer.size > 0:
+                logger.debug(f"[{request_id}] Primer micro-cache hit; yielding cached primer audio")
+                try:
+                    scaled_audio = np.int16(cached_primer * 32767)
+                    segment_bytes = scaled_audio.tobytes()
+                    # yield a couple of small chunks to flush
+                    yield segment_bytes[:max(1024, len(segment_bytes)//4)]
+                    if len(segment_bytes) > 2048:
+                        yield segment_bytes[max(1024, len(segment_bytes)//4):max(2048, len(segment_bytes)//2)]
+                except Exception as e:
+                    logger.debug(f"[{request_id}] Primer cached audio emit failed: {e}")
+            else:
+                # No cached primer; keep primer as first segment and mark fast-path
+                segments = [early, rest] + segments[1:]
+                fast_indices.add(0)  # force fast path for the early primer segment
+                # Store hint key for later caching after generation
+                primer_hint_key = primer_key
+        else:
+            primer_hint_key = None
+    else:
+        primer_hint_key = None
 
     total_segments = len(segments)
     logger.info(f"[{request_id}] Text split into {total_segments} segments.")
@@ -689,6 +742,13 @@ async def stream_tts_audio(
                     # Convert audio to bytes immediately
                     scaled_audio = np.int16(audio_np * 32767)
                     segment_bytes = scaled_audio.tobytes()
+
+                    # If this was the primer segment, put into micro-cache
+                    try:
+                        if i in fast_indices and 'primer_hint_key' in locals() and primer_hint_key:
+                            _put_cached_primer(primer_hint_key, audio_np)
+                    except Exception:
+                        pass
                     
                     # PHASE 1 OPTIMIZATION: Yield chunks immediately in smaller pieces
                     # Smaller initial chunks for primer segment to improve TTFA
