@@ -40,6 +40,8 @@ import type {
   StreamingStats,
   TTSProcessorConfig,
 } from "../../validation/tts-types.js";
+import { environment } from "@raycast/api";
+import { randomUUID } from "crypto";
 
 // Safe fallback for import.meta.url in Raycast environment
 let __filename: string;
@@ -192,170 +194,33 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
   constructor(config: Partial<TTSProcessorConfig> = {}) {
     super();
-    this.instanceId = this.constructor.name + "_" + Date.now();
-    console.warn(`[${this.instanceId}] Constructor called`);
-    console.warn(`[${this.instanceId}] Config provided:`, config);
+    this.instanceId = randomUUID();
 
-    // Robust path resolution for daemon script (ES module compatible)
-    // Priority: config > environment variable > auto-detected project root > absolute paths > relative paths
-    const configDaemonPath = config.daemonScriptPath;
-    const envDaemonPath = process.env.KOKORO_AUDIO_DAEMON_PATH;
+    const localDaemonPath = join(environment.supportPath, "audio-daemon.js");
 
-    // Detect if we're running in Raycast extension environment
-    // Check multiple indicators of Raycast extension environment
-    const cwd = process.cwd();
-    const isRaycastExtension =
-      cwd.includes("raycast/extensions") ||
-      cwd.includes(".config/raycast") ||
-      cwd === "/" || // Raycast sometimes runs from root
-      process.env.RAYCAST_EXTENSION_PATH !== undefined; // Raycast environment variable
+    // Dynamic configuration with safe defaults
+    this.config = {
+      daemonPath: environment.assetsPath,
+      daemonScriptPath: localDaemonPath,
+      port: config.daemonPort ?? 8080,
+      bufferSize: config.bufferSize ?? 1024 * 512, // 512 KB buffer
+      heartbeatInterval: 3000,
+      healthCheckTimeout: 10000,
+      developmentMode: environment.isDevelopment,
+    };
 
-    console.log(`[${this.instanceId}] Extension CWD:`, process.cwd());
-    console.log(`[${this.instanceId}] Is Raycast extension:`, isRaycastExtension);
+    // --- Daemon Script Path Resolution ---
+    let daemonScriptPath: string | null = null;
+    if (existsSync(localDaemonPath)) {
+      daemonScriptPath = localDaemonPath;
+    } else {
+      // Find project root using the marker file
+      const projectRoot = findKokoroProjectRoot(process.cwd()) ?? process.env.KOKORO_PROJECT_ROOT;
 
-    // Auto-detect project root by walking up parent directories for .kokoro-root
-    let projectRoot = process.cwd();
-    let autoDetectedRoot: string | null = null;
-    if (isRaycastExtension) {
-      // If running from root, try to find the actual extension directory first
-      let searchStartDir = process.cwd();
-      if (cwd === "/") {
-        console.log(
-          `[${this.instanceId}] Running from root, trying to find extension directory...`
-        );
-        // Try common Raycast extension locations
-        const possibleExtensionDirs = [
-          process.env.RAYCAST_EXTENSION_PATH,
-          process.env.HOME + "/.config/raycast/extensions/raycast-kokoro-tts",
-          process.env.HOME + "/.config/raycast/extensions",
-          "/Users/darianrosebrook/.config/raycast/extensions/raycast-kokoro-tts",
-        ].filter(Boolean);
-
-        for (const extDir of possibleExtensionDirs) {
-          if (extDir && existsSync(extDir)) {
-            console.log(`[${this.instanceId}] Found extension directory:`, extDir);
-            searchStartDir = extDir;
-            break;
-          }
-        }
-      }
-
-      autoDetectedRoot = findKokoroProjectRoot(searchStartDir);
-      if (autoDetectedRoot) {
-        projectRoot = autoDetectedRoot;
-        console.log("Auto-detected Kokoro project root via .kokoro-root marker", {
-          component: this.name,
-          method: "constructor",
-          autoDetectedRoot,
-        });
-      } else {
-        console.log(`[${this.instanceId}] Auto-detection failed, trying fallback paths...`);
-        // Fallback to previous guessing logic
-        const possibleProjectRoots = [
-          "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx",
-          process.env.KOKORO_PROJECT_ROOT,
-          process.env.HOME + "/Desktop/Projects/kokoro-onnx",
-          process.env.HOME + "/Projects/kokoro-onnx",
-        ].filter(Boolean);
-        console.log(`[${this.instanceId}] Fallback project roots:`, possibleProjectRoots);
-        for (const root of possibleProjectRoots) {
-          const daemonPath = join(root, "raycast/bin/audio-daemon.js");
-          console.log(`[${this.instanceId}] Checking fallback path: ${daemonPath}`);
-          if (root && existsSync(daemonPath)) {
-            projectRoot = root;
-            console.log(`[${this.instanceId}] Found daemon in fallback path:`, root);
-            break;
-          }
-        }
-      }
-    }
-
-    const possiblePaths = [
-      // Configuration path (highest priority)
-      ...(configDaemonPath ? [configDaemonPath] : []),
-      // Environment variable path (second priority)
-      ...(envDaemonPath ? [envDaemonPath] : []),
-      // Auto-detected project root (third priority)
-      ...(autoDetectedRoot
-        ? [
-            join(autoDetectedRoot, "raycast/bin/audio-daemon.js"),
-            join(autoDetectedRoot, "bin/audio-daemon.js"),
-          ]
-        : []),
-      // Absolute paths for Raycast extension environment
-      ...(isRaycastExtension && !autoDetectedRoot
-        ? [
-            join(projectRoot, "raycast/bin/audio-daemon.js"),
-            join(projectRoot, "bin/audio-daemon.js"),
-          ]
-        : []),
-      // Local extension directory paths
-      join(process.cwd(), "audio-daemon.js"), // Local copy in extension directory
-      // Relative paths (fallback)
-      join(process.cwd(), "bin/audio-daemon.js"), // Relative to working directory
-      join(process.cwd(), "raycast/bin/audio-daemon.js"), // Raycast subdirectory
-      join(__dirname, "../../../bin/audio-daemon.js"), // Relative to current file location
-      join(__dirname, "../../bin/audio-daemon.js"), // Alternative relative path
-    ];
-
-    console.log("Starting daemon script path resolution", {
-      component: this.name,
-      method: "constructor",
-      workingDirectory: process.cwd(),
-      isRaycastExtension,
-      projectRoot,
-      autoDetectedRoot,
-      possiblePaths,
-    });
-
-    console.warn("Checking possible daemon paths:");
-    possiblePaths.forEach((path, index) => {
-      console.warn(`  ${index + 1}. ${path}`);
-    });
-
-    let daemonScriptPath = "";
-    for (const path of possiblePaths) {
-      try {
-        if (existsSync(path)) {
-          daemonScriptPath = path;
-          console.log(`[${this.instanceId}] Found daemon script at:`, daemonScriptPath);
-          console.log("Found daemon script", {
-            component: this.name,
-            method: "constructor",
-            path: daemonScriptPath,
-          });
-          break;
-        } else {
-          console.log(`[${this.instanceId}] Path not found: ${path}`);
-        }
-      } catch (error) {
-        console.log(`[${this.instanceId}] Error checking path ${path}:`, error);
-        console.warn("Error checking daemon path", {
-          component: this.name,
-          method: "constructor",
-          path,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }
-
-    if (!daemonScriptPath) {
-      // Try to create a local copy of the daemon script in the extension directory
-      const localDaemonPath = join(process.cwd(), "audio-daemon.js");
-
-      try {
-        // Check if we can find the daemon script in any of the project roots
-        const projectRoots = [
-          "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx",
-          process.env.KOKORO_PROJECT_ROOT,
-          process.env.HOME + "/Desktop/Projects/kokoro-onnx",
-          process.env.HOME + "/Projects/kokoro-onnx",
-        ].filter(Boolean);
-
-        for (const root of projectRoots) {
-          const sourcePath = join(root, "raycast/bin/audio-daemon.js");
-          if (existsSync(sourcePath)) {
-            // Copy the daemon script to the extension directory
+      if (projectRoot) {
+        const sourcePath = join(projectRoot, "raycast/bin/audio-daemon.js");
+        if (existsSync(sourcePath)) {
+          try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const fs = require("fs");
             fs.copyFileSync(sourcePath, localDaemonPath);
@@ -366,30 +231,33 @@ export class AudioPlaybackDaemon extends EventEmitter {
               sourcePath,
               localDaemonPath,
             });
-            break;
+          } catch (copyError) {
+            console.warn("Failed to copy daemon script", {
+              component: this.name,
+              method: "constructor",
+              error: copyError instanceof Error ? copyError.message : "Unknown error",
+            });
           }
         }
-      } catch (copyError) {
-        console.warn("Failed to copy daemon script", {
-          component: this.name,
-          method: "constructor",
-          error: copyError instanceof Error ? copyError.message : "Unknown error",
-        });
-      }
-
-      if (!daemonScriptPath) {
-        const error = new Error("Audio daemon script not found in any expected location");
-        console.error("Daemon script not found", {
-          component: this.name,
-          method: "constructor",
-          possiblePaths,
-          error: error.message,
-        });
-        throw error;
       }
     }
 
-    // Robust Node.js executable detection
+    if (!daemonScriptPath) {
+      const error = new Error(
+        "Audio daemon script not found. Please ensure the project is set up correctly."
+      );
+      console.error("Daemon script resolution failed", {
+        component: this.name,
+        method: "constructor",
+        localDaemonPath,
+        "process.env.KOKORO_PROJECT_ROOT": process.env.KOKORO_PROJECT_ROOT,
+      });
+      throw error;
+    }
+
+    this.config.daemonScriptPath = daemonScriptPath;
+
+    // --- Node.js Executable Detection ---
     let nodeExecutable = "";
     const nodePath = process.execPath;
 
@@ -448,37 +316,6 @@ export class AudioPlaybackDaemon extends EventEmitter {
       });
       throw error;
     }
-
-    this.config = {
-      daemonPath: nodeExecutable,
-      daemonScriptPath,
-      port: config.daemonPort ?? 8081,
-      bufferSize: config.bufferSize ?? TTS_CONSTANTS.DEFAULT_BUFFER_SIZE,
-      heartbeatInterval: 5000,
-      healthCheckTimeout: 10000,
-      developmentMode: config.developmentMode ?? false,
-    };
-
-    this.currentAudioFormat = {
-      format: "wav",
-      sampleRate: 24000,
-      channels: 1,
-      bitDepth: 16,
-      bytesPerSample: 2,
-      bytesPerSecond: 48000,
-    };
-
-    console.log("AudioPlaybackDaemon controller initialized", {
-      component: this.name,
-      method: "constructor",
-      config: {
-        daemonPath: this.config.daemonPath,
-        daemonScriptPath: this.config.daemonScriptPath,
-        port: this.config.port,
-        bufferSize: this.config.bufferSize,
-        developmentMode: this.config.developmentMode,
-      },
-    });
   }
 
   /**
@@ -494,6 +331,17 @@ export class AudioPlaybackDaemon extends EventEmitter {
     await loadWebSocket();
 
     try {
+      // First, try to connect to existing daemon
+      if (await this.tryConnectToExistingDaemon()) {
+        console.log("Connected to existing audio daemon", {
+          component: this.name,
+          method: "initialize",
+          port: this.config.port,
+        });
+        return;
+      }
+
+      // If no existing daemon, start our own
       await this.startDaemon();
       await this.waitForConnection();
       await this.configureAudio();
@@ -538,6 +386,70 @@ export class AudioPlaybackDaemon extends EventEmitter {
         throw error;
       }
     }
+  }
+
+  /**
+   * Try to connect to an existing daemon instead of spawning our own
+   */
+  private async tryConnectToExistingDaemon(): Promise<boolean> {
+    console.log("Checking for existing audio daemon", {
+      component: this.name,
+      method: "tryConnectToExistingDaemon",
+      port: this.config.port,
+    });
+
+    try {
+      // Check if daemon is already running on our port
+      const healthUrl = `http://localhost:${this.config.port}/health`;
+      const response = await fetch(healthUrl, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(2000), // 2 second timeout
+      });
+
+      if (response.ok) {
+        const health = await response.json();
+        console.log("Found existing daemon", {
+          component: this.name,
+          method: "tryConnectToExistingDaemon",
+          health: health.status,
+        });
+
+        // Create a mock daemon process object for the existing daemon
+        this.daemonProcess = {
+          process: null as any, // No process to manage
+          port: this.config.port,
+          isConnected: false,
+          lastHeartbeat: Date.now(),
+          healthStatus: "healthy" as const,
+        };
+
+        // Mark as connected
+        this.daemonProcess.isConnected = true;
+        this.isConnected = true;
+
+        // Establish WebSocket connection to existing daemon
+        await this.establishWebSocketConnection();
+
+        console.log("Successfully connected to existing daemon", {
+          component: this.name,
+          method: "tryConnectToExistingDaemon",
+          port: this.config.port,
+        });
+
+        return true;
+      }
+    } catch (error) {
+      console.log("No existing daemon found, will spawn our own", {
+        component: this.name,
+        method: "tryConnectToExistingDaemon",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+
+    return false;
   }
 
   /**

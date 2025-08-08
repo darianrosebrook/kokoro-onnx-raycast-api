@@ -39,11 +39,30 @@ _misaki_available: Optional[bool] = None
 
 # Fallback imports
 try:
-    from api.tts.text_processing import text_to_phonemes as fallback_text_to_phonemes
+    # Import phonemizer backend directly to avoid circular dependency
+    from phonemizer_fork.backend import EspeakBackend
+    _fallback_backend = EspeakBackend(
+        language='en-us',
+        preserve_punctuation=True,
+        with_stress=False,
+        language_switch='remove-flags'
+    )
     _fallback_available = True
 except ImportError:
-    _fallback_available = False
-    logger.warning("Fallback text processing not available")
+    try:
+        # Fallback to regular phonemizer
+        from phonemizer.backend import EspeakBackend
+        _fallback_backend = EspeakBackend(
+            language='en-us',
+            preserve_punctuation=True,
+            with_stress=False,
+            language_switch='remove-flags'
+        )
+        _fallback_available = True
+    except ImportError:
+        _fallback_backend = None
+        _fallback_available = False
+        logger.warning("Fallback text processing not available")
 
 @dataclass
 class MisakiStats:
@@ -88,47 +107,47 @@ def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
         Misaki G2P backend instance or None if initialization fails
     """
     global _misaki_backend, _misaki_available
-    
+
     # Thread-safe initialization
     with _misaki_lock:
+        # Already initialized
         if _misaki_backend is not None:
             return _misaki_backend
-        
-        # If we already know it's available, return the backend
-        if _misaki_available is True:
-            return _misaki_backend
-        
+
+        # Known unavailable
+        if _misaki_available is False:
+            return None
+
         try:
             # Try to import and initialize Misaki
             from misaki import en
-            
-            # Initialize with specified language, no transformer, with fallback
+
+            # Initialize with specified language, no transformer, with fallback handled above
             _misaki_backend = en.G2P(
-                trf=False,  # No transformer for faster processing
-                british=False,  # American English (for now, can be extended for other languages)
-                fallback=None  # We'll handle fallback at a higher level
+                trf=False,
+                british=False,
+                fallback=None
             )
-            
-            # Test the backend with a simple phrase to make sure it works properly
+
+            # Smoke test the backend
             test_result = _misaki_backend("hello")
             if test_result is None or not hasattr(test_result, '__iter__') or len(test_result) < 2:
                 logger.error(f"❌ Misaki backend test failed: returned {test_result}")
                 _misaki_backend = None
                 _misaki_available = False
                 return None
-            
-            # Extract first two elements (phonemes, tokens) - allows for future extensions
-            phonemes, tokens = test_result[:2]
+
+            phonemes, _tokens = test_result[:2]
             if phonemes is None or not isinstance(phonemes, str):
                 logger.error(f"❌ Misaki backend test failed: invalid phonemes {phonemes}")
                 _misaki_backend = None
                 _misaki_available = False
                 return None
-            
+
             _misaki_available = True
             logger.info("✅ Misaki G2P backend initialized and tested successfully")
             return _misaki_backend
-            
+
         except ImportError as e:
             logger.warning(f"⚠️ Misaki G2P not available: {e}")
             _misaki_available = False
@@ -251,12 +270,12 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
                 raise ValueError("Misaki returned invalid phoneme type")
             
             # Convert to list format expected by the system
-            # Handle case where phonemes might be None or empty
             logger.debug(f"Converting phonemes to list: {phonemes}")
             if phonemes is None:
                 phoneme_list = []
                 logger.debug("Phonemes was None, using empty list")
             else:
+                # Remove spaces to produce a compact phoneme list
                 phoneme_list = list(phonemes.replace(' ', ''))
                 logger.debug(f"Converted to phoneme list: {phoneme_list[:10]}...")
             
@@ -289,10 +308,20 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
             # Fall through to fallback
     
     # Fallback to existing phonemizer-fork implementation
-    if _fallback_available:
+    if _fallback_available and _fallback_backend is not None:
         try:
             _misaki_stats.fallback_uses += 1
-            phonemes = fallback_text_to_phonemes(text)
+            
+            # Use phonemizer backend directly
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*words count mismatch.*")
+                warnings.filterwarnings("ignore", category=UserWarning, module="phonemizer")
+                
+                phoneme_string = _fallback_backend.phonemize([text], strip=True, njobs=1)[0]
+            
+            # Convert phoneme string to list format
+            phonemes = list(phoneme_string.replace(' ', ''))
             
             processing_time = time.time() - start_time
             _misaki_stats.average_processing_time = (
@@ -300,16 +329,16 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
                 _misaki_stats.total_requests
             )
             
-            logger.debug(f" Fallback phonemization used: '{text[:30]}...' -> {len(phonemes)} phonemes")
+            logger.debug(f"✅ Fallback phonemization used: '{text[:30]}...' -> {len(phonemes)} phonemes")
             return phonemes
             
         except Exception as e:
-            logger.error(f" Both Misaki and fallback phonemization failed: {e}")
+            logger.error(f"❌ Both Misaki and fallback phonemization failed: {e}")
             # Ultimate fallback: character-level tokenization
             return list(text.replace(' ', ''))
     
     else:
-        logger.error(" No fallback phonemization available")
+        logger.error("❌ No fallback phonemization available")
         return list(text.replace(' ', ''))
 
 
@@ -475,10 +504,18 @@ def compare_phonemization_quality(text: str, lang: str = 'en') -> Dict[str, Any]
             results["misaki"]["error"] = str(e)
     
     # Test fallback processing
-    if _fallback_available:
+    if _fallback_available and _fallback_backend is not None:
         try:
             start_time = time.time()
-            fallback_phonemes = fallback_text_to_phonemes(text)
+            
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*words count mismatch.*")
+                warnings.filterwarnings("ignore", category=UserWarning, module="phonemizer")
+                
+                phoneme_string = _fallback_backend.phonemize([text], strip=True, njobs=1)[0]
+            
+            fallback_phonemes = list(phoneme_string.replace(' ', ''))
             processing_time = time.time() - start_time
             
             results["fallback"] = {
