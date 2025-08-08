@@ -598,7 +598,16 @@ class DualSessionManager:
                         f"Processing with {session_type} routing (complexity: {complexity:.2f})")
 
                     # Create audio using the global model
-                    samples, _ = kokoro_model.create(text, voice, speed, lang)
+                    result = kokoro_model.create(text, voice, speed, lang)
+                    
+                    # Handle different return formats
+                    if isinstance(result, tuple):
+                        if len(result) >= 2:
+                            samples = result[0]  # First element is always samples
+                        else:
+                            samples = result[0]  # Single element tuple
+                    else:
+                        samples = result  # Direct return
 
                     self.logger.debug(
                         f"Successfully processed segment with {session_type} routing")
