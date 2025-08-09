@@ -612,7 +612,7 @@ def _fast_generate_audio_segment(
             start_time = time.perf_counter()
 
             try:
-                samples, _ = dual_session_manager.process_segment_concurrent(
+                samples = dual_session_manager.process_segment_concurrent(
                     processed_text, voice, speed, lang
                 )
 
