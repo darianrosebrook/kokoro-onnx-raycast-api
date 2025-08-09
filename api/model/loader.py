@@ -195,10 +195,10 @@ _capabilities_cache: Optional[Dict[str, Any]] = None
 # Global dual session manager instance
 dual_session_manager: Optional['DualSessionManager'] = None
 
-# Global dynamic memory manager instance for Phase 4 optimization
+# Global dynamic memory manager instance for adaptive memory optimization
 dynamic_memory_manager: Optional['DynamicMemoryManager'] = None
 
-# Global pipeline warmer instance for Phase 4 optimization
+# Global pipeline warmer instance for inference pipeline warming
 pipeline_warmer: Optional['InferencePipelineWarmer'] = None
 
 # Cache for optimized session options (hardware-specific, deterministic)
@@ -279,26 +279,26 @@ def _initialize_heavy_components_async(capabilities: Dict[str, Any]) -> None:
     def _run():
         try:
             try:
-                logger.info("Initializing dual session manager for Phase 3 optimization...")
+                logger.info("Initializing dual session manager for concurrent ANE/GPU processing...")
                 initialize_dual_session_manager(capabilities)
             except Exception as e:
                 logger.debug(f"Dual session init deferred error: {e}")
 
             try:
-                logger.info("Initializing dynamic memory manager for Phase 4 optimization...")
+                logger.info("Initializing dynamic memory manager for adaptive memory sizing...")
                 initialize_dynamic_memory_manager()
             except Exception as e:
                 logger.debug(f"Dynamic memory init deferred error: {e}")
 
             try:
-                logger.info("Initializing pipeline warmer for Phase 4 optimization...")
+                logger.info("Initializing inference pipeline warmer...")
                 initialize_pipeline_warmer()
             except Exception as e:
                 logger.debug(f"Pipeline warmer init deferred error: {e}")
 
             try:
                 from api.performance.optimization import initialize_real_time_optimizer
-                logger.info("Initializing real-time optimizer for Phase 4 optimization...")
+                logger.info("Initializing real-time performance optimizer...")
                 initialize_real_time_optimizer()
             except Exception as e:
                 logger.debug(f"Real-time optimizer init deferred error: {e}")
@@ -1513,7 +1513,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> dict:
         'AllowLowPrecisionAccumulationOnGPU': '1'
     }
 
-    # PHASE 2 OPTIMIZATION: Hardware-specific MLComputeUnits configuration
+    # Hardware-specific MLComputeUnits configuration
     neural_engine_cores = capabilities.get('neural_engine_cores', 0)
     memory_gb = capabilities.get('memory_gb', 8)
 
@@ -1577,7 +1577,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> dict:
 
         logger.info("✅ Applied CPU-only optimizations")
 
-    # PHASE 2 OPTIMIZATION: Memory-based optimizations
+    # Memory-based optimizations
     if memory_gb >= 32:  # High memory systems
         coreml_options.update({
             'MaximumCacheSizeMB': '1024',  # 1GB cache for high-memory systems
@@ -1701,7 +1701,7 @@ def test_mlcompute_units_configuration(capabilities: Dict[str, Any]) -> str:
         logger.info(f" Single configuration available: {test_configs[0]}")
         return test_configs[0]
 
-    # PHASE 2 OPTIMIZATION: Actual MLComputeUnits performance testing
+    # MLComputeUnits performance testing
     benchmark_results = {}
     test_text = "Hello world, this is a test."
     test_voice = "af_heart"
@@ -1898,7 +1898,7 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
 
         logger.info(" Configuring CoreML provider for Apple Silicon...")
 
-        # PHASE 2 OPTIMIZATION: Use dedicated CoreML options creation function
+        # Use dedicated CoreML options creation function
         coreml_options = create_coreml_provider_options(capabilities)
 
         providers.append(('CoreMLExecutionProvider', coreml_options))
@@ -2196,18 +2196,18 @@ def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.Sessio
         session_options.add_session_config_entry("session.use_env_allocators", "1")
         session_options.add_session_config_entry("session.temp_dir_path", local_temp_dir)
 
-    # PHASE 2 OPTIMIZATION: Graph optimization based on workload
+    # Graph optimization based on workload
     # BASIC provides best performance balance for TTS, ALL can cause diminishing returns
     session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
     logger.debug(
         "Using BASIC graph optimization level for optimal TTS performance")
 
-    # PHASE 2 OPTIMIZATION: Disable deterministic compute for production
+    # Disable deterministic compute for production
     # Small speed boost when reproducibility isn't required
     session_options.use_deterministic_compute = False
     logger.debug("Disabled deterministic compute for production speed boost")
 
-    # PHASE 2 OPTIMIZATION: Per-core threading optimization
+    # Per-core threading optimization
     # Configure based on Apple Silicon architecture
     if capabilities.get('is_apple_silicon', False):
         # Apple Silicon specific threading
@@ -2236,12 +2236,12 @@ def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.Sessio
         logger.info(
             "Non-Apple Silicon: Using conservative 2 intra-op threads, 1 inter-op thread")
 
-    # PHASE 4 OPTIMIZATION: Dynamic memory arena sizing with adaptive optimization
+    # Dynamic memory arena sizing with adaptive optimization
     # Use dynamic memory manager for optimal arena sizing
     global dynamic_memory_manager
 
     if dynamic_memory_manager is None:
-        # Fallback to Phase 2 static sizing if dynamic manager not available
+        # Fallback to static sizing if dynamic manager not available
         total_ram_gb = capabilities.get('memory_gb', 8)
 
         if total_ram_gb >= 32:  # M1 Max / M2 Max with 32GB+ RAM
@@ -2281,7 +2281,7 @@ def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.Sessio
     except Exception as e:
         logger.warning(f"Failed to set memory arena size: {e}")
 
-    # PHASE 2 OPTIMIZATION: Memory pattern optimization
+    # Memory pattern optimization
     # Reuses memory buffers for repeated inference calls
     session_options.enable_mem_pattern = True
     session_options.enable_cpu_mem_arena = True
@@ -2485,33 +2485,33 @@ def initialize_model():
         # Set up resource management
         atexit.register(cleanup_model)
 
-        # PHASE 3 OPTIMIZATION: Initialize dual session manager
+        # Initialize dual session manager
         try:
-            logger.info("Initializing dual session manager for Phase 3 optimization...")
+            logger.info("Initializing dual session manager for concurrent ANE/GPU processing...")
             initialize_dual_session_manager(capabilities)
         except Exception as e:
             logger.warning(f"⚠️ Failed to initialize dual session manager: {e}")
             logger.warning("Continuing with single session mode")
 
-        # PHASE 4 OPTIMIZATION: Initialize dynamic memory manager
+        # Initialize dynamic memory manager
         try:
-            logger.info("Initializing dynamic memory manager for Phase 4 optimization...")
+            logger.info("Initializing dynamic memory manager for adaptive memory sizing...")
             initialize_dynamic_memory_manager()
         except Exception as e:
             logger.warning(f"⚠️ Failed to initialize dynamic memory manager: {e}")
             logger.warning("Continuing with static memory configuration")
 
-        # PHASE 4 OPTIMIZATION: Initialize pipeline warmer
+        # Initialize pipeline warmer
         try:
-            logger.info("Initializing pipeline warmer for Phase 4 optimization...")
+            logger.info("Initializing inference pipeline warmer...")
             initialize_pipeline_warmer()
         except Exception as e:
             logger.warning(f"⚠️ Failed to initialize pipeline warmer: {e}")
             logger.warning("Continuing without pipeline warming")
 
-        # PHASE 4 OPTIMIZATION: Initialize real-time optimizer
+        # Initialize real-time optimizer
         try:
-            logger.info("Initializing real-time optimizer for Phase 4 optimization...")
+            logger.info("Initializing real-time performance optimizer...")
             from api.performance.optimization import initialize_real_time_optimizer
             initialize_real_time_optimizer()
         except Exception as e:
@@ -2537,23 +2537,23 @@ def cleanup_model():
     # Clean up old files in CoreML temp directory but keep the directory
     cleanup_coreml_temp_directory()
 
-    # PHASE 3 OPTIMIZATION: Cleanup dual session manager
+    # Cleanup dual session manager
     if dual_session_manager:
         logger.info("Cleaning up dual session manager...")
         dual_session_manager.cleanup_sessions()
         dual_session_manager = None
 
-    # PHASE 4 OPTIMIZATION: Cleanup dynamic memory manager
+    # Cleanup dynamic memory manager
     if dynamic_memory_manager:
         logger.info("Cleaning up dynamic memory manager...")
         dynamic_memory_manager = None
 
-    # PHASE 4 OPTIMIZATION: Cleanup pipeline warmer
+    # Cleanup pipeline warmer
     if pipeline_warmer:
         logger.info("Cleaning up pipeline warmer...")
         pipeline_warmer = None
 
-    # PHASE 4 OPTIMIZATION: Cleanup real-time optimizer
+    # Cleanup real-time optimizer
     try:
         from api.performance.optimization import cleanup_real_time_optimizer
         cleanup_real_time_optimizer()
@@ -2630,7 +2630,7 @@ class DynamicMemoryManager:
         # Get hardware capabilities for scaling calculations
         self.capabilities = detect_apple_silicon_capabilities()
 
-        # PHASE 4 OPTIMIZATION: Initialize advanced workload analyzer
+        # Initialize advanced workload analyzer
         self.workload_analyzer = WorkloadAnalyzer()
 
         # Initialize with hardware-optimized base size
@@ -2907,7 +2907,7 @@ class DynamicMemoryManager:
 
 class WorkloadAnalyzer:
     """
-    Advanced workload profiling and analysis system for Phase 4 optimization.
+    Advanced workload profiling and analysis system for adaptive memory optimization.
 
     This analyzer provides comprehensive workload characterization to enable
     intelligent memory optimization and performance tuning. It tracks text
@@ -2951,7 +2951,7 @@ class WorkloadAnalyzer:
         # Initialize text complexity analyzer
         self.complexity_analyzer = TextComplexityAnalyzer()
 
-        self.logger.info("Workload analyzer initialized for Phase 4 profiling")
+        self.logger.info("Workload analyzer initialized for concurrent processing profiling")
 
     def analyze_text_complexity(self, text: str) -> float:
         """
@@ -3315,7 +3315,7 @@ def initialize_dynamic_memory_manager():
     global dynamic_memory_manager
 
     if dynamic_memory_manager is None:
-        logger.info("Initializing dynamic memory manager for Phase 4 optimization")
+        logger.info("Initializing dynamic memory manager for adaptive memory sizing")
         dynamic_memory_manager = DynamicMemoryManager()
         logger.debug("✅ Dynamic memory manager initialized")
 
@@ -3341,7 +3341,7 @@ def initialize_pipeline_warmer():
 
 class InferencePipelineWarmer:
     """
-    Handles comprehensive inference pipeline warm-up and precompilation for Phase 4 optimization.
+    Handles comprehensive inference pipeline warm-up and precompilation.
 
     This warmer implements advanced pipeline optimization strategies to eliminate cold-start
     overhead and achieve immediate peak performance from the first inference request.
@@ -3350,25 +3350,25 @@ class InferencePipelineWarmer:
 
     ## Warm-up Strategy
 
-    ### Phase 1: CoreML Graph Precompilation
+    ### CoreML Graph Precompilation
     - **Graph Compilation**: Force compilation of all execution paths
     - **Shape Specialization**: Pre-compile graphs for common tensor shapes
     - **Provider Optimization**: Warm up all available providers (ANE, GPU, CPU)
     - **Memory Layout**: Optimize memory allocation patterns
 
-    ### Phase 2: Common Pattern Caching
+    ### Common Pattern Caching
     - **Phoneme Patterns**: Pre-cache frequent phoneme sequences
     - **Text Patterns**: Pre-process common text phrases
     - **Voice Embeddings**: Pre-load voice embedding patterns
     - **Inference Results**: Pre-populate inference cache with common results
 
-    ### Phase 3: Dual Session Optimization
+    ### Dual Session Optimization
     - **Session Routing**: Optimize session selection algorithms
     - **Load Balancing**: Pre-test concurrent processing patterns
     - **Memory Fragmentation**: Pre-allocate memory to prevent fragmentation
     - **Utilization Patterns**: Establish optimal utilization baselines
 
-    ### Phase 4: Performance Validation
+    ### Performance Validation
     - **Benchmark Execution**: Run comprehensive performance benchmarks
     - **Bottleneck Detection**: Identify and resolve performance bottlenecks
     - **Optimization Verification**: Validate optimization effectiveness
@@ -3462,23 +3462,23 @@ class InferencePipelineWarmer:
         }
 
         try:
-            # Phase 1: CoreML graph compilation
-            self.logger.info("Phase 1: CoreML graph precompilation...")
+            # CoreML graph compilation
+            self.logger.info("Precompiling CoreML graphs...")
             phase1_results = await self._warm_up_coreml_graphs()
             results['phases']['coreml_graphs'] = phase1_results
 
-            # Phase 2: Common pattern caching
-            self.logger.info("Phase 2: Common pattern caching...")
+            # Common pattern caching
+            self.logger.info("Caching common text/phoneme patterns...")
             phase2_results = await self._cache_common_patterns()
             results['phases']['common_patterns'] = phase2_results
 
-            # Phase 3: Dual session optimization
-            self.logger.info("Phase 3: Dual session optimization...")
+            # Dual session optimization
+            self.logger.info("Optimizing dual-session routing...")
             phase3_results = await self._optimize_session_routing()
             results['phases']['session_routing'] = phase3_results
 
-            # Phase 4: Memory pattern optimization
-            self.logger.info("Phase 4: Memory pattern optimization...")
+            # Memory pattern optimization
+            self.logger.info("Optimizing memory patterns...")
             phase4_results = await self._optimize_memory_patterns()
             results['phases']['memory_patterns'] = phase4_results
 

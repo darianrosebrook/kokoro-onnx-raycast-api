@@ -1143,12 +1143,12 @@ async def trigger_cache_cleanup(aggressive: bool = False):
         return {"success": False, "error": str(e)}
 
 
-@app.get("/phase4-optimization")
+@app.get("/optimization-status")
 async def get_phase4_optimization_status():
     """
-    Get comprehensive Phase 4 optimization status and insights.
+    Get optimization status and insights for runtime components.
     
-    This endpoint provides detailed information about Phase 4 advanced optimization
+    This endpoint provides detailed information about advanced runtime optimization
     features including dynamic memory management, pipeline warming, and real-time
     optimization capabilities.
     
@@ -1178,16 +1178,16 @@ async def get_phase4_optimization_status():
     ```
     
     **Use Cases**:
-    - Monitor Phase 4 optimization effectiveness
+    - Monitor optimization effectiveness
     - Debug advanced optimization features
     - Analyze performance trends and patterns
     - Validate optimization configurations
     
-    @returns JSON object with Phase 4 optimization status
+    @returns JSON object with optimization status
     """
     try:
         phase4_status = {
-            "phase4_enabled": True,
+            "optimization_enabled": True,
             "optimization_components": {}
         }
         
@@ -1263,7 +1263,7 @@ async def get_phase4_optimization_status():
                 "error": str(e)
             }
         
-        # Overall Phase 4 Status
+        # Overall optimization status
         enabled_components = sum(1 for comp in phase4_status["optimization_components"].values() if comp.get("enabled", False))
         total_components = len(phase4_status["optimization_components"])
         
@@ -1277,19 +1277,19 @@ async def get_phase4_optimization_status():
         return phase4_status
         
     except Exception as e:
-        logger.error(f" Phase 4 optimization status endpoint error: {e}")
+        logger.error(f" Optimization status endpoint error: {e}")
         return {
-            "error": "Phase 4 optimization status endpoint failed",
+            "error": "Optimization status endpoint failed",
             "details": str(e)
         }
 
 
-@app.post("/phase4-optimization/trigger")
+@app.post("/optimization-status/trigger")
 async def trigger_phase4_optimization():
     """
-    Trigger immediate Phase 4 optimization.
+    Trigger immediate runtime optimization.
     
-    This endpoint allows manual triggering of Phase 4 optimization processes
+    This endpoint allows manual triggering of runtime optimization processes
     including pipeline warming and real-time optimization.
     
     @returns JSON object with optimization trigger results
@@ -1337,9 +1337,9 @@ async def trigger_phase4_optimization():
         return results
         
     except Exception as e:
-        logger.error(f" Phase 4 optimization trigger endpoint error: {e}")
+        logger.error(f" Optimization trigger endpoint error: {e}")
         return {
-            "error": "Phase 4 optimization trigger failed",
+            "error": "Optimization trigger failed",
             "details": str(e)
         }
 
