@@ -9,6 +9,7 @@ The scripts in this directory support the current **Phase 4** optimization level
 - Environment diagnostics and troubleshooting
 - Cache management and optimization
 - Production deployment validation
+- Model optimization and quantization
 
 ## Active Production Scripts
 
@@ -66,6 +67,50 @@ python scripts/validate_optimization_performance.py --comprehensive
 **Usage**:
 ```bash
 python scripts/baseline_comparison.py
+```
+
+### Model Optimization
+
+#### `optimize_onnx_graph.py` - ONNX Graph Optimization
+**Purpose**: Advanced ONNX model optimization
+
+**Features**:
+- Graph fusion and optimization
+- Constant folding
+- Static shape binding
+- Apple Silicon optimizations
+
+**Usage**:
+```bash
+python scripts/optimize_onnx_graph.py --model-path kokoro-v1.0.onnx
+```
+
+#### `optimization_pipeline.py` - Optimization Pipeline
+**Purpose**: Complete optimization workflow
+
+**Features**:
+- Multi-stage optimization pipeline
+- Automated optimization workflow
+- Performance validation
+- Comprehensive reporting
+
+**Usage**:
+```bash
+python scripts/optimization_pipeline.py --input-model kokoro-v1.0.onnx --output-dir optimized/
+```
+
+#### `quantize_model.py` - Model Quantization
+**Purpose**: Model quantization for performance
+
+**Features**:
+- INT8 quantization
+- Per-channel quantization
+- Calibration data generation
+- Quality validation
+
+**Usage**:
+```bash
+python scripts/quantize_model.py --input kokoro-v1.0.onnx --output kokoro-v1.0.int8.onnx
 ```
 
 ### System Management
@@ -139,6 +184,19 @@ python scripts/configure_benchmark_frequency.py --show-current
 python scripts/configure_benchmark_frequency.py --frequency weekly
 ```
 
+#### `manage_security.py` - Security Management
+**Purpose**: Security configuration and validation
+
+**Features**:
+- Security status checking
+- Local connection testing
+- Security configuration validation
+
+**Usage**:
+```bash
+python scripts/manage_security.py
+```
+
 ## Phase 4 Optimization Status
 
 The TTS system is currently implementing **Phase 4** advanced optimizations:
@@ -183,6 +241,18 @@ python scripts/validate_optimization_performance.py --comprehensive
 
 # 4. Baseline comparison
 python scripts/baseline_comparison.py
+```
+
+### Model Optimization Workflow
+```bash
+# 1. Optimize ONNX graph
+python scripts/optimize_onnx_graph.py --model-path kokoro-v1.0.onnx
+
+# 2. Quantize model
+python scripts/quantize_model.py --input kokoro-v1.0.onnx --output kokoro-v1.0.int8.onnx
+
+# 3. Run optimization pipeline
+python scripts/optimization_pipeline.py --input-model kokoro-v1.0.onnx --output-dir optimized/
 ```
 
 ### System Maintenance

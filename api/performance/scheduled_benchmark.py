@@ -120,8 +120,7 @@ async def run_scheduled_benchmark() -> Dict[str, Any]:
         # Run benchmark with minimal output for scheduled execution
         result = subprocess.run([
             sys.executable, str(script_path),
-            "--quiet",  # Minimal output
-            "--no-warmup",  # Skip warmup for scheduled runs
+            "--quick",  # Quick benchmark with minimal testing
             "--consistency-runs", "1"  # Single run for speed
         ], capture_output=True, text=True, timeout=300)  # 5 minute timeout
         

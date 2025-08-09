@@ -143,6 +143,7 @@ import numpy as np
 from typing import Optional, Dict, Any, List
 from collections import deque
 from dataclasses import dataclass
+from functools import lru_cache
 
 import onnxruntime as ort
 
@@ -181,6 +182,7 @@ logger = logging.getLogger(__name__)
 kokoro_model: Optional[Kokoro] = None
 model_loaded = False
 _active_provider: str = "CPUExecutionProvider"
+_model_lock = threading.Lock()
 
 # Create .cache directory and define cache file path
 _cache_dir = ".cache"
@@ -198,6 +200,191 @@ dynamic_memory_manager: Optional['DynamicMemoryManager'] = None
 
 # Global pipeline warmer instance for Phase 4 optimization
 pipeline_warmer: Optional['InferencePipelineWarmer'] = None
+
+# Cache for optimized session options (hardware-specific, deterministic)
+_session_options_cache: Optional[ort.SessionOptions] = None
+
+# Cache for provider options (hardware-specific, deterministic)
+_provider_options_cache: Dict[str, Dict[str, Any]] = {}  # provider_name -> options
+def _read_cached_provider_strategy() -> Optional[Dict[str, Any]]:
+    """
+    Read cached provider strategy if available.
+
+    Returns a dictionary with keys 'provider' and 'bench_results' or None if missing.
+    """
+    try:
+        from api.utils.cache_helpers import compute_system_fingerprint, load_json_cache
+        from api.config import TTSConfig
+
+        fp = compute_system_fingerprint(TTSConfig.MODEL_PATH, TTSConfig.VOICES_PATH)
+        cache_name = f"provider_strategy_{fp}.json"
+        cached = load_json_cache(cache_name)
+        if cached and isinstance(cached, dict) and cached.get("provider"):
+            return cached
+    except Exception:
+        pass
+    return None
+
+
+def _initialize_session_for_provider(provider_name: str, capabilities: Dict[str, Any]) -> Kokoro:
+    """
+    Create a Kokoro model session for a specific provider using optimized options.
+
+    Raises on failure.
+    """
+    # CoreML temp dir must be configured before CoreML session
+    if provider_name == "CoreMLExecutionProvider":
+        setup_coreml_temp_directory()
+
+    session_options = create_optimized_session_options(capabilities)
+    provider_options = get_cached_provider_options(provider_name, capabilities)
+    providers = [(provider_name, provider_options)] if provider_options else [provider_name]
+
+    session = ort.InferenceSession(
+        TTSConfig.MODEL_PATH,
+        sess_options=session_options,
+        providers=providers,
+    )
+
+    return Kokoro.from_session(session=session, voices_path=TTSConfig.VOICES_PATH)
+
+
+def _hot_swap_provider(new_provider: str, capabilities: Dict[str, Any]) -> bool:
+    """
+    Reinitialize the global model with a new provider if different.
+
+    Returns True on successful swap, False otherwise.
+    """
+    global kokoro_model, _active_provider, model_loaded
+    if new_provider == _active_provider:
+        return True
+    try:
+        new_model = _initialize_session_for_provider(new_provider, capabilities)
+        with _model_lock:
+            kokoro_model = new_model
+            _active_provider = new_provider
+            model_loaded = True
+        logger.info(f"Switched active provider to {new_provider}")
+        return True
+    except Exception as e:
+        logger.warning(f"Hot-swap to {new_provider} failed: {e}")
+        return False
+
+
+def _initialize_heavy_components_async(capabilities: Dict[str, Any]) -> None:
+    """
+    Start heavy components (dual session manager, dynamic memory manager, pipeline warmer,
+    real-time optimizer) in background threads to avoid blocking startup.
+    """
+    def _run():
+        try:
+            try:
+                logger.info("Initializing dual session manager for Phase 3 optimization...")
+                initialize_dual_session_manager(capabilities)
+            except Exception as e:
+                logger.debug(f"Dual session init deferred error: {e}")
+
+            try:
+                logger.info("Initializing dynamic memory manager for Phase 4 optimization...")
+                initialize_dynamic_memory_manager()
+            except Exception as e:
+                logger.debug(f"Dynamic memory init deferred error: {e}")
+
+            try:
+                logger.info("Initializing pipeline warmer for Phase 4 optimization...")
+                initialize_pipeline_warmer()
+            except Exception as e:
+                logger.debug(f"Pipeline warmer init deferred error: {e}")
+
+            try:
+                from api.performance.optimization import initialize_real_time_optimizer
+                logger.info("Initializing real-time optimizer for Phase 4 optimization...")
+                initialize_real_time_optimizer()
+            except Exception as e:
+                logger.debug(f"Real-time optimizer init deferred error: {e}")
+        except Exception:
+            # Avoid crashing background thread
+            pass
+
+    t = threading.Thread(target=_run, name="kokoro-heavy-init", daemon=True)
+    t.start()
+
+
+def _benchmark_and_hotswap_async(capabilities: Dict[str, Any]) -> None:
+    """
+    Run provider benchmarking in the background and hot-swap if a better provider is found.
+    """
+    def _run():
+        try:
+            optimal_provider, _results = benchmark_providers()
+            if optimal_provider and optimal_provider != _active_provider:
+                _hot_swap_provider(optimal_provider, capabilities)
+        except Exception as e:
+            logger.debug(f"Background benchmark/hot-swap failed: {e}")
+
+    t = threading.Thread(target=_run, name="kokoro-bench-hotswap", daemon=True)
+    t.start()
+
+
+def initialize_model_fast():
+    """
+    Fast, non-blocking model initialization.
+
+    Strategy:
+    - Use cached provider strategy if available; otherwise default to CPU.
+    - Initialize model with chosen provider and perform a minimal warmup.
+    - Start heavy components and benchmarking in background threads.
+    - Hot-swap to better provider when benchmarking completes.
+    """
+    global kokoro_model, model_loaded, _active_provider
+    if model_loaded:
+        return
+
+    logger.info("Starting optimized model initialization...")
+    start_ts = time.perf_counter()
+
+    capabilities = detect_apple_silicon_capabilities()
+
+    # Determine initial provider quickly
+    cached = _read_cached_provider_strategy()
+    initial_provider = cached.get("provider") if cached else None
+    if not initial_provider:
+        # Safe default
+        initial_provider = "CoreMLExecutionProvider" if capabilities.get("is_apple_silicon") else "CPUExecutionProvider"
+
+    # Attempt init with initial provider, fallback to CPU if needed
+    tried_cpu_fallback = False
+    for provider_attempt in [initial_provider, "CPUExecutionProvider"]:
+        if provider_attempt == "CPUExecutionProvider" and tried_cpu_fallback:
+            continue
+        try:
+            model_candidate = _initialize_session_for_provider(provider_attempt, capabilities)
+            with _model_lock:
+                kokoro_model = model_candidate
+                _active_provider = provider_attempt
+                model_loaded = True
+            logger.info(f"✅ Fast init: provider={provider_attempt}")
+            break
+        except Exception as e:
+            logger.warning(f"Fast init failed with {provider_attempt}: {e}")
+            tried_cpu_fallback = tried_cpu_fallback or (provider_attempt == "CPUExecutionProvider")
+            continue
+
+    if not model_loaded:
+        raise RuntimeError("Fast initialization failed for all providers")
+
+    # Minimal warmup (non-fatal)
+    try:
+        kokoro_model.create("Hello", "af_heart", 1.0, "en-us")
+    except Exception as e:
+        logger.debug(f"Minimal warmup failed: {e}")
+
+    logger.info(f"✅ Fast initialization completed in {time.perf_counter() - start_ts:.2f}s")
+
+    # Defer heavy components and benchmarking
+    _initialize_heavy_components_async(capabilities)
+    _benchmark_and_hotswap_async(capabilities)
+
 
 
 @dataclass
@@ -314,7 +501,7 @@ class DualSessionManager:
     Neural Engine and GPU cores for optimal performance.
     """
 
-    def __init__(self):
+    def __init__(self, capabilities: Optional[Dict[str, Any]] = None):
         self.sessions = {
             'ane': None,  # Neural Engine optimized session
             'gpu': None,  # GPU optimized session
@@ -335,8 +522,8 @@ class DualSessionManager:
 
         self.logger = logging.getLogger(__name__ + ".DualSessionManager")
 
-        # Initialize capabilities
-        self.capabilities = detect_apple_silicon_capabilities()
+        # Initialize capabilities (use provided or detect)
+        self.capabilities = capabilities if capabilities is not None else detect_apple_silicon_capabilities()
 
         # Initialize sessions
         self._initialize_sessions()
@@ -472,6 +659,121 @@ class DualSessionManager:
             self.logger.error(f"Failed to initialize CPU session: {e}")
             self.sessions['cpu'] = None
 
+    @lru_cache(maxsize=1024)
+    def _complexity_cache_key(self, text: str) -> float:
+        """Cached wrapper for complexity calculation."""
+        return self._calculate_complexity_impl(text)
+    
+    def _calculate_complexity_impl(self, text: str) -> float:
+        """
+        Calculate text complexity for optimal session selection.
+        
+        This method analyzes text characteristics to determine the optimal
+        processing session (ANE, GPU, or CPU) based on complexity.
+        
+        @param text: Input text to analyze
+        @returns: Complexity score (0.0 to 1.0)
+        """
+        if not text or len(text.strip()) == 0:
+            return 0.0
+        
+        # Normalize text for consistent analysis
+        normalized_text = text.strip().lower()
+        
+        # Calculate various complexity factors
+        length_factor = min(len(normalized_text) / 1000.0, 1.0)  # Length complexity
+        char_complexity = self._analyze_character_complexity(normalized_text)
+        linguistic_complexity = self._analyze_linguistic_complexity(normalized_text)
+        
+        # Weighted combination of factors
+        complexity = (
+            length_factor * 0.3 +
+            char_complexity * 0.4 +
+            linguistic_complexity * 0.3
+        )
+        
+        return min(complexity, 1.0)
+
+    def _analyze_character_complexity(self, text: str) -> float:
+        """
+        Analyze character distribution complexity.
+        
+        @param text: Text to analyze
+        @returns: Character complexity score (0.0 to 1.0)
+        """
+        if not text:
+            return 0.0
+
+        char_counts = {
+            'letters': 0,
+            'digits': 0,
+            'punctuation': 0,
+            'special': 0,
+            'unicode': 0
+        }
+
+        for char in text:
+            if char.isalpha():
+                char_counts['letters'] += 1
+            elif char.isdigit():
+                char_counts['digits'] += 1
+            elif char in '.,!?;:':
+                char_counts['punctuation'] += 1
+            elif ord(char) > 127:
+                char_counts['unicode'] += 1
+            else:
+                char_counts['special'] += 1
+
+        # Calculate weighted complexity
+        total_chars = len(text)
+        complexity = 0.0
+
+        # Character complexity weights
+        char_weights = {
+            'letters': 1.0,
+            'digits': 1.1,
+            'punctuation': 1.2,
+            'special': 1.5,
+            'unicode': 2.0
+        }
+
+        for char_type, count in char_counts.items():
+            if total_chars > 0:
+                ratio = count / total_chars
+                complexity += ratio * char_weights[char_type]
+
+        return complexity / 2.0  # Normalize to reasonable range
+
+    def _analyze_linguistic_complexity(self, text: str) -> float:
+        """
+        Analyze linguistic complexity patterns.
+        
+        @param text: Text to analyze
+        @returns: Linguistic complexity score (0.0 to 1.0)
+        """
+        if not text:
+            return 0.0
+
+        # Simple heuristic-based linguistic analysis
+        complexity = 0.0
+
+        # Count difficult patterns
+        difficult_patterns = [
+            'tion', 'sion', 'ough', 'augh', 'eigh',
+            'ph', 'gh', 'ch', 'sh', 'th', 'wh',
+            'qu', 'x', 'z'
+        ]
+
+        pattern_count = 0
+        for pattern in difficult_patterns:
+            pattern_count += text.lower().count(pattern)
+
+        # Calculate complexity based on pattern density
+        if len(text) > 0:
+            complexity = min(1.0, pattern_count / len(text) * 10)
+
+        return complexity
+    
     def calculate_segment_complexity(self, text: str) -> float:
         """
         Calculate segment complexity for optimal session routing.
@@ -482,34 +784,7 @@ class DualSessionManager:
         @param text: Input text to analyze
         @returns: Complexity score from 0.0 to 1.0
         """
-        if not text:
-            return 0.0
-
-        complexity_score = 0.0
-
-        # Length factor (longer = more complex)
-        length_factor = min(len(text) / 200, 1.0)  # Normalize to 200 chars
-        complexity_score += length_factor * 0.3
-
-        # Character complexity (special chars, punctuation)
-        special_chars = sum(
-            1 for c in text if not c.isalnum() and not c.isspace())
-        special_factor = min(special_chars / (len(text) * 0.2), 1.0)
-        complexity_score += special_factor * 0.2
-
-        # Word complexity (longer words = more complex phonemes)
-        words = text.split()
-        if words:
-            avg_word_length = sum(len(word) for word in words) / len(words)
-            word_factor = min(avg_word_length / 10, 1.0)
-            complexity_score += word_factor * 0.3
-
-        # Sentence complexity (multiple sentences = more complex)
-        sentence_count = text.count('.') + text.count('!') + text.count('?')
-        sentence_factor = min(sentence_count / 5, 1.0)
-        complexity_score += sentence_factor * 0.2
-
-        return min(complexity_score, 1.0)
+        return self._complexity_cache_key(text)
 
     def get_optimal_session(self, complexity: float) -> str:
         """
@@ -665,12 +940,12 @@ def get_dual_session_manager() -> Optional[DualSessionManager]:
     return dual_session_manager
 
 
-def initialize_dual_session_manager():
+def initialize_dual_session_manager(capabilities: Optional[Dict[str, Any]] = None):
     """Initialize the global dual session manager."""
     global dual_session_manager
 
     if dual_session_manager is None:
-        dual_session_manager = DualSessionManager()
+        dual_session_manager = DualSessionManager(capabilities)
         logger.debug("✅ Dual session manager initialized")
 
     return dual_session_manager
@@ -724,6 +999,7 @@ def detect_apple_silicon_capabilities():
 
     ### Caching Strategy
     - **Runtime Caching**: Capabilities are cached after first detection
+    - **Persistent Caching**: Results are saved to disk for cross-process reuse
     - **Performance Optimization**: Avoids repeated expensive system calls
     - **Memory Efficient**: Minimal memory overhead for cached data
 
@@ -737,15 +1013,32 @@ def detect_apple_silicon_capabilities():
     ```
     """
     global _capabilities_cache
+    
+    # Set up logger first
+    logger = logging.getLogger(__name__)
 
     # Return cached result if available
     if _capabilities_cache is not None:
         return _capabilities_cache
+    
+    # Try to load from persistent cache
+    try:
+        from api.utils.cache_helpers import compute_system_fingerprint, load_json_cache, save_json_cache_atomic
+        from api.config import TTSConfig
+        
+        fp = compute_system_fingerprint(TTSConfig.MODEL_PATH, TTSConfig.VOICES_PATH)
+        cache_name = f"capabilities_{fp}.json"
+        cached = load_json_cache(cache_name)
+        
+        if cached:
+            _capabilities_cache = cached
+            logger.info(f"✅ Loaded hardware capabilities from cache: {fp[:8]}...")
+            return cached
+    except Exception as e:
+        logger.debug(f"Could not load persistent capabilities cache: {e}")
 
     import platform
     import subprocess
-
-    logger = logging.getLogger(__name__)
 
     # Basic platform detection
     is_apple_silicon = platform.machine() == 'arm64' and platform.system() == 'Darwin'
@@ -887,9 +1180,23 @@ def detect_apple_silicon_capabilities():
 
     # Cache the result before returning
     _capabilities_cache = capabilities
+    
+    # Save to persistent cache
+    try:
+        from api.utils.cache_helpers import compute_system_fingerprint, save_json_cache_atomic
+        from api.config import TTSConfig
+        
+        fp = compute_system_fingerprint(TTSConfig.MODEL_PATH, TTSConfig.VOICES_PATH)
+        cache_name = f"capabilities_{fp}.json"
+        save_json_cache_atomic(cache_name, capabilities)
+        logger.debug(f"Saved hardware capabilities to cache: {fp[:8]}...")
+    except Exception as e:
+        logger.debug(f"Could not save persistent capabilities cache: {e}")
+    
     return capabilities
 
 
+@lru_cache(maxsize=8)
 def validate_provider(provider_name: str) -> bool:
     """
     Validate that a specific ONNX Runtime provider is available and functional.
@@ -1044,143 +1351,67 @@ def should_use_ort_optimization(capabilities: Dict[str, Any]) -> bool:
 
 def get_or_create_ort_model() -> str:
     """
-    Get existing ORT model or create one from the standard ONNX model.
-
-    This function implements intelligent ORT model management:
-    1. **Check for existing ORT model**: Use if available and valid
-    2. **Create from ONNX**: Convert standard ONNX to ORT if needed
-    3. **Cache management**: Store in local cache to avoid permission issues
-    4. **Validation**: Ensure ORT model is valid and compatible
-
-    ## Benefits of ORT Models
-    - **Optimized for Apple Silicon**: Better CoreML integration
-    - **Reduced compilation time**: Pre-compiled vs runtime compilation
-    - **Lower memory usage**: Optimized graph structure
-    - **Fewer temporary files**: Reduces permission issues
-
-    @returns str: Path to the ORT model file
-    @raises RuntimeError: If ORT model creation fails
-
-    @example
-    ```python
-    # Get optimized model path
-    model_path = get_or_create_ort_model()
-
-    # Use with Kokoro
-    kokoro_model = Kokoro(model_path=model_path, voices_path=voices_path)
-    ```
+    Get or create optimized ONNX Runtime model with persistent caching.
+    
+    This function creates an optimized .ort model file from the original ONNX model
+    and caches it persistently with fingerprint-based validation.
+    
+    @returns: Path to the optimized .ort model file
     """
-    from api.config import TTSConfig
-    import os
-
-    # Create ORT cache directory
-    os.makedirs(TTSConfig.ORT_CACHE_DIR, exist_ok=True)
-
-    # Check for explicit ORT model path
-    if TTSConfig.ORT_MODEL_PATH and os.path.exists(TTSConfig.ORT_MODEL_PATH):
-        logger.info(f" Using explicit ORT model: {TTSConfig.ORT_MODEL_PATH}")
-        return TTSConfig.ORT_MODEL_PATH
-
-    # Generate ORT model path from standard ONNX
-    base_name = os.path.splitext(os.path.basename(TTSConfig.MODEL_PATH))[0]
-    ort_model_path = os.path.join(TTSConfig.ORT_CACHE_DIR, f"{base_name}.ort")
-
-    # Check if ORT model already exists and is valid
-    if os.path.exists(ort_model_path):
-        try:
-            # Quick validation - check if file is readable and has reasonable size
-            stat = os.stat(ort_model_path)
-            if stat.st_size > 1000000:  # At least 1MB
-                logger.info(f"✅ Using existing ORT model: {ort_model_path}")
-                return ort_model_path
-        except Exception as e:
-            logger.warning(f"⚠️ Existing ORT model validation failed: {e}")
-
-    # Create ORT model from standard ONNX
-    logger.info(" Creating ORT model from ONNX (this may take a moment)...")
-
     try:
-        # Import ORT tools for model conversion
-        import onnxruntime as ort
-
-        # Set up ONNX Runtime session options
-        session_options = ort.SessionOptions()
-        session_options.optimized_model_filepath = ort_model_path
-
-        # Enable extensive logging for debugging if needed
-        # session_options.log_severity_level = 0
-
-        # Set graph optimization level for production
-        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-
-        # Enhanced memory and graph optimizations for M1 Max
-        # Reference: DEPENDENCY_RESEARCH.md sections 1.2 & 1.3
-        capabilities = detect_apple_silicon_capabilities()
-
-        # Configure memory arena based on system capabilities
-        system_memory_gb = capabilities.get('memory_gb', 8)
-
-        # Enhanced memory management for M1 Max with 64GB RAM
-        if system_memory_gb >= 32:  # M1 Max with 64GB RAM
-            logger.info(
-                f" M1 Max with {system_memory_gb}GB RAM detected - applying enhanced memory configuration")
-            session_options.enable_cpu_mem_arena = True
-            session_options.enable_mem_pattern = True
-            session_options.memory_pattern_optimization = True
-            session_options.arena_extend_strategy = 'kSameAsRequested'
-            session_options.memory_arena_size_mb = 2048  # 2GB for M1 Max with 64GB RAM
-        elif system_memory_gb >= 16:  # Standard Apple Silicon with 16GB+ RAM
-            logger.info(
-                f" Apple Silicon with {system_memory_gb}GB RAM detected - applying standard memory configuration")
-            session_options.enable_cpu_mem_arena = True
-            session_options.enable_mem_pattern = True
-            session_options.arena_extend_strategy = 'kSameAsRequested'
-            session_options.memory_arena_size_mb = 1024  # 1GB for standard configurations
-        else:
-            logger.info(
-                f" System with {system_memory_gb}GB RAM detected - applying conservative memory configuration")
-            session_options.enable_cpu_mem_arena = True
-            session_options.enable_mem_pattern = True
-            session_options.arena_extend_strategy = 'kSameAsRequested'
-            session_options.memory_arena_size_mb = 512   # 512MB for low-memory systems
-
-        # Graph optimization settings for TTS workloads
-        session_options.enable_profiling = False  # Disable profiling for production
-        session_options.use_deterministic_compute = True  # For reproducible results
-        session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL  # For TTS workloads
-
-        # Float16 precision optimization for Apple Silicon
-        # Reference: DEPENDENCY_RESEARCH.md section 1.3
-        if capabilities.get('is_apple_silicon', False):
-            logger.info(
-                " Enabling float16 precision optimizations for Apple Silicon")
-            # Set environment variables for float16 optimization
-            os.environ['COREML_USE_FLOAT16'] = '1'
-            os.environ['COREML_OPTIMIZE_FOR_APPLE_SILICON'] = '1'
-
-        # Configure local temp directory for CoreML to avoid permission issues
-        local_temp_dir = os.path.join(_cache_dir, "coreml_temp")
-        os.makedirs(local_temp_dir, exist_ok=True)
-
-        # Create session to generate optimized model
-        logger.info(" Optimizing model for current hardware...")
-        temp_session = ort.InferenceSession(
-            TTSConfig.MODEL_PATH, session_options)
-
-        # Validate the optimized model was created
-        if not os.path.exists(ort_model_path):
-            raise RuntimeError(
-                "ORT model creation failed - file not generated")
-
-        # Clean up temporary session
-        del temp_session
-
-        logger.info(f"✅ ORT model created successfully: {ort_model_path}")
-        return ort_model_path
-
+        from api.utils.cache_helpers import compute_system_fingerprint, load_json_cache, save_json_cache_atomic, file_lock
+        from api.config import TTSConfig
+        
+        # Compute system fingerprint for caching
+        fp = compute_system_fingerprint(TTSConfig.MODEL_PATH, TTSConfig.VOICES_PATH)
+        base_name = os.path.splitext(os.path.basename(TTSConfig.MODEL_PATH))[0]
+        ort_model_path = os.path.join(TTSConfig.ORT_CACHE_DIR, f"{base_name}.{fp}.ort")
+        meta_path = ort_model_path + ".meta.json"
+        
+        # Check if cached model exists and is valid
+        meta = load_json_cache(os.path.relpath(meta_path, "."))
+        if os.path.exists(ort_model_path) and meta and meta.get("fingerprint") == fp:
+            logger.info(f"✅ Using existing ORT model for {fp[:8]}...")
+            return ort_model_path
+        
+        # Use file lock to prevent concurrent model creation
+        with file_lock(f"ort_build_{fp}", timeout=300):
+            # Re-check inside lock
+            meta = load_json_cache(os.path.relpath(meta_path, "."))
+            if os.path.exists(ort_model_path) and meta and meta.get("fingerprint") == fp:
+                return ort_model_path
+            
+            # Create optimized model
+            logger.info(f"Creating optimized ORT model for {fp[:8]}...")
+            
+            # Ensure cache directory exists
+            os.makedirs(TTSConfig.ORT_CACHE_DIR, exist_ok=True)
+            
+            # Create session options with optimization enabled
+            session_options = ort.SessionOptions()
+            session_options.optimized_model_filepath = ort_model_path
+            session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            
+            # Create temporary session to trigger optimization
+            temp_session = ort.InferenceSession(
+                TTSConfig.MODEL_PATH,
+                sess_options=session_options,
+                providers=['CPUExecutionProvider']
+            )
+            
+            # Save metadata
+            save_json_cache_atomic(os.path.relpath(meta_path, "."), {
+                "fingerprint": fp,
+                "built_at": time.time(),
+                "ort_version": getattr(ort, "__version__", "unknown"),
+                "model_path": TTSConfig.MODEL_PATH,
+            })
+            
+            logger.info(f"✅ Created optimized ORT model: {ort_model_path}")
+            return ort_model_path
+            
     except Exception as e:
-        logger.error(f" ORT model creation failed: {e}")
-        logger.info(" Falling back to standard ONNX model")
+        logger.warning(f"Could not create optimized ORT model: {e}")
         return TTSConfig.MODEL_PATH
 
 
@@ -1719,117 +1950,133 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
 
 def benchmark_providers():
     """
-    Benchmark available ONNX Runtime providers to find the optimal one.
-    The results are cached to avoid re-running on every startup.
+    Benchmark available providers to determine optimal performance.
+    
+    This function tests CoreML and CPU providers to determine which offers
+    the best performance for the current hardware configuration.
+    
+    @returns: Tuple of (optimal_provider, benchmark_results)
     """
-    capabilities = detect_apple_silicon_capabilities()
-
-    # Check for cached results
-    if os.path.exists(_coreml_cache_file):
-        with open(_coreml_cache_file, "r") as f:
-            cached_data = json.load(f)
-        cache_age = time.time() - cached_data.get("timestamp", 0)
-        if cache_age < TTSConfig.get_benchmark_cache_duration():
-            optimal_provider = cached_data.get("optimal_provider")
-            if optimal_provider and validate_provider(optimal_provider):
-                logger.info(
-                    f"Using cached optimal provider: {optimal_provider}")
-                return optimal_provider, cached_data.get("results", {})
-
-    logger.info("Running benchmark to find optimal ONNX Runtime provider...")
-
-    providers_to_test = []
-    available_providers = ort.get_available_providers()
-    if "CoreMLExecutionProvider" in available_providers and capabilities["is_apple_silicon"]:
-        providers_to_test.append("CoreMLExecutionProvider")
-    if "CPUExecutionProvider" in available_providers:
-        providers_to_test.append("CPUExecutionProvider")
-
-    if not providers_to_test:
-        return "CPUExecutionProvider", {}
-
-    benchmark_results = {}
-    for provider in providers_to_test:
-        try:
-            logger.info(f"Benchmarking {provider}...")
-            temp_model = Kokoro(
-                model_path=TTSConfig.MODEL_PATH,
-                voices_path=TTSConfig.VOICES_PATH,
-                providers=[provider]
-            )
-
-            # Warmup
-            for _ in range(TTSConfig.BENCHMARK_WARMUP_RUNS):
-                temp_model.create(
-                    TTSConfig.BENCHMARK_WARMUP_TEXT, "af_heart", 1.0, "en-us")
-
-            # Benchmark
-            times = []
-            for _ in range(TTSConfig.BENCHMARK_CONSISTENCY_RUNS):
-                start_time = time.perf_counter()
-                temp_model.create(TTSConfig.TEST_TEXT,
-                                  "af_heart", 1.0, "en-us")
-                times.append(time.perf_counter() - start_time)
-
-            benchmark_results[provider] = sum(times) / len(times)
-        except Exception as e:
-            logger.error(f"Failed to benchmark {provider}: {e}")
-
-    if not benchmark_results:
-        return "CPUExecutionProvider", {}
-
-    # Determine optimal provider with preference for CoreML on Apple Silicon
-    fastest_provider = min(benchmark_results, key=benchmark_results.get)
-    fastest_time = benchmark_results[fastest_provider]
-
-    # Check if we have both providers and are on Apple Silicon
-    if (len(benchmark_results) >= 2 and
-        "CoreMLExecutionProvider" in benchmark_results and
-        "CPUExecutionProvider" in benchmark_results and
-            capabilities["is_apple_silicon"]):
-
-        coreml_time = benchmark_results["CoreMLExecutionProvider"]
-        cpu_time = benchmark_results["CPUExecutionProvider"]
-
-        # Calculate performance difference
-        if fastest_time == coreml_time:
-            # CoreML is fastest - use it
-            optimal_provider = "CoreMLExecutionProvider"
-            logger.info(
-                f"✅ CoreML is fastest ({coreml_time:.3f}s vs CPU {cpu_time:.3f}s) - using CoreML")
-        elif fastest_time == cpu_time:
-            # CPU is fastest - check if difference is significant
-            performance_diff = cpu_time - coreml_time
-            improvement_percent = (performance_diff / coreml_time) * 100
-
-            if improvement_percent >= TTSConfig.BENCHMARK_MIN_IMPROVEMENT_PERCENT:
-                # Significant improvement - use CPU
-                optimal_provider = "CPUExecutionProvider"
-                logger.info(
-                    f"⚠️ CPU is {improvement_percent:.1f}% faster ({cpu_time:.3f}s vs CoreML {coreml_time:.3f}s) - using CPU")
-            else:
-                # Negligible difference - prefer CoreML for hardware acceleration
-                optimal_provider = "CoreMLExecutionProvider"
-                logger.info(
-                    f"✅ CPU is only {improvement_percent:.1f}% faster ({cpu_time:.3f}s vs CoreML {coreml_time:.3f}s) - using CoreML for hardware acceleration")
+    try:
+        from api.utils.cache_helpers import compute_system_fingerprint, load_json_cache, save_json_cache_atomic
+        from api.config import TTSConfig
+        
+        # Compute system fingerprint for caching
+        fp = compute_system_fingerprint(TTSConfig.MODEL_PATH, TTSConfig.VOICES_PATH)
+        cache_name = f"provider_strategy_{fp}.json"
+        
+        # Check for cached benchmark results
+        cached = load_json_cache(cache_name)
+        if cached:
+            logger.info(f"✅ Using cached provider strategy for {fp[:8]}...")
+            return cached["provider"], cached["bench_results"]
+        
+        # Perform benchmark without file locking to avoid hanging
+        logger.info(f"Benchmarking providers for {fp[:8]}...")
+        
+        # Get system capabilities
+        capabilities = detect_apple_silicon_capabilities()
+        
+        # Determine providers to test
+        providers_to_test = []
+        available_providers = ort.get_available_providers()
+        
+        if "CoreMLExecutionProvider" in available_providers and capabilities["is_apple_silicon"]:
+            providers_to_test.append("CoreMLExecutionProvider")
+        if "CPUExecutionProvider" in available_providers:
+            providers_to_test.append("CPUExecutionProvider")
+        
+        if not providers_to_test:
+            optimal_provider = "CPUExecutionProvider"
+            benchmark_results = {}
         else:
-            # Unexpected case - use fastest
-            optimal_provider = fastest_provider
-            logger.info(f"Using fastest provider: {optimal_provider}")
-    else:
-        # Single provider or non-Apple Silicon - use fastest
-        optimal_provider = fastest_provider
-        logger.info(f"Using fastest provider: {optimal_provider}")
-
-    # Cache the result
-    with open(_coreml_cache_file, "w") as f:
-        json.dump({
-            "optimal_provider": optimal_provider,
-            "results": benchmark_results,
-            "timestamp": time.time(),
-        }, f)
-
-    return optimal_provider, benchmark_results
+            # Run benchmarks
+            benchmark_results = {}
+            for provider in providers_to_test:
+                try:
+                    logger.info(f"Benchmarking {provider}...")
+                    
+                    # Create temporary model for benchmarking
+                    session_options = create_optimized_session_options(capabilities)
+                    provider_options = get_cached_provider_options(provider, capabilities)
+                    
+                    providers = [(provider, provider_options)] if provider_options else [provider]
+                    session = ort.InferenceSession(
+                        TTSConfig.MODEL_PATH,
+                        sess_options=session_options,
+                        providers=providers
+                    )
+                    
+                    temp_model = Kokoro.from_session(session, TTSConfig.VOICES_PATH)
+                    
+                    # Warmup
+                    for _ in range(3):  # Reduced warmup for faster benchmarking
+                        temp_model.create("Hello world", "af_heart", 1.0, "en-us")
+                    
+                    # Benchmark
+                    times = []
+                    for _ in range(5):  # Reduced runs for faster benchmarking
+                        start_time = time.perf_counter()
+                        temp_model.create("The quick brown fox jumps over the lazy dog.", "af_heart", 1.0, "en-us")
+                        times.append(time.perf_counter() - start_time)
+                    
+                    benchmark_results[provider] = sum(times) / len(times)
+                    logger.info(f"✅ {provider}: {benchmark_results[provider]:.3f}s average")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to benchmark {provider}: {e}")
+                    continue
+            
+            # Determine optimal provider
+            if benchmark_results:
+                fastest_provider = min(benchmark_results, key=benchmark_results.get)
+                fastest_time = benchmark_results[fastest_provider]
+                
+                # Check if we have both providers and are on Apple Silicon
+                if (len(benchmark_results) >= 2 and
+                    "CoreMLExecutionProvider" in benchmark_results and
+                    "CPUExecutionProvider" in benchmark_results and
+                    capabilities["is_apple_silicon"]):
+                    
+                    coreml_time = benchmark_results["CoreMLExecutionProvider"]
+                    cpu_time = benchmark_results["CPUExecutionProvider"]
+                    
+                    # Calculate performance difference
+                    if fastest_time == coreml_time:
+                        optimal_provider = "CoreMLExecutionProvider"
+                        logger.info(f"✅ CoreML is fastest ({coreml_time:.3f}s vs CPU {cpu_time:.3f}s)")
+                    elif fastest_time == cpu_time:
+                        performance_diff = cpu_time - coreml_time
+                        improvement_percent = (performance_diff / coreml_time) * 100
+                        
+                        if improvement_percent >= 5.0:  # 5% threshold
+                            optimal_provider = "CPUExecutionProvider"
+                            logger.info(f"⚠️ CPU is {improvement_percent:.1f}% faster - using CPU")
+                        else:
+                            optimal_provider = "CoreMLExecutionProvider"
+                            logger.info(f"✅ CPU is only {improvement_percent:.1f}% faster - using CoreML for hardware acceleration")
+                    else:
+                        optimal_provider = fastest_provider
+                        logger.info(f"Using fastest provider: {optimal_provider}")
+                else:
+                    optimal_provider = fastest_provider
+                    logger.info(f"Using fastest provider: {optimal_provider}")
+            else:
+                optimal_provider = "CPUExecutionProvider"
+                benchmark_results = {}
+        
+        # Save results
+        save_json_cache_atomic(cache_name, {
+            "provider": optimal_provider,
+            "bench_results": benchmark_results,
+            "timestamp": time.time()
+        })
+        
+        return optimal_provider, benchmark_results
+        
+    except Exception as e:
+        logger.warning(f"Provider benchmarking failed: {e}")
+        return "CPUExecutionProvider", {}
 
 
 def setup_coreml_temp_directory():
@@ -1932,6 +2179,12 @@ def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.Sessio
     @param capabilities: Hardware capabilities from detect_apple_silicon_capabilities()
     @returns: Optimized SessionOptions for ONNX Runtime
     """
+    global _session_options_cache
+    
+    # Return cached session options if available
+    if _session_options_cache is not None:
+        return _session_options_cache
+    
     logger.info("Creating optimized ONNX Runtime session options...")
 
     session_options = ort.SessionOptions()
@@ -2048,7 +2301,63 @@ def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.Sessio
     logger.info(
         f"✅ ONNX Runtime session options optimized for {'Apple Silicon' if capabilities.get('is_apple_silicon', False) else 'generic'} hardware")
 
+    # Cache the session options for reuse
+    _session_options_cache = session_options
+    
     return session_options
+
+
+def get_cached_provider_options(provider_name: str, capabilities: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Get cached provider options for the specified provider.
+    
+    This function caches provider options since they are deterministic based on hardware capabilities.
+    
+    @param provider_name: Name of the provider (e.g., "CoreMLExecutionProvider")
+    @param capabilities: Hardware capabilities
+    @returns: Provider options dictionary
+    """
+    global _provider_options_cache
+    
+    # Return cached options if available
+    if provider_name in _provider_options_cache:
+        return _provider_options_cache[provider_name]
+    
+    provider_options = {}
+    
+    if provider_name == "CoreMLExecutionProvider":
+        # Enhanced CoreML provider options
+        if capabilities.get('neural_engine_cores', 0) >= 32:  # M1 Max / M2 Max
+            provider_options = {
+                "MLComputeUnits": "CPUAndNeuralEngine",  # Prefer Neural Engine
+                "ModelFormat": "MLProgram",              # Use MLProgram for newer devices
+                "AllowLowPrecisionAccumulationOnGPU": "1"  # Enable FP16 optimization
+            }
+            logger.info("Using M1/M2 Max optimized CoreML configuration")
+        elif capabilities.get('neural_engine_cores', 0) >= 16:  # M1 / M2
+            provider_options = {
+                "MLComputeUnits": "CPUAndNeuralEngine",
+                "ModelFormat": "MLProgram"
+            }
+            logger.info("Using M1/M2 optimized CoreML configuration")
+        else:  # Other Apple Silicon
+            provider_options = {
+                "MLComputeUnits": "CPUAndGPU"
+            }
+            logger.info("Using standard Apple Silicon CoreML configuration")
+    elif provider_name == "CPUExecutionProvider":
+        provider_options = {
+            "intra_op_num_threads": min(4, capabilities.get("cpu_cores", 4)),
+            "inter_op_num_threads": 1,
+            "arena_extend_strategy": "kSameAsRequested",
+            "enable_cpu_mem_arena": "1",
+            "enable_mem_pattern": "1",
+        }
+    
+    # Cache the options for reuse
+    _provider_options_cache[provider_name] = provider_options
+    
+    return provider_options
 
 
 def initialize_model():
@@ -2071,7 +2380,7 @@ def initialize_model():
     logger.info("Initializing TTS model with enhanced optimization...")
     initialization_start = time.perf_counter()
 
-    # Detect hardware capabilities for optimization
+    # Detect hardware capabilities for optimization (cached)
     capabilities = detect_apple_silicon_capabilities()
 
     try:
@@ -2100,28 +2409,8 @@ def initialize_model():
                 # Create optimized session options using dedicated function
                 session_options = create_optimized_session_options(capabilities)
 
-                # Configure provider options based on hardware
-                provider_options = {}
-                if provider_attempt == "CoreMLExecutionProvider":
-                    # Enhanced CoreML provider options
-                    if capabilities.get('neural_engine_cores', 0) >= 32:  # M1 Max / M2 Max
-                        provider_options = {
-                            "MLComputeUnits": "CPUAndNeuralEngine",  # Prefer Neural Engine
-                            "ModelFormat": "MLProgram",              # Use MLProgram for newer devices
-                            "AllowLowPrecisionAccumulationOnGPU": "1"  # Enable FP16 optimization
-                        }
-                        logger.info("Using M1/M2 Max optimized CoreML configuration")
-                    elif capabilities.get('neural_engine_cores', 0) >= 16:  # M1 / M2
-                        provider_options = {
-                            "MLComputeUnits": "CPUAndNeuralEngine",
-                            "ModelFormat": "MLProgram"
-                        }
-                        logger.info("Using M1/M2 optimized CoreML configuration")
-                    else:  # Other Apple Silicon
-                        provider_options = {
-                            "MLComputeUnits": "CPUAndGPU"
-                        }
-                        logger.info("Using standard Apple Silicon CoreML configuration")
+                # Configure provider options based on hardware (cached)
+                provider_options = get_cached_provider_options(provider_attempt, capabilities)
 
                 # Create the ONNX Runtime session with optimizations
                 providers = [(provider_attempt, provider_options)] if provider_options else [provider_attempt]
@@ -2199,7 +2488,7 @@ def initialize_model():
         # PHASE 3 OPTIMIZATION: Initialize dual session manager
         try:
             logger.info("Initializing dual session manager for Phase 3 optimization...")
-            initialize_dual_session_manager()
+            initialize_dual_session_manager(capabilities)
         except Exception as e:
             logger.warning(f"⚠️ Failed to initialize dual session manager: {e}")
             logger.warning("Continuing with single session mode")
@@ -2899,6 +3188,38 @@ class TextComplexityAnalyzer:
             'foreign_sounds': 1.5
         }
 
+    @lru_cache(maxsize=1024)
+    def _complexity_cache_key(self, text: str) -> float:
+        """Cached wrapper for complexity calculation."""
+        return self._calculate_complexity_impl(text)
+    
+    def _calculate_complexity_impl(self, text: str) -> float:
+        """
+        Calculate text complexity using multiple analysis methods.
+        
+        @param text: Input text to analyze
+        @returns: Complexity score (0.0 to 1.0)
+        """
+        if not text or len(text.strip()) == 0:
+            return 0.0
+        
+        # Normalize text for consistent analysis
+        normalized_text = text.strip().lower()
+        
+        # Calculate various complexity factors
+        char_complexity = self._analyze_character_complexity(normalized_text)
+        length_complexity = self._analyze_length_complexity(normalized_text)
+        linguistic_complexity = self._analyze_linguistic_complexity(normalized_text)
+        
+        # Weighted combination of factors
+        complexity = (
+            char_complexity * 0.4 +
+            length_complexity * 0.3 +
+            linguistic_complexity * 0.3
+        )
+        
+        return min(complexity, 1.0)
+    
     def calculate_complexity(self, text: str) -> float:
         """
         Calculate overall text complexity score.
@@ -2906,27 +3227,7 @@ class TextComplexityAnalyzer:
         @param text: Text to analyze
         @returns: Complexity score (0.0 to 1.0)
         """
-        if not text:
-            return 0.0
-
-        # Character complexity
-        char_complexity = self._analyze_character_complexity(text)
-
-        # Length complexity
-        length_complexity = self._analyze_length_complexity(text)
-
-        # Linguistic complexity
-        linguistic_complexity = self._analyze_linguistic_complexity(text)
-
-        # Combine scores with weights
-        total_complexity = (
-            char_complexity * 0.4 +
-            length_complexity * 0.3 +
-            linguistic_complexity * 0.3
-        )
-
-        # Normalize to 0.0-1.0 range
-        return min(1.0, max(0.0, total_complexity))
+        return self._complexity_cache_key(text)
 
     def _analyze_character_complexity(self, text: str) -> float:
         """Analyze character distribution complexity."""

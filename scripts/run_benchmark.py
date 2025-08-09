@@ -54,7 +54,8 @@ from typing import Dict, List, Optional, Tuple, Any
 import aiohttp
 
 # Add the project root to the Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 from api.config import TTSConfig
 from api.model.loader import initialize_model, benchmark_providers

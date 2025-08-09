@@ -208,17 +208,17 @@ import soundfile as sf
 from api.config import TTSConfig, TTSRequest
 from api.warnings import setup_coreml_warning_handler
 from api.model.patch import apply_all_patches, get_patch_status
-from api.model.loader import initialize_model as initialize_model_sync, detect_apple_silicon_capabilities
+from api.model.loader import (
+    initialize_model_fast as initialize_model_sync,
+    detect_apple_silicon_capabilities,
+    get_model_status,
+)
 from api.performance.stats import get_performance_stats
 from api.tts.core import _generate_audio_segment, stream_tts_audio, get_tts_processing_stats
 from api.tts.core import get_primer_microcache_stats
 from api.utils.cache_cleanup import cleanup_cache, get_cache_info
 from api.tts.text_processing import segment_text
-from api.model.loader import get_model_status, initialize_model, detect_apple_silicon_capabilities
-from api.model.patch import apply_all_patches, get_patch_status
-from api.performance.stats import get_performance_stats
-from api.tts.text_processing import segment_text
-from api.warnings import setup_coreml_warning_handler, suppress_phonemizer_warnings, configure_onnx_runtime_logging
+from api.warnings import suppress_phonemizer_warnings, configure_onnx_runtime_logging
 from functools import lru_cache
 
 
@@ -912,10 +912,18 @@ async def perform_cold_start_warmup():
             segments = [warmup_text]
         
         # Generate audio for the first segment only (minimal warm-up)
+        # Use the global model directly to avoid creating additional instances
         from fastapi.concurrency import run_in_threadpool
+        from api.model.loader import get_model, get_active_provider
+        
+        # Get the already initialized model
+        global_model = get_model()
+        if global_model is None:
+            raise Exception("Global model not available for warm-up")
+        
+        # Use the model directly for warm-up
         audio_data = await run_in_threadpool(
-            _generate_audio_segment,
-            0,  # idx
+            global_model.create,
             segments[0],  # text
             "af_alloy",  # voice
             1.0,  # speed
@@ -968,13 +976,9 @@ async def lifespan(app: FastAPI):
     validate_environment()
     validate_patch_status()
 
-    # Proactively load model and trigger pipeline warm-up in background
+    # Trigger pipeline warm-up in background (after model initialization)
     try:
-        from api.model.loader import get_model, get_pipeline_warmer
-        try:
-            get_model()
-        except Exception as e:
-            logger.debug(f"Model preload skipped/failed during startup: {e}")
+        from api.model.loader import get_pipeline_warmer
         try:
             pipeline_warmer = get_pipeline_warmer()
             if pipeline_warmer:
@@ -1503,9 +1507,9 @@ async def get_status():
             logger.warning(f"⚠️ Could not get patch status: {e}")
             status["patch_status"] = {"error": str(e)}
 
-        # Add hardware information
+        # Add hardware information (use cached capabilities)
         try:
-            capabilities = detect_apple_silicon_capabilities()
+            capabilities = get_model_capabilities()
             status["hardware"] = {
                 "platform": capabilities['platform'],
                 "is_apple_silicon": capabilities['is_apple_silicon'],
