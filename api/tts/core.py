@@ -291,7 +291,7 @@ def should_use_phoneme_preprocessing() -> bool:
     Returns:
         bool: True if phoneme preprocessing is enabled and beneficial
     """
-    # PHASE 1 TTFA OPTIMIZATION: Disable phoneme preprocessing for streaming requests
+    # Disable phoneme preprocessing for streaming requests (lower latency)
     # to reduce first-chunk latency. This check can be extended to consider request context.
 
     try:
@@ -309,7 +309,7 @@ def should_use_phoneme_preprocessing() -> bool:
         return False
 
 
-# PHASE 1 TTFA OPTIMIZATION: Fast segment processing for simple text
+# Fast segment processing for simple text
 def _is_simple_segment(text: str) -> bool:
     """
     Determine if a text segment is simple enough for fast processing.
@@ -383,7 +383,7 @@ def _generate_audio_segment(
     This function implements inference pipeline caching for common requests
     to avoid redundant processing and improve performance.
 
-    ## PHASE 2 OPTIMIZATION: Phoneme Preprocessing Integration
+    ## Phoneme Preprocessing Integration
 
     This function now includes optional phoneme preprocessing for CoreML optimization:
     - **Phoneme Conversion**: Converts text to phoneme sequences for consistency
@@ -397,7 +397,7 @@ def _generate_audio_segment(
         return idx, None, "Text too short (minimum 3 characters required)"
 
     try:
-        # PHASE 2 OPTIMIZATION: Phoneme preprocessing for CoreML optimization
+        # Phoneme preprocessing for CoreML optimization
         processed_text = text
         preprocessing_info = ""
 
@@ -451,7 +451,7 @@ def _generate_audio_segment(
             return idx, samples, cache_info
 
         # Cache miss - generate new audio
-        # PHASE 3 OPTIMIZATION: Use dual session manager for concurrent processing
+        # Use dual session manager for concurrent processing
         dual_session_manager = get_dual_session_manager()
 
         if dual_session_manager:
@@ -602,7 +602,7 @@ def _fast_generate_audio_segment(
             return idx, samples, f"{provider} (fast-cached)"
 
         # Generate audio directly without preprocessing
-        # PHASE 3 OPTIMIZATION: Use dual session manager if available
+        # Use dual session manager if available
         dual_session_manager = get_dual_session_manager()
 
         if dual_session_manager:
@@ -686,7 +686,7 @@ async def stream_tts_audio(
         f"[{request_id}] Starting stream request: voice='{voice}', speed={speed}, format='{format}', text='{text[:30]}...'"
     )
 
-    # PHASE 1 OPTIMIZATION: Record request for workload analysis
+    # Record request for workload analysis
     start_time = time.perf_counter()
     concurrent_requests = 1  # TODO: Implement actual concurrent request tracking
 
@@ -788,11 +788,11 @@ async def stream_tts_audio(
 
     if format == "wav":
         try:
-            # PHASE 1 OPTIMIZATION: Enhanced WAV header streaming with proper chunking
+            # Enhanced WAV header streaming with proper chunking
             # This implements the optimization plan's requirement for streaming WAV header support
             header_size = 44
 
-            # PHASE 1 OPTIMIZATION: Create streaming-optimized WAV header
+            # Create streaming-optimized WAV header
             # Use placeholder for data size, will be handled by streaming response
             estimated_data_size = 0xFFFFFFFF - header_size  # Maximum size for streaming
 
@@ -828,14 +828,14 @@ async def stream_tts_audio(
                 "<4sI", wav_header, 36, b"data", estimated_data_size  # Data chunk size
             )
 
-            # PHASE 1 OPTIMIZATION: Immediate header yield for faster TTFA
+            # Immediate header yield for faster TTFA
             # This ensures the client receives the WAV header immediately
             logger.debug(
                 f"[{request_id}] Yielding optimized WAV header ({header_size} bytes) for streaming"
             )
             yield bytes(wav_header)
 
-            # PHASE 1 OPTIMIZATION: Yield a tiny silence primer to force flush and begin playback immediately
+            # Yield a tiny silence primer to force flush and begin playback immediately
             # 50ms of silence at 24kHz, 16-bit mono → 24000 * 0.05 * 2 = 2400 bytes
             try:
                 silence_ms = 50
@@ -851,11 +851,11 @@ async def stream_tts_audio(
 
         except Exception as e:
             logger.error(f"[{request_id}] WAV header generation failed: {e}")
-            # PHASE 1 OPTIMIZATION: Graceful fallback to PCM format
+            # Graceful fallback to PCM format
             logger.info(f"[{request_id}] Falling back to PCM format for streaming")
             format = "pcm"
 
-    # PHASE 1 OPTIMIZATION: True streaming - process segments one by one
+    # True streaming - process segments one by one
     # This is the key fix: instead of creating all tasks upfront and waiting,
     # we process each segment immediately and yield chunks as they complete
 
@@ -866,12 +866,12 @@ async def stream_tts_audio(
         "request_start_time": start_time,
         "stream_start_time": time.monotonic(),
         "total_audio_duration_ms": 0,
-        "phase1_ttfa_target_ms": 800,
-        "phase1_efficiency_target": 0.90,
+        "ttfa_target_ms": 800,
+        "efficiency_target": 0.90,
     }
 
     try:
-        # PHASE 1 OPTIMIZATION: Process segments with dual session manager for concurrency
+        # Process segments with dual session manager for concurrency
         # Get dual session manager for concurrent processing
         from api.model.loader import get_dual_session_manager
 
@@ -895,7 +895,7 @@ async def stream_tts_audio(
                 f"[{request_id}] Creating task for segment {i+1}/{total_segments}: '{seg_text[:30]}...'"
             )
 
-            # PHASE 1 TTFA OPTIMIZATION: Use fast processing for first simple segment
+            # Use fast processing for first simple segment
             # Force fast-path for primer segment and for first segment regardless of complexity
             use_fast_processing = (i in fast_indices) or (i == 0)
 
@@ -1005,7 +1005,7 @@ async def stream_tts_audio(
                         f"[{request_id}] Exception details: {type(e).__name__}: {str(e)}"
                     )
 
-                # PHASE 1 OPTIMIZATION: Yield chunks immediately in smaller pieces
+                # Yield chunks immediately in smaller pieces
                 # Smaller initial chunks for primer segment to improve TTFA
                 chunk_size = TTSConfig.CHUNK_SIZE_BYTES
                 if i in fast_indices:
@@ -1017,14 +1017,14 @@ async def stream_tts_audio(
                     current_time = time.monotonic()
                     chunk_timing_state["chunk_count"] += 1
 
-                    # PHASE 1 OPTIMIZATION: Track first chunk for TTFA calculation
+                    # Track first chunk for TTFA calculation
                     if chunk_timing_state["first_chunk_time"] is None:
                         chunk_timing_state["first_chunk_time"] = current_time
                         ttfa_ms = (
                             current_time - chunk_timing_state["stream_start_time"]
                         ) * 1000
                         logger.info(
-                            f"[{request_id}] PHASE 1 OPTIMIZATION: First chunk yielded in {ttfa_ms:.2f}ms"
+                            f"[{request_id}] First chunk yielded in {ttfa_ms:.2f}ms"
                         )
 
                         if ttfa_ms < chunk_timing_state["phase1_ttfa_target_ms"]:
@@ -1081,7 +1081,7 @@ async def stream_tts_audio(
         total_time = time.perf_counter() - start_time
         total_stream_time = time.monotonic() - chunk_timing_state["stream_start_time"]
 
-        logger.info(f"[{request_id}] PHASE 1 OPTIMIZATION: Streaming completed")
+        logger.info(f"[{request_id}] Streaming completed")
         logger.info(f"[{request_id}] Final statistics:")
         logger.info(f"[{request_id}]   • Total time: {total_time:.2f}s")
         logger.info(f"[{request_id}]   • Stream time: {total_stream_time:.2f}s")
@@ -1103,7 +1103,7 @@ async def stream_tts_audio(
             logger.info(f"[{request_id}]   • TTFA: {ttfa_ms:.2f}ms")
 
             if ttfa_ms < chunk_timing_state["phase1_ttfa_target_ms"]:
-                logger.info(f"[{request_id}] ✅ PHASE 1 SUCCESS: TTFA target achieved")
+                logger.info(f"[{request_id}] ✅ TTFA target achieved")
             else:
                 logger.warning(
                     f"[{request_id}] ⚠️ PHASE 1 NEEDS IMPROVEMENT: TTFA target not met"
