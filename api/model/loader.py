@@ -126,6 +126,7 @@ print(f"Hardware acceleration: {capabilities['has_neural_engine']}")
 ```
 """
 from api.performance.reporting import save_benchmark_report
+from api.performance.startup_profiler import step_timer, record_step
 from api.config import TTSConfig
 from kokoro_onnx import Kokoro
 import os
@@ -343,7 +344,8 @@ def initialize_model_fast():
     logger.info("Starting optimized model initialization...")
     start_ts = time.perf_counter()
 
-    capabilities = detect_apple_silicon_capabilities()
+    with step_timer("capabilities_detection"):
+        capabilities = detect_apple_silicon_capabilities()
 
     # Determine initial provider quickly
     cached = _read_cached_provider_strategy()
@@ -358,7 +360,8 @@ def initialize_model_fast():
         if provider_attempt == "CPUExecutionProvider" and tried_cpu_fallback:
             continue
         try:
-            model_candidate = _initialize_session_for_provider(provider_attempt, capabilities)
+            with step_timer(f"init_provider_{provider_attempt}"):
+                model_candidate = _initialize_session_for_provider(provider_attempt, capabilities)
             with _model_lock:
                 kokoro_model = model_candidate
                 _active_provider = provider_attempt
@@ -375,7 +378,8 @@ def initialize_model_fast():
 
     # Minimal warmup (non-fatal)
     try:
-        kokoro_model.create("Hello", "af_heart", 1.0, "en-us")
+        with step_timer("minimal_warmup"):
+            kokoro_model.create("Hello", "af_heart", 1.0, "en-us")
     except Exception as e:
         logger.debug(f"Minimal warmup failed: {e}")
 

@@ -213,6 +213,7 @@ from api.model.loader import (
     detect_apple_silicon_capabilities,
     get_model_status,
 )
+from api.performance.startup_profiler import get_timings as get_startup_timings
 from api.performance.stats import get_performance_stats
 from api.tts.core import _generate_audio_segment, stream_tts_audio, get_tts_processing_stats
 from api.tts.core import get_primer_microcache_stats
@@ -1547,6 +1548,12 @@ async def get_status():
         except Exception as e:
             logger.warning(f"⚠️ Could not get TTS processing stats: {e}")
             status["tts_processing"] = {"error": str(e)}
+
+        # Startup step timings (compact, high-signal)
+        try:
+            status["startup_timings"] = get_startup_timings()
+        except Exception:
+            status["startup_timings"] = {}
 
         # PHASE 1 TTFA OPTIMIZATION: Primer micro-cache telemetry
         try:
