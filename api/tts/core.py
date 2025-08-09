@@ -942,8 +942,8 @@ async def stream_tts_audio(
                 if dual_session_manager and i not in fast_indices:
                     # Dual session manager returns audio data directly
                     audio_data = await task
-                    # Convert to numpy array for consistency
-                    audio_np = np.frombuffer(audio_data, dtype=np.float32)
+                    # audio_data is already a numpy array from dual session manager
+                    audio_np = audio_data
                     provider = (
                         "DualSession-"
                         + dual_session_manager.get_optimal_session(
