@@ -411,10 +411,9 @@ class TTSConfig:
     
     # Text processing limits for optimal performance
     MAX_TEXT_LENGTH = 4500  # OpenAI API compatibility limit
-    # PHASE 1 OPTIMIZATION: Increased from 200 to 800 for better TTFA performance
     # This allows moderately long texts to be processed as single segments,
     # reducing server-side processing overhead and improving time-to-first-audio
-    MAX_SEGMENT_LENGTH = 800  # Optimal segment size for Phase 1 streaming performance
+    MAX_SEGMENT_LENGTH = 800  
     
     # ORT (ONNX Runtime) optimization settings
     ORT_OPTIMIZATION_ENABLED = os.environ.get("KOKORO_ORT_OPTIMIZATION", "auto").lower()
@@ -426,7 +425,12 @@ class TTSConfig:
     APPLE_SILICON_ORT_PREFERRED = os.environ.get("KOKORO_APPLE_SILICON_ORT_PREFERRED", "true").lower() == "true"
     ORT_COMPUTE_UNITS = ["CPUAndNeuralEngine", "CPUAndGPU", "CPUOnly", "ALL"]
     
-    # Enhanced Phonemizer Configuration - Phase 1 Optimization
+    # MPS (Metal Performance Shaders) provider settings
+    MPS_PROVIDER_ENABLED = os.environ.get("KOKORO_MPS_PROVIDER_ENABLED", "false").lower() == "true"
+    MPS_PROVIDER_BENCHMARK = os.environ.get("KOKORO_MPS_PROVIDER_BENCHMARK", "false").lower() == "true"
+    MPS_PROVIDER_PRIORITY = int(os.environ.get("KOKORO_MPS_PROVIDER_PRIORITY", "3"))  # Lower number = higher priority
+    
+    # Enhanced Phonemizer Configuration  
     PHONEMIZER_BACKEND = os.environ.get("KOKORO_PHONEMIZER_BACKEND", "espeak")
     PHONEMIZER_LANGUAGE = os.environ.get("KOKORO_PHONEMIZER_LANGUAGE", "en-us")
     PHONEMIZER_PRESERVE_PUNCTUATION = os.environ.get("KOKORO_PHONEMIZER_PRESERVE_PUNCTUATION", "true").lower() == "true"

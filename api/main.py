@@ -1145,7 +1145,7 @@ async def trigger_cache_cleanup(aggressive: bool = False):
 
 
 @app.get("/optimization-status")
-async def get_phase4_optimization_status():
+async def get_optimization_status():
     """
     Get optimization status and insights for runtime components.
     
@@ -1187,7 +1187,7 @@ async def get_phase4_optimization_status():
     @returns JSON object with optimization status
     """
     try:
-        phase4_status = {
+        status = {
             "optimization_enabled": True,
             "optimization_components": {}
         }
@@ -1201,19 +1201,19 @@ async def get_phase4_optimization_status():
                 optimization_stats = dynamic_memory_manager.get_optimization_stats()
                 workload_insights = dynamic_memory_manager.get_workload_insights()
                 
-                phase4_status["optimization_components"]["dynamic_memory"] = {
+                status["optimization_components"]["dynamic_memory"] = {
                     "enabled": True,
                     "current_arena_size_mb": optimization_stats.get("current_arena_size_mb", 0),
                     "optimization_stats": optimization_stats,
                     "workload_insights": workload_insights
                 }
             else:
-                phase4_status["optimization_components"]["dynamic_memory"] = {
+                status["optimization_components"]["dynamic_memory"] = {
                     "enabled": False,
                     "error": "Dynamic memory manager not available"
                 }
         except Exception as e:
-            phase4_status["optimization_components"]["dynamic_memory"] = {
+            status["optimization_components"]["dynamic_memory"] = {
                 "enabled": False,
                 "error": str(e)
             }
@@ -1226,7 +1226,7 @@ async def get_phase4_optimization_status():
             if pipeline_warmer:
                 warm_up_status = pipeline_warmer.get_warm_up_status()
                 
-                phase4_status["optimization_components"]["pipeline_warming"] = {
+                status["optimization_components"]["pipeline_warming"] = {
                     "enabled": True,
                     "warm_up_complete": warm_up_status.get("warm_up_complete", False),
                     "warm_up_duration": warm_up_status.get("warm_up_duration", 0),
@@ -1234,12 +1234,12 @@ async def get_phase4_optimization_status():
                     "warm_up_results": warm_up_status.get("warm_up_results", {})
                 }
             else:
-                phase4_status["optimization_components"]["pipeline_warming"] = {
+                status["optimization_components"]["pipeline_warming"] = {
                     "enabled": False,
                     "error": "Pipeline warmer not available"
                 }
         except Exception as e:
-            phase4_status["optimization_components"]["pipeline_warming"] = {
+            status["optimization_components"]["pipeline_warming"] = {
                 "enabled": False,
                 "error": str(e)
             }
@@ -1250,7 +1250,7 @@ async def get_phase4_optimization_status():
             
             optimization_status = get_optimization_status()
             
-            phase4_status["optimization_components"]["real_time_optimization"] = {
+            status["optimization_components"]["real_time_optimization"] = {
                 "enabled": optimization_status.get("status", "unknown") != "optimizer_not_available",
                 "status": optimization_status.get("status", "unknown"),
                 "auto_optimization_enabled": optimization_status.get("auto_optimization_enabled", False),
@@ -1259,23 +1259,23 @@ async def get_phase4_optimization_status():
                 "parameter_tuning": optimization_status.get("parameter_tuner_summary", {})
             }
         except Exception as e:
-            phase4_status["optimization_components"]["real_time_optimization"] = {
+            status["optimization_components"]["real_time_optimization"] = {
                 "enabled": False,
                 "error": str(e)
             }
         
         # Overall optimization status
-        enabled_components = sum(1 for comp in phase4_status["optimization_components"].values() if comp.get("enabled", False))
-        total_components = len(phase4_status["optimization_components"])
+        enabled_components = sum(1 for comp in status["optimization_components"].values() if comp.get("enabled", False))
+        total_components = len(status["optimization_components"])
         
-        phase4_status["summary"] = {
+        status["summary"] = {
             "total_components": total_components,
             "enabled_components": enabled_components,
             "optimization_coverage": (enabled_components / total_components * 100) if total_components > 0 else 0,
             "fully_operational": enabled_components == total_components
         }
         
-        return phase4_status
+        return status
         
     except Exception as e:
         logger.error(f" Optimization status endpoint error: {e}")
@@ -1286,7 +1286,7 @@ async def get_phase4_optimization_status():
 
 
 @app.post("/optimization-status/trigger")
-async def trigger_phase4_optimization():
+async def trigger_optimization():
     """
     Trigger immediate runtime optimization.
     
@@ -1536,7 +1536,7 @@ async def get_status():
             logger.warning(f"⚠️ Could not get warning suppression info: {e}")
             status["warning_suppression"] = {"error": str(e)}
 
-        # PHASE 2 OPTIMIZATION: Add TTS processing statistics including phoneme cache performance
+        # Add TTS processing statistics including phoneme cache performance
         try:
             tts_stats = get_tts_processing_stats()
             status["tts_processing"] = {
@@ -1555,26 +1555,26 @@ async def get_status():
         except Exception:
             status["startup_timings"] = {}
 
-        # PHASE 1 TTFA OPTIMIZATION: Primer micro-cache telemetry
+        # Primer micro-cache telemetry
         try:
             status["primer_microcache"] = get_primer_microcache_stats()
         except Exception as e:
             status["primer_microcache"] = {"error": str(e)}
 
-        # PHASE 1 TTFA OPTIMIZATION: Cold-start warm-up telemetry
+        # Cold-start warm-up telemetry
         try:
             status["cold_start_warmup"] = get_cold_start_warmup_stats()
         except Exception as e:
             status["cold_start_warmup"] = {"error": str(e)}
 
-        # PHASE 4 OPTIMIZATION: Scheduled benchmark telemetry
+        # Scheduled benchmark telemetry
         try:
             from api.performance.scheduled_benchmark import get_scheduled_benchmark_stats
             status["scheduled_benchmark"] = get_scheduled_benchmark_stats()
         except Exception as e:
             status["scheduled_benchmark"] = {"error": str(e)}
 
-        # PHASE 3 OPTIMIZATION: Add dual session utilization statistics
+        # Add dual session utilization statistics
         try:
             from api.performance.stats import get_session_utilization_stats, get_memory_fragmentation_stats
             
@@ -1620,7 +1620,7 @@ async def get_status():
             status["session_utilization"] = {"error": str(e)}
             status["memory_fragmentation"] = {"error": str(e)}
 
-        # PHASE 4 OPTIMIZATION: Add dynamic memory optimization statistics
+        # Add dynamic memory optimization statistics
         try:
             from api.performance.stats import get_dynamic_memory_optimization_stats
             
@@ -1634,7 +1634,7 @@ async def get_status():
                 'error': str(e)
             }
         
-        # PHASE 4 OPTIMIZATION: Add pipeline warmer status
+        # Add pipeline warmer status
         try:
             from api.model.loader import get_pipeline_warmer
             
@@ -1655,7 +1655,7 @@ async def get_status():
                 'error': str(e)
             }
         
-        # PHASE 4 OPTIMIZATION: Add real-time optimizer status
+        # Add real-time optimizer status
         try:
             from api.performance.optimization import get_optimization_status
             

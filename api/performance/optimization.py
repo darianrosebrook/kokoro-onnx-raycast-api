@@ -606,21 +606,21 @@ class RealTimeOptimizer:
         try:
             self.logger.info(f"Starting system optimization: {optimization_id}")
             
-            # Phase 1: Trend Analysis
-            self.logger.debug("Phase 1: Analyzing performance trends...")
+            # Trend Analysis
+            self.logger.debug("Analyzing performance trends...")
             trend_analysis = self.trend_analyzer.analyze_trends()
             
-            # Phase 2: Parameter Tuning
-            self.logger.debug("Phase 2: Tuning parameters...")
+            # Parameter Tuning
+            self.logger.debug("Tuning parameters...")
             tuning_results = await self._tune_system_parameters()
             
-            # Phase 3: Apply Optimizations
-            self.logger.debug("Phase 3: Applying optimizations...")
+            # Apply Optimizations
+            self.logger.debug("Applying optimizations...")
             self.status = OptimizationStatus.OPTIMIZING
             optimization_results = await self._apply_optimizations(trend_analysis, tuning_results)
             
-            # Phase 4: Validation
-            self.logger.debug("Phase 4: Validating optimizations...")
+            # Validation
+            self.logger.debug("Validating optimizations...")
             validation_results = await self._validate_optimizations()
             
             optimization_duration = time.time() - optimization_start
@@ -880,7 +880,7 @@ def initialize_real_time_optimizer():
     global _real_time_optimizer
     
     if _real_time_optimizer is None:
-        logger.info("Initializing real-time optimizer for Phase 4 optimization")
+        logger.info("Initializing real-time performance optimizer")
         _real_time_optimizer = RealTimeOptimizer()
         logger.info("✅ Real-time optimizer initialized")
     

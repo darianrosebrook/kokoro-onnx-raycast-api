@@ -56,7 +56,6 @@ from onnxruntime.quantization import (
     QuantFormat,
     QuantType,
     quantize_static,
-    create_calibration_data_reader,
     CalibrationMethod
 )
 
@@ -391,7 +390,9 @@ def quantize_model_per_channel(
             }
         )
         
-        logger.info("✅ Per-channel INT8 quantization completed successfully!")
+        logger.info(f"Quantization completed successfully")
+        logger.info(f"Quantized model saved to: {output_model_path}")
+        
         return True
         
     except Exception as e:

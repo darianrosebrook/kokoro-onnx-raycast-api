@@ -78,4 +78,5 @@ Thumbs.db
 .env.development
 
 # Backup files from emoji cleanup script
-*.backup 
+*.backup
+kokoro-v1_0.pth

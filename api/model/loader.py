@@ -127,6 +127,12 @@ print(f"Hardware acceleration: {capabilities['has_neural_engine']}")
 """
 from api.performance.reporting import save_benchmark_report
 from api.performance.startup_profiler import step_timer, record_step
+from api.model.providers import (
+    create_optimized_session_options,
+    get_cached_provider_options,
+    setup_coreml_temp_directory,
+    cleanup_coreml_temp_directory,
+)
 from api.config import TTSConfig
 from kokoro_onnx import Kokoro
 import os
@@ -397,6 +403,7 @@ class SessionUtilization:
     total_requests: int = 0
     ane_requests: int = 0
     gpu_requests: int = 0
+    mps_requests: int = 0
     cpu_requests: int = 0
     concurrent_peak: int = 0
     memory_usage_mb: int = 0
@@ -408,6 +415,10 @@ class SessionUtilization:
     def get_gpu_percentage(self) -> float:
         """Calculate GPU utilization percentage."""
         return (self.gpu_requests / self.total_requests) * 100 if self.total_requests > 0 else 0
+
+    def get_mps_percentage(self) -> float:
+        """Calculate MPS utilization percentage."""
+        return (self.mps_requests / self.total_requests) * 100 if self.total_requests > 0 else 0
 
     def get_cpu_percentage(self) -> float:
         """Calculate CPU utilization percentage."""
@@ -520,7 +531,8 @@ class DualSessionManager:
         self.memory_watchdog = MemoryFragmentationWatchdog()
 
         # Semaphore-based load control to prevent CoreML queue thrashing
-        self.max_concurrent_segments = 4
+        # Keep concurrency conservative to avoid long waits on session locks
+        self.max_concurrent_segments = 2
         self.segment_semaphore = threading.Semaphore(
             self.max_concurrent_segments)
 
@@ -548,6 +560,10 @@ class DualSessionManager:
 
             # Initialize GPU-optimized session
             self._initialize_gpu_session()
+
+            # Initialize MPS session if enabled
+            if TTSConfig.MPS_PROVIDER_ENABLED:
+                self._initialize_mps_session()
 
             # Initialize CPU fallback session
             self._initialize_cpu_session()
@@ -587,9 +603,18 @@ class DualSessionManager:
                 "AllowLowPrecisionAccumulationOnGPU": "1"
             }
 
+            # Get ORT-optimized model path if available
+            model_path = TTSConfig.MODEL_PATH
+            try:
+                if should_use_ort_optimization(self.capabilities):
+                    model_path = get_or_create_ort_model()
+                    self.logger.info("Using ORT-optimized model for ANE session")
+            except Exception as e:
+                self.logger.debug(f"ORT optimization not available for ANE: {e}")
+
             # Create ONNX session
             ane_session = ort.InferenceSession(
-                TTSConfig.MODEL_PATH,
+                model_path,
                 sess_options=session_options,
                 providers=[("CoreMLExecutionProvider", ane_provider_options)]
             )
@@ -619,9 +644,18 @@ class DualSessionManager:
                 "AllowLowPrecisionAccumulationOnGPU": "1"
             }
 
+            # Get ORT-optimized model path if available
+            model_path = TTSConfig.MODEL_PATH
+            try:
+                if should_use_ort_optimization(self.capabilities):
+                    model_path = get_or_create_ort_model()
+                    self.logger.info("Using ORT-optimized model for GPU session")
+            except Exception as e:
+                self.logger.debug(f"ORT optimization not available for GPU: {e}")
+
             # Create ONNX session
             gpu_session = ort.InferenceSession(
-                TTSConfig.MODEL_PATH,
+                model_path,
                 sess_options=session_options,
                 providers=[("CoreMLExecutionProvider", gpu_provider_options)]
             )
@@ -638,15 +672,66 @@ class DualSessionManager:
             self.logger.error(f"Failed to initialize GPU session: {e}")
             self.sessions['gpu'] = None
 
+    def _initialize_mps_session(self):
+        """Initialize MPS (Metal Performance Shaders) optimized session."""
+        try:
+            # Create MPS-specific session options
+            session_options = create_optimized_session_options(self.capabilities)
+
+            # MPS-specific provider options
+            mps_provider_options = {
+                'device_type': 'gpu',  # Use GPU for Metal acceleration
+                'precision': 'fp16',   # Use half precision for better performance
+                'memory_pool': 'shared',  # Use shared memory pool
+                'enable_mem_pattern': '1',  # Enable memory pattern optimization
+            }
+
+            # Get ORT-optimized model path if available
+            model_path = TTSConfig.MODEL_PATH
+            try:
+                if should_use_ort_optimization(self.capabilities):
+                    model_path = get_or_create_ort_model()
+                    self.logger.info("Using ORT-optimized model for MPS session")
+            except Exception as e:
+                self.logger.debug(f"ORT optimization not available for MPS: {e}")
+
+            # Create ONNX session with MPS provider
+            mps_session = ort.InferenceSession(
+                model_path,
+                sess_options=session_options,
+                providers=[("MPSExecutionProvider", mps_provider_options)]
+            )
+
+            # Create Kokoro instance
+            self.sessions['mps'] = Kokoro.from_session(
+                session=mps_session,
+                voices_path=TTSConfig.VOICES_PATH
+            )
+
+            self.logger.debug("✅ MPS session initialized successfully")
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize MPS session: {e}")
+            self.sessions['mps'] = None
+
     def _initialize_cpu_session(self):
         """Initialize CPU fallback session."""
         try:
             # Create CPU-specific session options
             session_options = create_optimized_session_options(self.capabilities)
 
+            # Get ORT-optimized model path if available
+            model_path = TTSConfig.MODEL_PATH
+            try:
+                if should_use_ort_optimization(self.capabilities):
+                    model_path = get_or_create_ort_model()
+                    self.logger.info("Using ORT-optimized model for CPU session")
+            except Exception as e:
+                self.logger.debug(f"ORT optimization not available for CPU: {e}")
+
             # Create ONNX session with CPU provider
             cpu_session = ort.InferenceSession(
-                TTSConfig.MODEL_PATH,
+                model_path,
                 sess_options=session_options,
                 providers=["CPUExecutionProvider"]
             )
@@ -801,36 +886,52 @@ class DualSessionManager:
         if self.sessions['ane'] is not None:
             if complexity > 0.7:
                 # Complex segments prefer ANE
-                preferred = 'ane'
-                fallback = 'gpu' if self.sessions['gpu'] else 'cpu'
+                try_order = ['ane', 'gpu', 'mps', 'cpu']
             else:
-                # Simple segments can use GPU
-                preferred = 'gpu' if self.sessions['gpu'] else 'ane'
-                fallback = 'ane' if preferred == 'gpu' else 'gpu'
+                # Simple segments can use GPU or MPS
+                try_order = ['gpu', 'mps', 'ane', 'cpu']
         else:
-            # No ANE available, use GPU or CPU
-            preferred = 'gpu' if self.sessions['gpu'] else 'cpu'
-            fallback = 'cpu'
+            # No ANE available, use GPU, MPS, or CPU
+            if self.sessions['gpu']:
+                try_order = ['gpu', 'mps', 'cpu']
+            elif self.sessions['mps']:
+                try_order = ['mps', 'cpu']
+            else:
+                try_order = ['cpu']
 
-        # Check session availability
-        if self.sessions[preferred] and self.session_locks[preferred].acquire(blocking=False):
-            self.logger.debug(f"Using preferred session: {preferred}")
-            return preferred
-        elif self.sessions[fallback] and self.session_locks[fallback].acquire(blocking=False):
-            self.logger.debug(f"Using fallback session: {fallback}")
-            return fallback
-        else:
-            # Wait for preferred session (blocking)
-            if self.sessions[preferred]:
-                self.session_locks[preferred].acquire()
-                self.logger.debug(
-                    f"Waiting for preferred session: {preferred}")
-                return preferred
-            else:
-                # Last resort: wait for fallback
-                self.session_locks[fallback].acquire()
-                self.logger.debug(f"Waiting for fallback session: {fallback}")
-                return fallback
+        # Remove duplicates and only keep available sessions
+        try_order = [s for i, s in enumerate(try_order)
+                     if s in self.sessions and self.sessions[s] is not None and s not in try_order[:i]]
+
+        # Fast path: non-blocking attempt in priority order
+        for session_type in try_order:
+            if self.session_locks[session_type].acquire(blocking=False):
+                self.logger.debug(f"Using {session_type} session (immediate)")
+                return session_type
+
+        # Controlled wait with short timeouts to avoid long stalls
+        import time
+        start_wait = time.time()
+        time_budgets = {
+            'ane': 2.0,
+            'gpu': 2.0,
+            'mps': 1.5,
+            'cpu': 0.75,
+        }
+
+        for session_type in try_order:
+            budget = time_budgets.get(session_type, 1.0)
+            deadline = time.time() + budget
+            while time.time() < deadline:
+                if self.session_locks[session_type].acquire(blocking=False):
+                    self.logger.debug(f"Acquired {session_type} session after waiting")
+                    return session_type
+                time.sleep(0.02)
+
+        total_wait = time.time() - start_wait
+        self.logger.error(
+            f"All sessions busy - waited {total_wait:.2f}s (order: {try_order})")
+        raise RuntimeError(f"All sessions are busy - timeout after {total_wait:.2f}s")
 
     def process_segment_concurrent(self, text: str, voice: str, speed: float = 1.0, lang: str = "en-us"):
         """
@@ -859,6 +960,7 @@ class DualSessionManager:
         with self.segment_semaphore:
             # Get optimal session
             session_type = self.get_optimal_session(complexity)
+            session_lock = self.session_locks[session_type]
 
             try:
                 # Update utilization statistics
@@ -867,6 +969,8 @@ class DualSessionManager:
                     self.utilization.ane_requests += 1
                 elif session_type == 'gpu':
                     self.utilization.gpu_requests += 1
+                elif session_type == 'mps':
+                    self.utilization.mps_requests += 1
                 else:
                     self.utilization.cpu_requests += 1
 
@@ -883,14 +987,17 @@ class DualSessionManager:
                     if isinstance(result, tuple):
                         if len(result) >= 2:
                             samples = result[0]  # First element is always samples
+                            sample_rate = result[1]  # Second element is sample rate
                         else:
                             samples = result[0]  # Single element tuple
+                            sample_rate = 24000  # Default sample rate
                     else:
                         samples = result  # Direct return
+                        sample_rate = 24000  # Default sample rate
 
                     self.logger.debug(
                         f"Successfully processed segment with {session_type} routing")
-                    return samples
+                    return samples, sample_rate
                 else:
                     # Fall back to single model processing if global model not available
                     self.logger.warning(f"Global model not available for {session_type} routing, falling back to single model")
@@ -900,6 +1007,14 @@ class DualSessionManager:
                 self.logger.error(
                     f"Error processing segment with {session_type} routing: {e}")
                 raise
+            finally:
+                # Always release the session lock
+                try:
+                    if session_lock.locked():
+                        session_lock.release()
+                        self.logger.debug(f"Released session lock for {session_type}")
+                except Exception as lock_error:
+                    self.logger.warning(f"Error releasing session lock for {session_type}: {lock_error}")
 
     def get_utilization_stats(self) -> Dict[str, Any]:
         """Get current session utilization statistics."""
@@ -907,9 +1022,11 @@ class DualSessionManager:
             'total_requests': self.utilization.total_requests,
             'ane_requests': self.utilization.ane_requests,
             'gpu_requests': self.utilization.gpu_requests,
+            'mps_requests': self.utilization.mps_requests,
             'cpu_requests': self.utilization.cpu_requests,
             'ane_percentage': self.utilization.get_ane_percentage(),
             'gpu_percentage': self.utilization.get_gpu_percentage(),
+            'mps_percentage': self.utilization.get_mps_percentage(),
             'cpu_percentage': self.utilization.get_cpu_percentage(),
             'concurrent_segments_active': self.max_concurrent_segments - self.segment_semaphore._value,
             'max_concurrent_segments': self.max_concurrent_segments,
@@ -924,6 +1041,15 @@ class DualSessionManager:
         """Cleanup all sessions and release resources."""
         self.logger.info("Cleaning up dual session manager")
 
+        # Release all session locks first
+        for session_type, lock in self.session_locks.items():
+            try:
+                if lock.locked():
+                    lock.release()
+                    self.logger.debug(f"Released session lock for {session_type}")
+            except Exception as lock_error:
+                self.logger.warning(f"Error releasing session lock for {session_type}: {lock_error}")
+
         # Clear all sessions
         for session_type in self.sessions:
             if self.sessions[session_type]:
@@ -933,6 +1059,7 @@ class DualSessionManager:
         self.utilization = SessionUtilization()
 
         # Force garbage collection
+        import gc
         gc.collect()
 
         self.logger.info("Session cleanup completed")
@@ -1911,6 +2038,27 @@ def configure_coreml_providers(capabilities: Optional[Dict[str, Any]] = None):
         logger.info(
             "✅ CoreML provider configured with Apple Silicon optimizations")
 
+    # Configure MPS provider if enabled and available
+    if (TTSConfig.MPS_PROVIDER_ENABLED and
+        "MPSExecutionProvider" in ort.get_available_providers() and
+        validate_provider('MPSExecutionProvider')):
+
+        logger.info("Configuring MPS provider for Metal GPU acceleration...")
+
+        # MPS provider options for optimal performance
+        mps_options = {
+            'device_type': 'gpu',  # Use GPU for Metal acceleration
+            'precision': 'fp16',   # Use half precision for better performance
+            'memory_pool': 'shared',  # Use shared memory pool
+            'enable_mem_pattern': '1',  # Enable memory pattern optimization
+        }
+
+        # Add MPS provider with configured priority
+        providers.insert(TTSConfig.MPS_PROVIDER_PRIORITY, ('MPSExecutionProvider', mps_options))
+        provider_options.insert(TTSConfig.MPS_PROVIDER_PRIORITY, mps_options)
+
+        logger.info("✅ MPS provider configured for Metal GPU acceleration")
+
     # Always include CPU provider as fallback
     if validate_provider('CPUExecutionProvider'):
         logger.info("Configuring CPU provider as fallback...")
@@ -1987,12 +2135,17 @@ def benchmark_providers():
         
         if "CoreMLExecutionProvider" in available_providers and capabilities["is_apple_silicon"]:
             providers_to_test.append("CoreMLExecutionProvider")
+        if "MPSExecutionProvider" in available_providers and TTSConfig.MPS_PROVIDER_BENCHMARK:
+            providers_to_test.append("MPSExecutionProvider")
         if "CPUExecutionProvider" in available_providers:
             providers_to_test.append("CPUExecutionProvider")
         
+        # Initialize default values
+        optimal_provider = "CPUExecutionProvider"
+        benchmark_results = {}
+        
         if not providers_to_test:
-            optimal_provider = "CPUExecutionProvider"
-            benchmark_results = {}
+            logger.warning("No providers to test, using CPUExecutionProvider as default")
         else:
             # Run benchmarks
             benchmark_results = {}
@@ -2066,15 +2219,18 @@ def benchmark_providers():
                     optimal_provider = fastest_provider
                     logger.info(f"Using fastest provider: {optimal_provider}")
             else:
+                logger.warning("No successful benchmarks, using CPUExecutionProvider as default")
                 optimal_provider = "CPUExecutionProvider"
-                benchmark_results = {}
         
         # Save results
-        save_json_cache_atomic(cache_name, {
-            "provider": optimal_provider,
-            "bench_results": benchmark_results,
-            "timestamp": time.time()
-        })
+        try:
+            save_json_cache_atomic(cache_name, {
+                "provider": optimal_provider,
+                "bench_results": benchmark_results,
+                "timestamp": time.time()
+            })
+        except Exception as e:
+            logger.warning(f"Failed to save benchmark results: {e}")
         
         return optimal_provider, benchmark_results
         
