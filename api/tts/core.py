@@ -444,7 +444,8 @@ def _generate_audio_segment(
             samples, provider = cached_result
             logger.debug(f"[{idx}] Using cached audio for: {processed_text[:50]}...")
             # Update cache hit statistics
-            update_performance_stats(0.001, provider)  # Minimal time for cache hit
+            from api.performance.stats import update_inference_stats
+            update_inference_stats(0.001, provider)  # Minimal time for cache hit
             cache_info = f"{provider} (cached)"
             if preprocessing_info:
                 cache_info += f" [{preprocessing_info}]"
@@ -489,7 +490,8 @@ def _generate_audio_segment(
                         else "ANE"
                     )
 
-                update_performance_stats(
+                from api.performance.stats import update_inference_stats
+                update_inference_stats(
                     inference_time, f"DualSession-{likely_session}"
                 )
 
@@ -543,7 +545,8 @@ def _generate_audio_segment(
             samples = result  # Direct return
 
         inference_time = time.perf_counter() - start_time
-        update_performance_stats(inference_time, provider)
+        from api.performance.stats import update_inference_stats
+        update_inference_stats(inference_time, provider)
 
         if samples is not None and samples.size > 0:
             # Cache the successful result
@@ -654,7 +657,8 @@ def _fast_generate_audio_segment(
             samples = result  # Direct return
 
         inference_time = time.perf_counter() - start_time
-        update_performance_stats(inference_time, f"{provider}-Fast")
+        from api.performance.stats import update_inference_stats
+        update_inference_stats(inference_time, f"{provider}-Fast")
 
         if samples is not None and samples.size > 0:
             # Cache the result
@@ -940,18 +944,13 @@ async def stream_tts_audio(
 
                 # Wait for segment to complete
                 if dual_session_manager and i not in fast_indices:
-                    # Dual session manager returns audio data directly
+                    # Dual session manager returns (samples, sample_rate)
                     audio_data = await task
-                    # audio_data is already a numpy array from dual session manager
-                    audio_np = audio_data
-                    provider = (
-                        "DualSession-"
-                        + dual_session_manager.get_optimal_session(
-                            dual_session_manager.calculate_segment_complexity(
-                                segments[i]
-                            )
-                        ).upper()
-                    )
+                    if isinstance(audio_data, tuple):
+                        audio_np = audio_data[0]
+                    else:
+                        audio_np = audio_data
+                    provider = "DualSession"
                 else:
                     # Standard processing returns (idx, audio_np, provider)
                     idx, audio_np, provider = await task
@@ -976,9 +975,32 @@ async def stream_tts_audio(
 
             audio_np, provider = completed_segments[i]
 
-            if audio_np is not None and audio_np.size > 0:
-                # Convert audio to bytes immediately
-                scaled_audio = np.int16(audio_np * 32767)
+            # If the segment is None, it means the segment failed to generate audio.
+            # Check the tuple for any other information that might be useful.
+            if audio_np is None:
+                logger.error(f"[{request_id}] Segment {i} failed to generate audio")
+                continue
+            else:
+                # Normalize and convert audio to bytes immediately
+                try:
+                    audio_np = np.asarray(audio_np)
+                    if audio_np.dtype == object:
+                        # Concatenate nested arrays/lists if present
+                        audio_np = np.concatenate([
+                            np.asarray(x, dtype=np.float32).reshape(-1)
+                            for x in audio_np
+                        ])
+                    else:
+                        audio_np = audio_np.astype(np.float32, copy=False)
+                    if audio_np.ndim > 1:
+                        audio_np = audio_np.reshape(-1)
+                    # Guard against NaN/Inf
+                    audio_np = np.nan_to_num(audio_np, nan=0.0, posinf=1.0, neginf=-1.0)
+                except Exception as norm_err:
+                    logger.warning(f"[{request_id}] Audio normalization failed: {norm_err}")
+                    audio_np = np.asarray(audio_np, dtype=np.float32).reshape(-1)
+
+                scaled_audio = np.clip(audio_np * 32767.0, -32768, 32767).astype(np.int16)
                 segment_bytes = scaled_audio.tobytes()
 
                 # If this was the primer segment, put into micro-cache
@@ -1027,13 +1049,13 @@ async def stream_tts_audio(
                             f"[{request_id}] First chunk yielded in {ttfa_ms:.2f}ms"
                         )
 
-                        if ttfa_ms < chunk_timing_state["phase1_ttfa_target_ms"]:
+                        if ttfa_ms < chunk_timing_state["ttfa_target_ms"]:
                             logger.info(
-                                f"[{request_id}] ✅ PHASE 1 TARGET ACHIEVED: TTFA < {chunk_timing_state['phase1_ttfa_target_ms']}ms"
+                                f"[{request_id}] ✅ TARGET ACHIEVED: TTFA < {chunk_timing_state['ttfa_target_ms']}ms"
                             )
                         else:
                             logger.warning(
-                                f"[{request_id}] ⚠️ PHASE 1 TARGET MISSED: TTFA {ttfa_ms:.2f}ms > {chunk_timing_state['phase1_ttfa_target_ms']}ms"
+                                f"[{request_id}] ⚠️ TARGET MISSED: TTFA {ttfa_ms:.2f}ms > {chunk_timing_state['ttfa_target_ms']}ms"
                             )
 
                     # Calculate actual audio duration represented by this chunk
@@ -1072,12 +1094,7 @@ async def stream_tts_audio(
                 # Clear the numpy array to free memory immediately
                 del audio_np, scaled_audio
 
-            else:
-                logger.warning(
-                    f"[{request_id}] Segment {i} ('{segments[i][:30]}...') produced no audio and will be skipped."
-                )
-
-        # PHASE 1 OPTIMIZATION: Final streaming statistics
+        # Final streaming statistics
         total_time = time.perf_counter() - start_time
         total_stream_time = time.monotonic() - chunk_timing_state["stream_start_time"]
 
@@ -1102,12 +1119,42 @@ async def stream_tts_audio(
             ) * 1000
             logger.info(f"[{request_id}]   • TTFA: {ttfa_ms:.2f}ms")
 
-            if ttfa_ms < chunk_timing_state["phase1_ttfa_target_ms"]:
+            if ttfa_ms < chunk_timing_state["ttfa_target_ms"]:
                 logger.info(f"[{request_id}] ✅ TTFA target achieved")
             else:
                 logger.warning(
-                    f"[{request_id}] ⚠️ PHASE 1 NEEDS IMPROVEMENT: TTFA target not met"
+                    f"[{request_id}] ⚠️ OPTIMAL TIMING NEEDS IMPROVEMENT: TTFA target not met"
                 )
+
+        # Update endpoint-level performance metrics
+        try:
+            from api.performance.stats import update_endpoint_performance_stats
+
+            # Compute RTF and streaming efficiency
+            audio_duration_sec = chunk_timing_state["total_audio_duration_ms"] / 1000.0
+            rtf = (total_time / audio_duration_sec) if audio_duration_sec > 0 else 0.0
+            efficiency = (
+                audio_duration_sec / total_stream_time if total_stream_time > 0 else 0.0
+            )
+
+            compliant = (
+                (ttfa_ms if chunk_timing_state["first_chunk_time"] else 1e9)
+                < chunk_timing_state["ttfa_target_ms"]
+                and rtf < 1.0
+                and efficiency >= chunk_timing_state["efficiency_target"]
+            )
+
+            update_endpoint_performance_stats(
+                endpoint="stream_tts_audio",
+                processing_time=total_time,
+                success=True,
+                ttfa_ms=float(ttfa_ms) if chunk_timing_state["first_chunk_time"] else 0.0,
+                rtf=float(rtf),
+                streaming_efficiency=float(efficiency),
+                compliant=bool(compliant),
+            )
+        except Exception as metrics_err:
+            logger.debug(f"[{request_id}] Endpoint metrics update failed: {metrics_err}")
 
     except Exception as e:
         logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)

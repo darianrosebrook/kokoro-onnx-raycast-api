@@ -13,7 +13,7 @@ The performance monitoring system consists of several key components:
    - Automatic calculation of rolling averages and performance metrics
    - Provider-specific performance comparisons (CoreML vs CPU)
 
-2. **Session Utilization Monitoring** (Phase 3):
+2. **Session Utilization Monitoring** 
    - Tracking of dual session manager performance and utilization
    - ANE vs GPU session routing optimization
    - Concurrent processing efficiency metrics
@@ -46,7 +46,7 @@ The performance monitoring system consists of several key components:
 - **coreml_context_warnings**: Count of CoreML context leak warnings
 - **memory_cleanup_count**: Number of memory cleanup operations performed
 
-### Phase 3 Session Utilization Metrics:
+### Session Utilization Metrics:
 - **dual_session_requests**: Total requests processed by dual session manager
 - **ane_utilization**: Neural Engine session utilization percentage
 - **gpu_utilization**: GPU session utilization percentage
@@ -123,18 +123,18 @@ coreml_performance_stats = {
     'coreml_context_warnings': 0,    # Count of CoreML context leak warnings
     'memory_cleanup_count': 0,       # Number of memory cleanup operations performed
     
-    # PHASE 1 OPTIMIZATION: Phase 1 performance metrics
-    'phase1_total_requests': 0,      # Total requests processed in Phase 1
-    'phase1_success_count': 0,       # Number of requests meeting Phase 1 targets
-    'phase1_ttfa_average': 0.0,      # Average Time to First Audio (ms)
-    'phase1_rtf_average': 0.0,       # Average Real-Time Factor
-    'phase1_efficiency_average': 0.0, # Average streaming efficiency
-    'phase1_success_rate': 0.0,      # Percentage of requests meeting all Phase 1 targets
-    'phase1_ttfa_target': 800,       # TTFA target in milliseconds
-    'phase1_rtf_target': 1.0,        # RTF target (must be < 1.0)
-    'phase1_efficiency_target': 0.90, # Streaming efficiency target (must be > 90%)
+    #  performance metrics
+    'total_requests': 0,      # Total requests processed in
+    'success_count': 0,       # Number of requests meeting targets
+    'ttfa_average': 0.0,      # Average Time to First Audio (ms)
+    'rtf_average': 0.0,       # Average Real-Time Factor
+    'efficiency_average': 0.0, # Average streaming efficiency
+    'success_rate': 0.0,      # Percentage of requests meeting all targets
+    'ttfa_target': 800,       # TTFA target in milliseconds
+    'rtf_target': 1.0,        # RTF target (must be < 1.0)
+    'efficiency_target': 0.90, # Streaming efficiency target (must be > 90%)
 
-    # PHASE 1 TTFA OPTIMIZATION: Fast-path processing metrics
+    # TTFA OPTIMIZATION: Fast-path processing metrics
     'fast_path_requests': 0,         # Number of requests using fast-path processing
     'fast_path_ttfa_average': 0.0,   # Average TTFA for fast-path requests (ms)
     'fast_path_success_rate': 0.0,   # Percentage of fast-path requests meeting TTFA target
@@ -161,7 +161,7 @@ _phonemizer_stats = {
 }
 
 
-def update_performance_stats(inference_time: float, provider_used: str):
+def update_inference_stats(inference_time: float, provider_used: str, **kwargs):
     """
     Update performance statistics with new inference data.
     
@@ -178,13 +178,15 @@ def update_performance_stats(inference_time: float, provider_used: str):
     Args:
         inference_time (float): Time taken for the inference operation (seconds)
         provider_used (str): Name of the ONNX provider used for inference
-                            (e.g., 'CoreMLExecutionProvider', 'CPUExecutionProvider')
+                             (e.g., 'CoreMLExecutionProvider', 'CPUExecutionProvider')
+        **kwargs: Optional metadata such as 'segment_count', 'cache_hit',
+                  and 'phoneme_preprocessing' for deeper analysis
     
     Examples:
-        >>> update_performance_stats(0.123, 'CoreMLExecutionProvider')
+        >>> update_inference_stats(0.123, 'CoreMLExecutionProvider')
         # Updates stats with CoreML inference time of 123ms
         
-        >>> update_performance_stats(0.456, 'CPUExecutionProvider') 
+        >>> update_inference_stats(0.456, 'CPUExecutionProvider') 
         # Updates stats with CPU inference time of 456ms
     
     Note:
@@ -221,7 +223,7 @@ def update_performance_stats(inference_time: float, provider_used: str):
             except Exception as e:
                 logger.debug(f"Could not update runtime stats in report: {e}")
         
-        # PHASE 4 OPTIMIZATION: Record performance metric for dynamic memory optimization
+        # Record performance metric for dynamic memory optimization
         try:
             from api.model.loader import get_dynamic_memory_manager
             
@@ -231,19 +233,21 @@ def update_performance_stats(inference_time: float, provider_used: str):
         except Exception as e:
             logger.debug(f"Could not record performance metric for dynamic memory optimization: {e}")
         
-        # PHASE 4 OPTIMIZATION: Record performance metric for real-time optimization
+        # Record performance metric for real-time optimization
         try:
             from api.performance.optimization import record_performance_metric
-            
+
+            metadata = {
+                "provider": provider_used,
+                "segment_count": int(kwargs.get("segment_count", 0)),
+                "cache_hit": bool(kwargs.get("cache_hit", False)),
+                "phoneme_preprocessing": kwargs.get("phoneme_preprocessing", None),
+            }
+
             record_performance_metric(
                 metric_type="inference_time",
                 value=inference_time,
-                metadata={
-                    "provider": provider,
-                    "segment_count": segments_processed,
-                    "cache_hit": cache_hit,
-                    "phoneme_preprocessing": phoneme_preprocessing_used
-                }
+                metadata=metadata,
             )
         except Exception as e:
             logger.debug(f"Could not record performance metric for real-time optimization: {e}")
@@ -449,17 +453,17 @@ def handle_coreml_context_warning():
         logger.debug(f"Error handling CoreML context warning: {e}")
 
 
-def update_phase1_performance_stats(endpoint: str, processing_time: float, success: bool = True, 
-                                   ttfa_ms: float = 0, rtf: float = 0, streaming_efficiency: float = 0, 
-                                   phase1_compliant: bool = False, **kwargs):
+def update_endpoint_performance_stats(endpoint: str, processing_time: float, success: bool = True,
+                                      ttfa_ms: float = 0, rtf: float = 0, streaming_efficiency: float = 0,
+                                      compliant: bool = False, **kwargs):
     """
-    Update Phase 1 optimization performance statistics.
+    Update optimization performance statistics.
     
-    This function tracks the key Phase 1 performance metrics including:
+    This function tracks the key performance metrics including:
     - Time to First Audio (TTFA) with <800ms target
     - Real-Time Factor (RTF) with <1.0 target  
     - Streaming Efficiency with >90% target
-    - Overall Phase 1 compliance rate
+    - Overall compliance rate
     
     Args:
         endpoint (str): The API endpoint being tracked
@@ -468,121 +472,83 @@ def update_phase1_performance_stats(endpoint: str, processing_time: float, succe
         ttfa_ms (float): Time to First Audio in milliseconds
         rtf (float): Real-Time Factor (processing_time / audio_duration)
         streaming_efficiency (float): Streaming efficiency (0.0 to 1.0)
-        phase1_compliant (bool): Whether request met all Phase 1 targets
+        compliant (bool): Whether request met all targets
         **kwargs: Additional metrics for future extensions
     
     Examples:
-        >>> update_phase1_performance_stats(
+        >>> update_endpoint_performance_stats(
         ...     endpoint="stream_tts_audio",
         ...     processing_time=0.75,
         ...     success=True,
         ...     ttfa_ms=650,
         ...     rtf=0.85,
         ...     streaming_efficiency=0.92,
-        ...     phase1_compliant=True
+        ...     compliant=True
         ... )
     """
     from api.performance.reporting import update_runtime_stats_in_report
     global coreml_performance_stats
     
     try:
-        # Update Phase 1 request counters
-        coreml_performance_stats['phase1_total_requests'] += 1
-        total_requests = coreml_performance_stats['phase1_total_requests']
+        # Update request counters
+        coreml_performance_stats['total_requests'] += 1
+        total_requests = coreml_performance_stats['total_requests']
         
-        # Track Phase 1 success rate
-        if phase1_compliant:
-            coreml_performance_stats['phase1_success_count'] += 1
+        # Track success rate
+        if compliant:
+            coreml_performance_stats['success_count'] += 1
         
-        # Calculate Phase 1 success rate
-        coreml_performance_stats['phase1_success_rate'] = (
-            coreml_performance_stats['phase1_success_count'] / total_requests
+        # Calculate success rate
+        coreml_performance_stats['success_rate'] = (
+            coreml_performance_stats['success_count'] / total_requests
         ) if total_requests > 0 else 0.0
         
-        # Update rolling averages for Phase 1 metrics
+        # Update rolling averages for metrics
         if ttfa_ms > 0:
-            current_avg = coreml_performance_stats['phase1_ttfa_average']
-            coreml_performance_stats['phase1_ttfa_average'] = (
+            current_avg = coreml_performance_stats['ttfa_average']
+            coreml_performance_stats['ttfa_average'] = (
                 (current_avg * (total_requests - 1)) + ttfa_ms
             ) / total_requests
         
         if rtf > 0:
-            current_avg = coreml_performance_stats['phase1_rtf_average']
-            coreml_performance_stats['phase1_rtf_average'] = (
+            current_avg = coreml_performance_stats['rtf_average']
+            coreml_performance_stats['rtf_average'] = (
                 (current_avg * (total_requests - 1)) + rtf
             ) / total_requests
         
         if streaming_efficiency > 0:
-            current_avg = coreml_performance_stats['phase1_efficiency_average']
-            coreml_performance_stats['phase1_efficiency_average'] = (
+            current_avg = coreml_performance_stats['efficiency_average']
+            coreml_performance_stats['efficiency_average'] = (
                 (current_avg * (total_requests - 1)) + streaming_efficiency
             ) / total_requests
         
-        # Log Phase 1 performance summary periodically
+        # Log performance summary periodically
         if total_requests % 10 == 0:
-            logger.info(f"Phase 1 Performance Summary (last {total_requests} requests):")
-            logger.info(f"  Success Rate: {coreml_performance_stats['phase1_success_rate']*100:.1f}%")
-            logger.info(f"  Avg TTFA: {coreml_performance_stats['phase1_ttfa_average']:.1f}ms (target: <{coreml_performance_stats['phase1_ttfa_target']}ms)")
-            logger.info(f"  Avg RTF: {coreml_performance_stats['phase1_rtf_average']:.3f} (target: <{coreml_performance_stats['phase1_rtf_target']})")
-            logger.info(f"  Avg Efficiency: {coreml_performance_stats['phase1_efficiency_average']*100:.1f}% (target: >{coreml_performance_stats['phase1_efficiency_target']*100:.0f}%)")
+            logger.info(f"Performance Summary (last {total_requests} requests):")
+            logger.info(f"  Success Rate: {coreml_performance_stats['success_rate']*100:.1f}%")
+            logger.info(f"  Avg TTFA: {coreml_performance_stats['ttfa_average']:.1f}ms (target: <{coreml_performance_stats['ttfa_target']}ms)")
+            logger.info(f"  Avg RTF: {coreml_performance_stats['rtf_average']:.3f} (target: <{coreml_performance_stats['rtf_target']})")
+            logger.info(f"  Avg Efficiency: {coreml_performance_stats['efficiency_average']*100:.1f}% (target: >{coreml_performance_stats['efficiency_target']*100:.0f}%)")
         
-        # Trigger periodic report updates for Phase 1 metrics
-        if total_requests % 5 == 0:  # Update more frequently for Phase 1 monitoring
+        # Trigger periodic report updates for metrics
+        if total_requests % 5 == 0:  # Update more frequently for monitoring
             try:
                 update_runtime_stats_in_report()
             except Exception as e:
                 logger.debug(f"Could not update runtime stats in report: {e}")
         
-        # Log warnings for Phase 1 target misses
-        if ttfa_ms > coreml_performance_stats['phase1_ttfa_target']:
-            logger.warning(f"TTFA target missed: {ttfa_ms:.1f}ms > {coreml_performance_stats['phase1_ttfa_target']}ms")
+        # Log warnings for target misses
+        if ttfa_ms > coreml_performance_stats['ttfa_target']:
+            logger.warning(f"TTFA target missed: {ttfa_ms:.1f}ms > {coreml_performance_stats['ttfa_target']}ms")
         
-        if rtf > coreml_performance_stats['phase1_rtf_target']:
-            logger.warning(f"RTF target missed: {rtf:.3f} > {coreml_performance_stats['phase1_rtf_target']}")
+        if rtf > coreml_performance_stats['rtf_target']:
+            logger.warning(f"RTF target missed: {rtf:.3f} > {coreml_performance_stats['rtf_target']}")
         
-        if streaming_efficiency < coreml_performance_stats['phase1_efficiency_target']:
-            logger.warning(f"Streaming efficiency target missed: {streaming_efficiency*100:.1f}% < {coreml_performance_stats['phase1_efficiency_target']*100:.0f}%")
+        if streaming_efficiency < coreml_performance_stats['efficiency_target']:
+            logger.warning(f"Streaming efficiency target missed: {streaming_efficiency*100:.1f}% < {coreml_performance_stats['efficiency_target']*100:.0f}%")
         
     except Exception as e:
-        logger.error(f"Error updating Phase 1 performance stats: {e}")
-
-
-def get_phase1_performance_stats():
-    """
-    Get comprehensive Phase 1 performance statistics including Misaki G2P metrics.
-    
-    Returns:
-        dict: Dictionary containing all Phase 1 performance metrics and Misaki G2P stats
-    """
-    global coreml_performance_stats
-    
-    # Get Misaki G2P statistics
-    misaki_stats = {"available": False, "total_requests": 0, "success_rate": 0.0, "fallback_rate": 0.0, "avg_processing_time": 0.0}
-    try:
-        from api.tts.misaki_processing import get_misaki_stats
-        misaki_stats = get_misaki_stats()
-    except ImportError:
-        pass  # Misaki not available
-    
-    return {
-        'total_requests': coreml_performance_stats['phase1_total_requests'],
-        'success_count': coreml_performance_stats['phase1_success_count'],
-        'success_rate': coreml_performance_stats['phase1_success_rate'],
-        'ttfa_average_ms': coreml_performance_stats['phase1_ttfa_average'],
-        'rtf_average': coreml_performance_stats['phase1_rtf_average'],
-        'efficiency_average': coreml_performance_stats['phase1_efficiency_average'],
-        'misaki_stats': misaki_stats,
-        'targets': {
-            'ttfa_target_ms': coreml_performance_stats['phase1_ttfa_target'],
-            'rtf_target': coreml_performance_stats['phase1_rtf_target'],
-            'efficiency_target': coreml_performance_stats['phase1_efficiency_target']
-        },
-        'compliance': {
-            'ttfa_compliant': coreml_performance_stats['phase1_ttfa_average'] < coreml_performance_stats['phase1_ttfa_target'],
-            'rtf_compliant': coreml_performance_stats['phase1_rtf_average'] < coreml_performance_stats['phase1_rtf_target'],
-            'efficiency_compliant': coreml_performance_stats['phase1_efficiency_average'] > coreml_performance_stats['phase1_efficiency_target']
-        }
-    }
+        logger.error(f"Error updating performance stats: {e}")
 
 
 def get_performance_stats():
@@ -641,7 +607,7 @@ def get_performance_stats():
             stats['coreml_usage_percent'] = 0
             stats['cpu_usage_percent'] = 0
         
-        # PHASE 3 OPTIMIZATION: Add session utilization statistics
+        #  Add session utilization statistics
         try:
             session_stats = get_session_utilization_stats()
             stats['session_utilization'] = session_stats
@@ -661,7 +627,7 @@ def get_performance_stats():
                 'error': str(e)
             }
         
-        # PHASE 4 OPTIMIZATION: Add dynamic memory optimization statistics
+        # Add dynamic memory optimization statistics
         try:
             dynamic_memory_stats = get_dynamic_memory_optimization_stats()
             stats['dynamic_memory_optimization'] = dynamic_memory_stats
@@ -701,7 +667,7 @@ def get_session_utilization_stats():
     This function provides detailed metrics about the dual session manager's
     performance, including session routing, utilization rates, and concurrent
     processing efficiency. These metrics are essential for optimizing the
-    Phase 3 multi-session concurrency implementation.
+    multi-session concurrency implementation.
     
     ## Session Utilization Metrics
     
@@ -1022,12 +988,12 @@ def get_memory_fragmentation_stats():
 
 def get_dynamic_memory_optimization_stats():
     """
-    Get comprehensive dynamic memory optimization statistics for Phase 4 monitoring.
+    Get comprehensive dynamic memory optimization statistics for monitoring.
     
     This function provides detailed insights into the dynamic memory manager's
     performance, including arena sizing optimization, workload adaptation, and
     system resource utilization. These metrics are essential for validating
-    Phase 4 advanced optimization effectiveness.
+    advanced optimization effectiveness.
     
     ## Dynamic Memory Optimization Metrics
     
@@ -1060,7 +1026,7 @@ def get_dynamic_memory_optimization_stats():
         ...     print("Memory arena optimization recommended")
     
     Note:
-        This function provides comprehensive insights into Phase 4 advanced
+        This function provides comprehensive insights into advanced
         optimization effectiveness and helps identify optimization opportunities.
     """
     try:
@@ -1163,7 +1129,7 @@ def update_fast_path_performance_stats(
     """
     Update fast-path processing performance statistics for TTFA optimization tracking.
     
-    This function tracks the performance of the PHASE 1 TTFA optimizations including:
+    This function tracks the performance of the TTFA optimizations including:
     - Fast-path text processing performance
     - Pre-initialized phonemizer backend effectiveness
     - Text processing method distribution
@@ -1201,7 +1167,7 @@ def update_fast_path_performance_stats(
             coreml_performance_stats['fast_path_ttfa_average'] = new_average
             
             # Update fast-path success rate
-            if ttfa_ms < coreml_performance_stats['phase1_ttfa_target']:
+            if ttfa_ms < coreml_performance_stats['ttfa_target']:
                 # This is a success
                 success_count = int(coreml_performance_stats['fast_path_success_rate'] * (current_count - 1))
                 success_count += 1
@@ -1216,7 +1182,7 @@ def update_fast_path_performance_stats(
         if total_fast_path > 0 and total_fast_path % 5 == 0:
             avg_ttfa = coreml_performance_stats['fast_path_ttfa_average']
             success_rate = coreml_performance_stats['fast_path_success_rate'] * 100
-            target = coreml_performance_stats['phase1_ttfa_target']
+            target = coreml_performance_stats['ttfa_target']
             
             logger.info(f"Fast-Path Performance Summary (last {total_fast_path} requests):")
             logger.info(f"  Average TTFA: {avg_ttfa:.1f}ms (target: <{target}ms)")
