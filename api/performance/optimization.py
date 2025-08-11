@@ -569,7 +569,17 @@ class RealTimeOptimizer:
         
         # Trigger optimization if needed
         if self.auto_optimization_enabled and self._should_optimize():
-            asyncio.create_task(self.optimize_system())
+            # Schedule safely whether or not an event loop is currently running
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop in this thread; run in a daemon thread
+                threading.Thread(
+                    target=lambda: asyncio.run(self.optimize_system()),
+                    daemon=True,
+                ).start()
+            else:
+                loop.create_task(self.optimize_system())
     
     def _should_optimize(self) -> bool:
         """Check if system optimization should be triggered."""

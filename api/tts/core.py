@@ -615,13 +615,25 @@ def _fast_generate_audio_segment(
             start_time = time.perf_counter()
 
             try:
-                samples = dual_session_manager.process_segment_concurrent(
+                ds_result = dual_session_manager.process_segment_concurrent(
                     processed_text, voice, speed, lang
                 )
 
                 inference_time = time.perf_counter() - start_time
 
-                if samples is not None and samples.size > 0:
+                # DualSessionManager returns (samples, sample_rate)
+                if isinstance(ds_result, tuple) and len(ds_result) >= 1:
+                    samples = ds_result[0]
+                else:
+                    samples = ds_result
+
+                if samples is not None:
+                    try:
+                        samples = np.asarray(samples)
+                    except Exception:
+                        pass
+
+                if samples is not None and getattr(samples, "size", 0) > 0:
                     # Cache the successful result
                     _cache_inference_result(cache_key, samples, "DualSession-Fast")
 
