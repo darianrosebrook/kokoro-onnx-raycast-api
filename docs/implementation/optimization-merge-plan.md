@@ -16,10 +16,19 @@ Unify work between `feature/audio-daemon-integration` and `optimization-implemen
 - **COMPLETED**: Added MPS utilization tracking and statistics
 
 ## Next Steps
-1. **Test MPS Integration**: Verify MPS provider works correctly on Apple Silicon systems
-2. **Performance Validation**: Run benchmarks to ensure MPS provider performance improvements
-3. **Documentation**: Update API documentation to reflect new MPS provider options
-4. **Integration Testing**: Test full pipeline with MPS provider enabled
+
+### Completed in this merge window
+- [x] Test MPS Integration: Verified provider wiring and selection on Apple Silicon via quick benchmark; CoreML optimal; MPS path available
+- [x] Performance Validation: Quick benchmark executed (`scripts/run_benchmark.py --quick`), report saved, provider cache populated
+- [x] Integration Testing: Streaming endpoint returns immediate WAV header; endpoint-level TTFA/RTF/efficiency recorded per request
+- [x] Metrics Plumbing: Resolved duplicate metrics function names; added `update_endpoint_performance_stats` to `api/tts/core.py`
+
+### Remaining follow-ups
+- [ ] Long-run soak: 30–60 min streaming soak test to observe TTFA stability and memory trends
+- [ ] Benchmark variance: Run comprehensive benchmark suite across scenarios; persist reports under `reports/`
+- [ ] Documentation: Add a short API section noting MPS flags in endpoint docs and `README.md`
+- [ ] Quantization validation: Compare baseline vs INT8 using `scripts/quantize_model.py --benchmark --compare`
+- [ ] Provider cache policy: Tighten cache invalidation windows for hardware changes; add manual reset endpoint
 
 ## Configuration
 New environment variables for MPS provider:

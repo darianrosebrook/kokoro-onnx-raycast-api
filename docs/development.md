@@ -23,7 +23,7 @@ python scripts/quick_benchmark.py
 
 ### 2. ORT (ONNX Runtime) Optimization
 
-For details on ORT Optimization, see [ORT_OPTIMIZATION_GUIDE.md](./ORT_OPTIMIZATION_GUIDE.md).
+For details on ORT Optimization, see [ORT-optimization-guide.md](./ORT-optimization-guide.md).
 
 ### 3. Benchmark Frequency Configuration
 
@@ -60,14 +60,12 @@ For details on Performance Monitoring, see [benchmarking.md](./benchmarking.md).
 If optimization isn't working as expected:
 
 ```bash
-# Check if ORT optimization is enabled
-python scripts/convert_to_ort.py --validate .cache/ort/kokoro-v1.0.int8.ort
+#!/usr/bin/env bash
+# Compare provider performance and validate optimization
+python scripts/run_benchmark.py --verbose
 
-# Compare ORT vs ONNX performance
-python scripts/convert_to_ort.py kokoro-v1.0.int8.onnx --benchmark --compare-original
-
-# Diagnose CoreML issues
-python scripts/troubleshoot_coreml.py
+# Validate CoreML provider behavior and patch status via status endpoint
+curl -s http://localhost:8000/status | jq '{provider: .performance.provider_used, patch_status: .patch_status}'
 
 # Check environment setup
 python scripts/check_environment.py
@@ -85,8 +83,8 @@ Before deploying to production, ensure these optimizations are in place:
 # ✅ Environment diagnostics pass
 python scripts/check_environment.py
 
-# ✅ ORT optimization enabled (Apple Silicon)
-ls -la .cache/ort/kokoro-v1.0.int8.ort
+# ✅ ORT optimization configured (Apple Silicon)
+echo ${KOKORO_ORT_OPTIMIZATION:-auto}
 
 # ✅ Benchmark frequency configured
 python scripts/configure_benchmark_frequency.py --show-current
@@ -95,7 +93,7 @@ python scripts/configure_benchmark_frequency.py --show-current
 python scripts/manage_benchmark_cache.py --status
 
 # ✅ Performance benchmark passes
-python run_benchmark.py --quick
+python scripts/run_benchmark.py --quick
 
 # ✅ System validation complete
 python scripts/troubleshoot_coreml.py
@@ -117,7 +115,7 @@ export KOKORO_DEVELOPMENT_MODE=true
 curl -s http://localhost:8000/status | jq '.performance'
 
 # 4. Test optimizations before production
-python run_benchmark.py --verbose
+python scripts/run_benchmark.py --verbose
 
 # 5. Production deployment with full optimizations
 export KOKORO_DEVELOPMENT_MODE=false

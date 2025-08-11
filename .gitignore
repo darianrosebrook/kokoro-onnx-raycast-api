@@ -66,6 +66,7 @@ Thumbs.db
 # Model and voice files
 *.onnx
 *.bin
+*.pth
 
 # Local cache
 .cache/
@@ -79,4 +80,4 @@ Thumbs.db
 
 # Backup files from emoji cleanup script
 *.backup
-kokoro-v1_0.pth
+

@@ -25,7 +25,7 @@ export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com
 
 ## Environment Variables by Category
 
-### 🚀 **Performance & Optimization**
+### Performance & Optimization
 
 #### `KOKORO_ORT_OPTIMIZATION`
 - **Purpose**: Controls ONNX Runtime optimization level
@@ -55,7 +55,7 @@ export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com
 - **Production**: `false` (use optimization)
 - **Example**: `export KOKORO_DISABLE_MEM_PATTERN=false`
 
-### 🍎 **Apple Silicon (CoreML) Optimization**
+### Apple Silicon (CoreML) Optimization
 
 #### `KOKORO_COREML_MODEL_FORMAT`
 - **Purpose**: CoreML model format for Apple Silicon
@@ -78,7 +78,7 @@ export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com
 - **Production**: `FastPrediction` (optimal for TTS)
 - **Example**: `export KOKORO_COREML_SPECIALIZATION=FastPrediction`
 
-### 📊 **Benchmarking & Monitoring**
+### Benchmarking & Monitoring
 
 #### `KOKORO_BENCHMARK_FREQUENCY`
 - **Purpose**: Controls automatic benchmark frequency
@@ -101,7 +101,7 @@ export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com
 - **Production**: `10.0` (stable performance)
 - **Example**: `export KOKORO_MIN_IMPROVEMENT_PERCENT=10.0`
 
-### 🔧 **Development Experience**
+### Development Experience
 
 #### `KOKORO_DEVELOPMENT_MODE`
 - **Purpose**: Enable development-specific optimizations
@@ -117,7 +117,7 @@ export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com
 - **Production**: `false` (complete initialization)
 - **Example**: `export KOKORO_FAST_STARTUP=true`
 
-### 🗣️ **Text Processing (Misaki G2P)**
+### Text Processing (Misaki G2P)
 
 #### `KOKORO_MISAKI_ENABLED`
 - **Purpose**: Enable/disable Misaki G2P phonemization
@@ -147,7 +147,7 @@ export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com
 - **Production**: `0.9` (higher quality)
 - **Example**: `export KOKORO_MISAKI_QUALITY_THRESHOLD=0.9`
 
-### 🔒 **Security & Production**
+### Security & Production
 
 #### `KOKORO_PRODUCTION`
 - **Purpose**: Enable production mode optimizations
@@ -163,7 +163,7 @@ export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com
 - **Production**: Specific domains only
 - **Example**: `export KOKORO_ALLOWED_HOSTS=yourdomain.com,api.yourdomain.com`
 
-### 📁 **File Paths & Cache**
+### File Paths & Cache
 
 #### `KOKORO_ORT_MODEL_PATH`
 - **Purpose**: Path to optimized ONNX Runtime model

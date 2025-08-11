@@ -18,7 +18,7 @@ Based on the optimization conversation document and codebase analysis, several k
 - **Performance Metrics Collection**: Core infrastructure implemented
 - **Streaming TTS Endpoint**: Basic streaming with TTFA optimization implemented
 
-### 🔄 Areas Needing Investigation/Implementation
+### Areas Needing Investigation/Implementation
 
 #### 1. Streaming Endpoint Optimization
 **Status:** Partially implemented, needs validation and testing
@@ -130,17 +130,17 @@ Based on the optimization conversation document and codebase analysis, several k
 
 ## Implementation Priority
 
-### High Priority (Week 1)
+### High Priority 
 1. **Streaming Endpoint Testing** - Critical for user experience
 2. **Performance Metrics Validation** - Essential for monitoring
 3. **Provider Strategy Testing** - Core functionality validation
 
-### Medium Priority (Week 2)
+### Medium Priority 
 4. **Quantization Testing** - Performance optimization
 5. **Memory Management Testing** - System stability
 6. **Scheduled Benchmarking** - Long-term monitoring
 
-### Low Priority (Week 3)
+### Low Priority 
 7. **Advanced Optimizations** - Fine-tuning and edge cases
 8. **Documentation Updates** - Implementation documentation
 9. **Performance Tuning** - Optimization based on testing results

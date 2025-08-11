@@ -8,7 +8,7 @@ Operationalize the comprehensive optimization plan across streaming, text proces
 
 ## Phase Summary
 
-- Phase 1 – TTFA and streaming pipeline
+-  – TTFA and streaming pipeline
   - Status: Mostly complete
   - Highlights:
     - Streaming endpoint with immediate WAV header + 50ms silence primer
@@ -20,7 +20,7 @@ Operationalize the comprehensive optimization plan across streaming, text proces
     - Segmentation tuned for fewer segments (better TTFA)
       - Code: `api/tts/text_processing.py` → `segment_text`
 
-- Phase 2 – Text preprocessing and Misaki G2P
+-  – Text preprocessing and Misaki G2P
   - Status: Implemented with fallbacks
   - Highlights:
     - Misaki G2P integration with fallback to phonemizer, stats, and caching
@@ -30,7 +30,7 @@ Operationalize the comprehensive optimization plan across streaming, text proces
     - Padded phoneme strategy for CoreML shape stability (opt-in via preprocessing path)
       - Code: `api/tts/text_processing.py` → `pad_phoneme_sequence`, `preprocess_text_for_inference`
 
-- Phase 3 – Concurrency and sessions
+-  – Concurrency and sessions
   - Status: Dual session manager implemented; hooked in core path
   - Highlights:
     - Dual ANE/GPU session manager and utilization stats
@@ -38,7 +38,7 @@ Operationalize the comprehensive optimization plan across streaming, text proces
     - Core path aware of dual session manager for concurrent segment processing
       - Code: `api/tts/core.py` → `_generate_audio_segment`, `_fast_generate_audio_segment`
 
-- Phase 4 – Dynamic memory, pipeline warming, real-time optimization
+-  – Dynamic memory, pipeline warming, real-time optimization
   - Status: Framework present; warming wired at startup; dynamic memory manager present in loader; optimizer module ready
   - Highlights:
     - Pipeline warm-up on startup
@@ -49,6 +49,21 @@ Operationalize the comprehensive optimization plan across streaming, text proces
       - Code: `api/warnings.py`, `api/performance/stats.py`
 
 ## Current Metrics & Notes
+
+### Latest validation (2025-08-10)
+- **Streaming endpoint**: Immediate WAV header observed; metrics recorded per request
+- **Perf metrics run** (`scripts/test_performance_metrics.py`):
+  - Overall: 19/19 success; TTFA target met 84.2%; real-time achieved 84.2%
+  - Provider-labeled runs: TTFA avg — CPU 6.8ms, CoreML 7.1ms, MPS 9.1ms; RTF ~0.01
+  - Long-text initial TTFA exceeded target (cold/segmentation path); follow-up provider runs met targets
+- **Quick provider benchmark**: CoreML optimal; provider strategy cached
+- **Scheduled benchmarking**: Active; last run persisted to `reports/benchmarks/latest_benchmark_results.json`
+
+Action items from this run:
+- [ ] Run 30–60 min streaming soak; verify TTFA stability and memory trend
+- [ ] Re-test long-text TTFA after warm-up; consider primer ratio/segment sizing tuning if still high
+- [ ] Add `/metrics` readout (wraps `get_performance_stats`) for dashboards
+- [ ] Quantization compare: baseline vs INT8 with `--benchmark --compare`; record in `docs/implementation/benchmark-results-summary.md`
 
 ### ✅ **MAJOR BREAKTHROUGH ACHIEVED** - August 8, 2025
 
@@ -137,7 +152,7 @@ Operationalize the comprehensive optimization plan across streaming, text proces
 - [x] Cold-start warm-up timing fixed (delayed warm-up with proper model readiness check)
 - [x] Scheduled benchmark scheduler startup fixed (moved to lifespan context manager)
 - [x] Fixed deprecation warnings (startup events modernized)
-- [x] Phase 3 concurrency validation completed (dual session manager working)
+- [x]  concurrency validation completed (dual session manager working)
 - [x] Primer micro-cache issue resolved (voice name correction: "alloy" → "af_alloy")
 - [x] **NEW**: Critical concurrent processing deadlocks identified and partially fixed
 - [x] **NEW**: Phonemizer language support issues identified
@@ -147,7 +162,7 @@ Operationalize the comprehensive optimization plan across streaming, text proces
 - [x] Fix cold-start warm-up timing (delayed warm-up with proper model readiness check)
 - [x] Fix scheduled benchmark scheduler startup (moved to lifespan context manager)
 - [x] Fix deprecation warnings (modernized startup events)
-- [x] Phase 3 concurrency validation completed
+- [x]  concurrency validation completed
 - [x] Document environment toggles for dev vs prod (comprehensive guide created)
 - [x] Fix primer micro-cache population (voice name correction resolved)
 - [x] **NEW**: Fix critical indentation and syntax errors in concurrent processing
@@ -158,24 +173,24 @@ Operationalize the comprehensive optimization plan across streaming, text proces
 - [ ] **NEW**: Fix phonemizer language support (`en` → `en-us`)
 - [ ] **NEW**: Investigate audio corruption in final chunks
 - [ ] **NEW**: Test optimization pipeline with actual model
-- [ ] **NEW**: Implement Phase 7: Pipeline engineering (3-stage, QoS, ring buffers)
-- [ ] **NEW**: Implement Phase 8: Streaming robustness (sequence tagging, adaptive buffers)
+- [ ] **NEW**: Implement : Pipeline engineering (3-stage, QoS, ring buffers)
+- [ ] **NEW**: Implement : Streaming robustness (sequence tagging, adaptive buffers)
 
 ## Open Items (Next Up)
 
 - [x] Cold-start warm-up: add explicit short inference at startup to reduce first request TTFB further and record timing in `/status`.
 - [x] Expose primer micro-cache telemetry in `/status` (hits, size, ttl) for visibility.
 - [x] Add periodic benchmark job respecting `TTSConfig.BENCHMARK_FREQUENCY`; persist last-run timestamp and result file.
-- [x] Validate Phase 3 concurrency under load; surface concurrent efficiency and load balancing via `/status` if not already present.
+- [x] Validate  concurrency under load; surface concurrent efficiency and load balancing via `/status` if not already present.
 - [x] Document env toggles for dev vs prod (e.g., `KOKORO_SKIP_BENCHMARKING`, `KOKORO_DEVELOPMENT_MODE`) in README.
 - [x] **NEW**: Fix primer micro-cache population issue (UnboundLocalError resolved)
 - [x] **NEW**: Comprehensive gap analysis completed - see `optimization-gap-analysis.md`
-- [x] **NEW**: Implement Phase 5: Advanced quantization (per-channel INT8, hybrid FP16) - scripts created
-- [x] **NEW**: Implement Phase 6: ONNX graph optimizations (fusion, static shapes) - scripts created
+- [x] **NEW**: Implement : Advanced quantization (per-channel INT8, hybrid FP16) - scripts created
+- [x] **NEW**: Implement : ONNX graph optimizations (fusion, static shapes) - scripts created
 - [x] **NEW**: Create comprehensive optimization pipeline - scripts created
 - [ ] **NEW**: Test optimization pipeline with actual model
-- [ ] **NEW**: Implement Phase 7: Pipeline engineering (3-stage, QoS, ring buffers)
-- [ ] **NEW**: Implement Phase 8: Streaming robustness (sequence tagging, adaptive buffers)
+- [ ] **NEW**: Implement : Pipeline engineering (3-stage, QoS, ring buffers)
+- [ ] **NEW**: Implement : Streaming robustness (sequence tagging, adaptive buffers)
 
 ## Quick Verification Checklist
 

@@ -1,3 +1,7 @@
+> Historical Transcript – Optimization Chat (Archived)
+> Status: Archived for reference; content preserved verbatim. Some guidance may be superseded by current implementation docs under `docs/implementation/`.
+> Author: @darianrosebrook
+
 Skip to content
 Chat history
 

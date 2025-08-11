@@ -6,18 +6,18 @@ The Kokoro-ONNX TTS API now includes comprehensive security middleware to protec
 
 ## Security Features
 
-### 🔒 IP-Based Protection
+### IP-Based Protection
 - **Localhost-only access**: Server now binds to `127.0.0.1` instead of `0.0.0.0`
 - **IP blacklisting**: Known malicious IPs are automatically blocked
 - **Rate limiting**: Prevents abuse with configurable limits (60 requests/minute, 1000/hour)
 - **Automatic blocking**: Suspicious IPs are temporarily blocked for 60 minutes
 
-### 🛡️ Request Pattern Filtering
+### Request Pattern Filtering
 - **Malicious path detection**: Blocks common pentesting paths like `/admin`, `/cgi-bin/`, etc.
 - **Attack pattern recognition**: Detects SQL injection, XSS, and file inclusion attempts
 - **Tool detection**: Identifies requests from common pentesting tools (nmap, nikto, etc.)
 
-### 📊 Monitoring & Management
+### Monitoring & Management
 - **Security statistics**: Track blocked requests and suspicious IPs
 - **Real-time monitoring**: View security status via `/security-status` endpoint
 - **Management script**: Use `scripts/manage_security.py` for monitoring

@@ -1,8 +1,8 @@
 # Misaki G2P Integration Guide - Updated Evaluation
 
-## 📊 **Current Integration Status** - UPDATED POST-MERGE
+## Current Integration Status — Updated Post-Merge
 
-### **✅ What's Working**
+### What's Working
 - **TTS Core System**: Fully functional with latest performance and security enhancements
 - **Branch Synchronization**: ✅ Successfully merged with main (3 commits integrated)
 - **Streaming Performance**: 48.4% speed improvement maintained + latest optimizations
@@ -11,15 +11,15 @@
 - **Integration Framework**: ✅ Complete Misaki integration code validated and functional
 - **Apple Silicon Optimization**: ✅ CoreML provider and M1 Neural Engine acceleration active
 
-### **⚠️ Current Status** 
+### Current Status
 - **Integration Testing**: ✅ Misaki integration working correctly with graceful fallback
 - **Statistics Tracking**: ✅ Real-time monitoring of misaki success/fallback rates (currently 100% fallback)
 - **Python Version**: Python 3.13.4 - Misaki backend fails but fallback system works perfectly
 - **Phonemization Quality**: Phonemizer-fork producing consistent results (48 phonemes for test text)
 
-## 🔧 **Alternative Solutions**
+## Alternative Solutions
 
-### **Option 1: Optimize Current Phonemizer (Immediate)**
+### Option 1: Optimize Current Phonemizer (Immediate)
 While maintaining current Python environment, we can optimize the existing phonemizer:
 
 ```python
@@ -31,7 +31,7 @@ PHONEMIZER_STRIP_STRESS = False
 PHONEMIZER_WORD_SEPARATOR = ' '
 ```
 
-### **Option 2: Python Environment Management (Recommended)**
+### Option 2: Python Environment Management (Recommended)
 Create a dedicated Python 3.12 environment for TTS processing:
 
 ```bash
@@ -46,7 +46,7 @@ pyenv local 3.12.7
 pip install misaki[en]
 ```
 
-### **Option 3: Docker Container (Production)**
+### Option 3: Docker Container (Production)
 Use containerized Misaki for production deployment:
 
 ```dockerfile
@@ -58,9 +58,9 @@ COPY . .
 CMD ["python", "api/main.py"]
 ```
 
-## 📈 **Performance Analysis**
+## Performance Analysis
 
-### **Current Performance Metrics**
+### Current Performance Metrics
 - **Phase 1 Optimizations**: ✅ Successfully implemented
 - **Speed Improvement**: 48.4% faster than baseline
 - **TTFA Target**: <800ms (Phase 1 target)
@@ -68,16 +68,16 @@ CMD ["python", "api/main.py"]
 - **Streaming Efficiency**: >90% target
 - **Language Coverage**: 50% (5/10 languages working)
 
-### **Misaki Integration Benefits (When Available)**
+### Misaki Integration Benefits (When Available)
 - **Quality Improvement**: 20-40% reduction in phonemization errors
 - **Kokoro-Specific**: Optimized for Kokoro model architecture
 - **Multi-Language**: Enhanced support for 10+ languages
 - **Consistency**: Reduced word count mismatches
 - **Performance**: Better processing speed for complex text
 
-## 🚀 **Immediate Action Plan**
+## Immediate Action Plan
 
-### **Phase 1: Optimize Current System**
+### Optimize Current System
 1. **Enable Enhanced Phonemizer Configuration**
    ```bash
    # Set environment variables for better phonemization
@@ -99,7 +99,7 @@ CMD ["python", "api/main.py"]
    python scripts/benchmark_phase1_improvements.py
    ```
 
-### **Phase 2: Misaki Integration Preparation**
+### Misaki Integration Preparation
 1. **Python Environment Setup**
    ```bash
    # Create dedicated TTS environment
@@ -121,7 +121,7 @@ CMD ["python", "api/main.py"]
    export KOKORO_MISAKI_CACHE_SIZE=1000
    ```
 
-### **Phase 3: Production Deployment**
+### Production Deployment
 1. **Performance Monitoring**
    ```bash
    python scripts/validate_optimization_performance.py
@@ -137,9 +137,9 @@ CMD ["python", "api/main.py"]
    python scripts/baseline_comparison.py
    ```
 
-## 🔄 **Current Configuration Status**
+## Current Configuration Status
 
-### **Misaki Configuration (api/config.py)**
+### Misaki Configuration (api/config.py)
 ```python
 # Misaki is already configured but disabled due to Python version
 MISAKI_ENABLED = True  # ✅ Already enabled
@@ -149,26 +149,26 @@ MISAKI_CACHE_SIZE = 1000  # ✅ Already configured
 MISAKI_QUALITY_THRESHOLD = 0.8  # ✅ Already configured
 ```
 
-### **Integration Status**
+### Integration Status
 - **Code Implementation**: ✅ Complete (api/tts/misaki_processing.py)
 - **Configuration**: ✅ Complete (api/config.py)
 - **Fallback System**: ✅ Complete (api/tts/text_processing.py)
 - **Performance Monitoring**: ✅ Complete (api/performance/stats.py)
 - **Testing Framework**: ✅ Complete (scripts/demo_misaki_integration.py)
 
-## 📋 **Next Steps**
+## Next Steps
 
-### **Immediate (Today)**
+### Immediate
 1. **Optimize Current Phonemizer**: Implement enhanced phonemizer settings
 2. **Enable Quality Monitoring**: Track phonemization success rates
 3. **Test Performance**: Validate Phase 1 optimization improvements
 
-### **Short-term (This Week)**
+### Short-term
 1. **Python Environment**: Set up Python 3.12 environment for Misaki
 2. **Misaki Installation**: Install and test Misaki G2P engine
 3. **Quality Testing**: Compare phonemization quality improvements
 
-### **Long-term (Production)**
+### Long-term
 1. **Production Deployment**: Deploy with Misaki integration
 2. **Performance Monitoring**: Track quality and performance metrics
 3. **Optimization**: Fine-tune settings based on real-world usage
@@ -215,7 +215,7 @@ The TTS system is already highly optimized with Phase 1 improvements showing sig
 
 ---
 
-## 🧩 **Kokoro TTS API Structure & Integration Points**
+## Kokoro TTS API Structure & Integration Points
 
 ### **API Overview**
 - **Framework**: FastAPI, async, production-optimized

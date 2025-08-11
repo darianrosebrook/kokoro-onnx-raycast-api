@@ -81,7 +81,7 @@ LOG_VERBOSE=false                 # Enable verbose logging for debugging
 #### api/model/loader.py
 - Consolidated dual session manager initialization
 - Moved session success messages to DEBUG level
-- Reduced Phase 3/4 optimization verbosity
+- Reduced verbose optimization logging in startup path
 - Simplified initialization confirmations
 
 #### api/config.py
@@ -135,7 +135,7 @@ LOG_VERBOSE=true ./start_development.sh
 
 ### Before (Verbose)
 ```
-2025-07-11 01:53:32,946 - INFO - Initializing dual session manager for Phase 3 optimization...
+2025-07-11 01:53:32,946 - INFO - Initializing dual session manager for optimized startup...
 2025-07-11 01:53:32,946 - INFO - Initializing dual session manager
 2025-07-11 01:53:32,946 - INFO - Initializing dual session manager for Apple Silicon
 2025-07-11 01:53:32,946 - INFO - Initializing ANE-optimized session
@@ -151,7 +151,7 @@ LOG_VERBOSE=true ./start_development.sh
 
 ### After (Clean)
 ```
-2025-07-11 01:53:32,946 - INFO - Initializing dual session manager for Phase 3 optimization...
+2025-07-11 01:53:32,946 - INFO - Initializing dual session manager for optimized startup...
 2025-07-11 01:53:34,174 - INFO - ✅ Dual session manager initialized with sessions: ane, gpu, cpu
 ```
 

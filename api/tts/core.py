@@ -36,7 +36,7 @@ from api.model.loader import (
     get_active_provider,
     get_dual_session_manager,
 )
-from api.performance.stats import update_performance_stats
+from api.performance.stats import update_inference_stats, update_endpoint_performance_stats
 from api.tts.text_processing import (
     segment_text,
     preprocess_text_for_inference,

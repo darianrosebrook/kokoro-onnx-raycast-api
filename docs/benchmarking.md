@@ -10,7 +10,7 @@ The system automatically generates comprehensive benchmark reports:
 
 ```bash
 # Run comprehensive performance benchmark
-python run_benchmark.py --verbose
+python scripts/run_benchmark.py --verbose
 
 # View current benchmark results
 cat benchmark_results.md
@@ -135,7 +135,7 @@ curl -X POST http://localhost:8000/cache-cleanup
 **Features:**
 -  Intelligent cleanup policies (age, size, pattern-based)
 -  Real-time cache statistics and monitoring
-- 🗂️ Preserves important ORT optimized models
+-  Preserves important optimized models
 -  Automatic cleanup during server startup
 -  Configurable cleanup thresholds (500MB max, 10 temp dirs)
 -  Performance impact monitoring
@@ -145,10 +145,10 @@ Comprehensive performance analysis:
 
 ```bash
 # Quick benchmark (recommended)
-python run_benchmark.py --quick
+python scripts/run_benchmark.py --quick
 
 # Full benchmark (detailed analysis)
-python run_benchmark.py
+python scripts/run_benchmark.py
 ```
 
 **Features:**

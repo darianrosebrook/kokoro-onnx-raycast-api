@@ -25,8 +25,8 @@ echo "KOKORO_ORT_MODEL_PATH=.cache/ort/kokoro-v1.0.int8.ort" >> .env
 **Benefits of ORT Optimization:**
 - **3-5x faster inference** on Apple Silicon with Neural Engine
 - **2-3x faster inference** on Apple Silicon without Neural Engine
-- 🛡️ **Fewer temporary file issues** - ORT models require less runtime compilation
-- 🛡️ **Better CoreML compatibility** - optimized for Apple's ML frameworks
+- **Fewer temporary file issues** - ORT models require less runtime compilation
+- **Better CoreML compatibility** - optimized for Apple's ML frameworks
 
 ## Automatic ORT Optimization
 
@@ -60,9 +60,9 @@ export KOKORO_ORT_CACHE_DIR=.cache/ort
 - **Faster startup times** after initial conversion
 
 #### **Reliability Improvements:**
-- 🛡️ **Fewer temporary file issues** - ORT models require less runtime compilation
-- 🛡️ **Better CoreML compatibility** - optimized for Apple's ML frameworks
-- 🛡️ **Reduced permission issues** - fewer system temp directory dependencies
+- **Fewer temporary file issues** - ORT models require less runtime compilation
+- **Better CoreML compatibility** - optimized for Apple's ML frameworks
+- **Reduced permission issues** - fewer system temp directory dependencies
 
 #### **Developer Experience:**
 -  **Automatic optimization** - no manual intervention required
@@ -102,16 +102,10 @@ else:
 For CI/CD pipelines or manual optimization:
 
 ```bash
-# Convert specific model
-python scripts/convert_to_ort.py kokoro-v1.0.int8.onnx \
-  -o .cache/ort/kokoro-v1.0.int8.ort \
-  --verbose
+#!/usr/bin/env bash
+# Run provider benchmark and persist reports
+python scripts/run_benchmark.py --verbose
 
-# Validate ORT model
-python scripts/convert_to_ort.py \
-  --validate .cache/ort/kokoro-v1.0.int8.ort
-
-# Compare performance
-python scripts/convert_to_ort.py kokoro-v1.0.int8.onnx \
-  --benchmark --compare-original
+# Validate optimization state via status endpoint
+curl -s http://localhost:8000/status | jq '{provider: .performance.provider_used, ort: .performance.ort_optimization}'
 ``` 
