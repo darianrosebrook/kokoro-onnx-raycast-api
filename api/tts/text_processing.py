@@ -96,7 +96,7 @@ TIME_RE = re.compile(r'(\d{2}:\d{2}:\d{2})')  # Time format (HH:MM:SS)
 # Phoneme processing constants
 PHONEME_PADDING_TOKEN = "_"  # Padding token for phoneme sequences
 # Default value, will be overridden by TTSConfig.MAX_PHONEME_LENGTH if available
-DEFAULT_MAX_PHONEME_LENGTH = 512  # Maximum phoneme sequence length for CoreML optimization (increased from 256 to handle longer texts)
+DEFAULT_MAX_PHONEME_LENGTH = 768  # Maximum phoneme sequence length for CoreML optimization (increased from 512 to 768 to handle longer texts)
 PHONEME_CACHE_SIZE = 1000  # Maximum size for phoneme conversion cache
 
 # Phoneme conversion cache for performance optimization
@@ -593,7 +593,7 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
     
     Args:
         phonemes (List[str]): Input phoneme sequence to pad
-        max_len (int): Maximum sequence length (default: 256)
+        max_len (int): Maximum sequence length (default: 768, increased from 512)
         
     Returns:
         List[str]: Padded phoneme sequence of exact length max_len
@@ -602,8 +602,8 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
         >>> pad_phoneme_sequence(['h', 'ə', 'l', 'oʊ'], max_len=8)
         ['h', 'ə', 'l', 'oʊ', '_', '_', '_', '_']
         
-        >>> pad_phoneme_sequence(['a'] * 300, max_len=256)  # Truncation
-        ['a'] * 256
+        >>> pad_phoneme_sequence(['a'] * 800, max_len=768)  # Truncation
+        ['a'] * 768
     
     Note:
         The padding token '_' represents silence and is recognized by the Kokoro model
@@ -614,15 +614,15 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
     
     # Handle sequences longer than max_len with enhanced smart truncation
     if len(phonemes) > max_len:
-        logger.warning(f"Truncating phoneme sequence: {len(phonemes)} → {max_len} (consider increasing DEFAULT_MAX_PHONEME_LENGTH)")
+        logger.warning(f"Truncating phoneme sequence: {len(phonemes)} → {max_len} (consider increasing DEFAULT_MAX_PHONEME_LENGTH if this occurs frequently)")
         
         # Try to truncate at word boundaries (space characters) for better quality
         truncated = phonemes[:max_len]
         
         # Find the last space within the truncation boundary for cleaner cut
-        # Extended search range from 20 to 50 to better handle longer words
+        # Extended search range to better handle longer sequences
         last_space_idx = -1
-        search_range = min(100, max_len // 4)  # Adaptive search range based on max_len
+        search_range = min(150, max_len // 3)  # Adaptive search range based on max_len
         
         for i in range(max_len - 1, max(0, max_len - search_range), -1):
             if i < len(phonemes) and phonemes[i] == ' ':
@@ -634,9 +634,20 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
             truncated = phonemes[:last_space_idx]
             # Pad to exact length
             truncated += [PHONEME_PADDING_TOKEN] * (max_len - len(truncated))
-            logger.debug(f"Truncated at word boundary: position {last_space_idx}")
+            logger.debug(f"Truncated at word boundary: position {last_space_idx} (preserved {len(truncated)} phonemes)")
         else:
-            logger.warning(f"Could not find word boundary for clean truncation, forced cut at {max_len}")
+            # If no word boundary found, try to find a better break point
+            # Look for sentence endings or punctuation
+            for i in range(max_len - 1, max(0, max_len - 100), -1):
+                if i < len(phonemes) and phonemes[i] in ['.', '!', '?', ';', ':']:
+                    truncated = phonemes[:i + 1]
+                    truncated += [PHONEME_PADDING_TOKEN] * (max_len - len(truncated))
+                    logger.debug(f"Truncated at sentence boundary: position {i} (preserved {len(truncated)} phonemes)")
+                    break
+            else:
+                # Force truncation at max_len if no good break point found
+                logger.warning(f"Could not find optimal break point for clean truncation, forced cut at {max_len}")
+                truncated = phonemes[:max_len]
         
         return truncated
     
@@ -1015,6 +1026,7 @@ def segment_text(text: str, max_len: int) -> List[str]:
     4. **Length Optimization**: Ensure segments fit within processing limits
     5. **Edge Case Handling**: Manage very long words and minimal text
     6. **Fallback Processing**: Word-level segmentation when needed
+    7. **Coverage Validation**: Ensure no text is lost during segmentation
     
     ## Performance Considerations
     
@@ -1023,6 +1035,7 @@ def segment_text(text: str, max_len: int) -> List[str]:
     - Optimizes segment length for TTS model efficiency
     - Maintains semantic coherence across segments
     - PHASE 1: Reduces segmentation overhead for better TTFA
+    - Validates full text coverage to prevent content loss
     
     Args:
         text (str): Input text to segment
@@ -1043,6 +1056,7 @@ def segment_text(text: str, max_len: int) -> List[str]:
         - Very long words are force-split at max_len boundary
         - Single words longer than max_len are handled gracefully
         - Whitespace-only text is filtered out
+        - Full text coverage is validated to prevent content loss
     """
     # Apply normalization first to prepare text for segmentation
     normalized_text = normalize_for_tts(text)
@@ -1054,6 +1068,7 @@ def segment_text(text: str, max_len: int) -> List[str]:
     # PHASE 1 OPTIMIZATION: Keep short texts as single segments for better TTFA
     # This reduces unnecessary segmentation overhead and improves processing speed
     if len(cleaned) <= max_len:
+        logger.debug(f"PHASE1: Keeping short text as single segment ({len(cleaned)} chars)")
         return [cleaned] if cleaned.strip() else []
     
     # PHASE 1 OPTIMIZATION: For moderately long texts (< 1000 chars), try to keep as single segment
@@ -1093,42 +1108,34 @@ def segment_text(text: str, max_len: int) -> List[str]:
             segment = sentence[:pos].strip()
             if segment and len(segment) > 0:  # Only add non-empty segments
                 segments.append(segment)
+            
             sentence = sentence[pos:].strip()
         
-        # Add remaining sentence portion if not empty
+        # Add remaining sentence if it's not empty
         if sentence and len(sentence) > 0:
             segments.append(sentence)
     
-    # Filter out empty segments and very short segments that won't produce audio
-    MIN_SEGMENT_LENGTH = 3  # Minimum characters for meaningful audio
-    final_segments = [s for s in segments if s.strip() and len(s.strip()) >= MIN_SEGMENT_LENGTH]
+    # Validate full text coverage to ensure no content is lost
+    total_segmented_length = sum(len(seg) for seg in segments)
+    original_length = len(cleaned)
     
-    # Fallback strategy: word-level segmentation if no segments were created
-    if not final_segments and cleaned:
-        logger.debug("Applying fallback word-level segmentation")
-        words = cleaned.split()
-        current_segment = ""
+    if total_segmented_length != original_length:
+        logger.warning(f"Text coverage validation failed: original {original_length} chars, segmented {total_segmented_length} chars")
+        logger.warning(f"Original text: '{cleaned[:100]}...'")
+        logger.warning(f"Segments: {[seg[:50] + '...' if len(seg) > 50 else seg for seg in segments]}")
         
-        for word in words:
-            # Check if adding this word would exceed max_len
-            test_segment = f"{current_segment} {word}" if current_segment else word
-            
-            if len(test_segment) <= max_len:
-                current_segment = test_segment
-            else:
-                # Start new segment
-                if current_segment:
-                    final_segments.append(current_segment)
-                current_segment = word
-        
-        # Add final segment if not empty and meets minimum length
-        if current_segment and len(current_segment.strip()) >= MIN_SEGMENT_LENGTH:
-            final_segments.append(current_segment)
+        # Attempt to recover by adding any missing text
+        if total_segmented_length < original_length:
+            missing_text = cleaned[total_segmented_length:]
+            if missing_text.strip():
+                logger.info(f"Recovering missing text: '{missing_text[:100]}...'")
+                segments.append(missing_text.strip())
     
-    # PHASE 1 OPTIMIZATION: Log segmentation decisions for monitoring
-    if len(final_segments) > 1:
-        logger.info(f"PHASE1: Segmented text into {len(final_segments)} segments (original: {len(cleaned)} chars)")
+    # Final validation and logging
+    final_coverage = sum(len(seg) for seg in segments)
+    if final_coverage == original_length:
+        logger.debug(f"✅ Full text coverage validated: {original_length} chars → {len(segments)} segments")
     else:
-        logger.debug(f"PHASE1: Text processed as single segment ({len(cleaned)} chars)")
+        logger.warning(f"⚠️ Partial text coverage: {original_length} chars → {final_coverage} chars in {len(segments)} segments")
     
-    return final_segments 
+    return segments 

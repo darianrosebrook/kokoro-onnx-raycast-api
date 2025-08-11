@@ -443,7 +443,8 @@ class TTSConfig:
     # Phoneme sequence length configuration
     # This controls the maximum length of phoneme sequences for TTS processing
     # Increase this value if you experience text truncation during speech synthesis
-    MAX_PHONEME_LENGTH = int(os.environ.get("KOKORO_MAX_PHONEME_LENGTH", "512"))
+    # Increased from 512 to 768 to ensure full text coverage and prevent truncation
+    MAX_PHONEME_LENGTH = int(os.environ.get("KOKORO_MAX_PHONEME_LENGTH", "768"))
     
     # Misaki G2P Configuration - Kokoro-specific phonemization
     MISAKI_ENABLED = os.environ.get("KOKORO_MISAKI_ENABLED", "true").lower() == "true"

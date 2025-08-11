@@ -711,37 +711,57 @@ async def stream_tts_audio(
         logger.error(f"[{request_id}] TTS model not ready, raising 503 error.")
         raise HTTPException(status_code=503, detail="TTS model not ready.")
 
+    # Segment text for optimal processing
     segments = segment_text(text, TTSConfig.MAX_SEGMENT_LENGTH)
-    if not segments:
-        logger.warning(
-            f"[{request_id}] No segments generated from text, ending stream early."
-        )
-        return
+    total_segments = len(segments)
+    
+    # Validate segment mapping to ensure full text coverage
+    if not _validate_segment_mapping(text, segments, request_id):
+        logger.warning(f"[{request_id}] Segment mapping validation failed - this may affect TTFA performance")
+    
+    if total_segments == 0:
+        raise HTTPException(status_code=400, detail="No valid text segments found")
 
     # Early TTFA primer: split first segment to stream ~5% of text ASAP
     def _split_segment_for_early_ttfa(segment_text: str) -> Tuple[str, str]:
-        try:
-            length = len(segment_text)
-            if length <= 60:
-                return segment_text, ""
-            # Increase primer aggressiveness: 10-15% of text, capped to 700 chars
-            # This provides enough audio to begin playback promptly while the rest streams
-            ratio = 0.10 if length < 800 else 0.15
-            target = max(60, int(length * ratio))
-            target = min(target, 700)
-            # Find a cut point at whitespace after target up to +60 chars
-            cut = -1
-            for i in range(target, min(length, target + 60)):
-                if segment_text[i].isspace():
-                    cut = i
-                    break
-            if cut == -1:
-                cut = min(length, target)
-            early = segment_text[:cut].strip()
-            rest = segment_text[cut:].strip()
-            return early or segment_text, rest if early else ""
-        except Exception:
+        """
+        Split a segment for early TTFA optimization.
+        
+        This function implements the early-primer strategy by splitting text segments
+        to provide immediate audio output while processing the remainder.
+        
+        Args:
+            segment_text (str): Text segment to split
+            
+        Returns:
+            Tuple[str, str]: (early_text, remaining_text) for optimized TTFA
+        """
+        length = len(segment_text)
+        
+        # For very short segments, return as-is
+        if length <= 50:
             return segment_text, ""
+        
+        # Calculate optimal split point for early TTFA
+        # Target 10-15% of text for immediate processing
+        split_percentage = min(0.15, max(0.10, 50.0 / length))
+        cut = int(length * split_percentage)
+        
+        # Ensure we don't cut in the middle of a word
+        for i in range(cut, min(length, cut + 50)):
+            if segment_text[i].isspace():
+                cut = i
+                break
+        
+        # Split the segment
+        early = segment_text[:cut].strip()
+        rest = segment_text[cut:].strip()
+        
+        # Ensure we have meaningful content in both parts
+        if not early or len(early) < 10:
+            return segment_text, ""
+        
+        return early, rest
 
     fast_indices: Set[int] = set()
     primer_hint_key: Optional[str] = None  # Initialize to avoid UnboundLocalError
@@ -959,13 +979,44 @@ async def stream_tts_audio(
                     # Dual session manager returns (samples, sample_rate)
                     audio_data = await task
                     if isinstance(audio_data, tuple):
-                        audio_np = audio_data[0]
+                        if len(audio_data) >= 2:
+                            audio_np = audio_data[0]  # First element is always samples
+                            sample_rate = audio_data[1]  # Second element is sample rate
+                        else:
+                            # Handle single element tuple
+                            audio_np = audio_data[0]
+                            sample_rate = 24000  # Default sample rate
+                            logger.warning(f"[{request_id}] Dual session returned single element tuple, using default sample rate")
                     else:
+                        # Handle direct return
                         audio_np = audio_data
+                        sample_rate = 24000  # Default sample rate
+                        logger.debug(f"[{request_id}] Dual session returned direct audio data")
+                    
                     provider = "DualSession"
+                    
+                    # Validate audio data
+                    if audio_np is None or (hasattr(audio_np, 'size') and audio_np.size == 0):
+                        logger.error(f"[{request_id}] Dual session returned invalid audio data for segment {i}")
+                        raise ValueError(f"Invalid audio data from dual session for segment {i}")
+                        
                 else:
                     # Standard processing returns (idx, audio_np, provider)
-                    idx, audio_np, provider = await task
+                    try:
+                        result = await task
+                        if isinstance(result, tuple) and len(result) >= 3:
+                            idx, audio_np, provider = result
+                        elif isinstance(result, tuple) and len(result) == 2:
+                            # Handle case where provider might be missing
+                            idx, audio_np = result
+                            provider = "Standard"
+                            logger.debug(f"[{request_id}] Standard processing returned 2-element tuple for segment {i}")
+                        else:
+                            logger.error(f"[{request_id}] Unexpected result format from standard processing: {type(result)}")
+                            raise ValueError(f"Unexpected result format for segment {i}")
+                    except Exception as e:
+                        logger.error(f"[{request_id}] Error unpacking standard processing result for segment {i}: {e}")
+                        raise
 
                 segment_duration = time.perf_counter() - segment_start_time
 
@@ -1177,3 +1228,59 @@ async def stream_tts_audio(
         raise HTTPException(
             status_code=500, detail="Audio generation failed for all segments"
         )
+
+
+def _validate_segment_mapping(text: str, segments: List[str], request_id: str) -> bool:
+    """
+    Validate that segment mapping preserves full text coverage.
+    
+    This function ensures that no text content is lost during segmentation,
+    which is critical for maintaining audio quality and preventing TTFA issues.
+    
+    Args:
+        text (str): Original input text
+        segments (List[str]): Segmented text chunks
+        request_id (str): Request identifier for logging
+        
+    Returns:
+        bool: True if full coverage is maintained, False otherwise
+    """
+    # Normalize both original and segmented text for comparison
+    original_normalized = text.replace('\n', ' ').replace('\r', ' ').strip()
+    segmented_normalized = ' '.join(segments).replace('\n', ' ').replace('\r', ' ').strip()
+    
+    # Remove extra whitespace for comparison
+    original_clean = ' '.join(original_normalized.split())
+    segmented_clean = ' '.join(segmented_normalized.split())
+    
+    # Check for exact match
+    if original_clean == segmented_clean:
+        logger.debug(f"[{request_id}] ✅ Segment mapping validation passed: full text coverage maintained")
+        return True
+    
+    # Check for length-based validation
+    original_length = len(original_clean)
+    segmented_length = len(segmented_clean)
+    
+    if abs(original_length - segmented_length) <= 5:  # Allow small differences due to normalization
+        logger.debug(f"[{request_id}] ✅ Segment mapping validation passed: length difference within tolerance ({original_length} vs {segmented_length})")
+        return True
+    
+    # Detailed analysis for failures
+    logger.warning(f"[{request_id}] ⚠️ Segment mapping validation failed:")
+    logger.warning(f"[{request_id}]   Original length: {original_length} chars")
+    logger.warning(f"[{request_id}]   Segmented length: {segmented_length} chars")
+    logger.warning(f"[{request_id}]   Difference: {abs(original_length - segmented_length)} chars")
+    
+    # Log sample of differences for debugging
+    if original_length > segmented_length:
+        missing_chars = original_length - segmented_length
+        logger.warning(f"[{request_id}]   Missing approximately {missing_chars} characters")
+        
+        # Try to identify where the loss occurred
+        if len(segments) > 1:
+            total_segmented = sum(len(seg) for seg in segments)
+            logger.warning(f"[{request_id}]   Total segment lengths: {total_segmented} chars")
+            logger.warning(f"[{request_id}]   Segment count: {len(segments)}")
+    
+    return False

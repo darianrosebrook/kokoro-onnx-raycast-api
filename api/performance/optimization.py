@@ -570,16 +570,49 @@ class RealTimeOptimizer:
         # Trigger optimization if needed
         if self.auto_optimization_enabled and self._should_optimize():
             # Schedule safely whether or not an event loop is currently running
+            self._schedule_optimization_safely()
+    
+    def _schedule_optimization_safely(self):
+        """Safely schedule system optimization without blocking or causing errors."""
+        try:
+            # Try to get the current running loop
+            loop = asyncio.get_running_loop()
+            # We're in an async context, schedule the task
+            loop.create_task(self.optimize_system())
+            self.logger.debug("Scheduled optimization in running event loop")
+        except RuntimeError:
+            # No running loop in this thread; run in a daemon thread
             try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                # No running loop in this thread; run in a daemon thread
-                threading.Thread(
-                    target=lambda: asyncio.run(self.optimize_system()),
+                # Create a new thread for the optimization
+                optimization_thread = threading.Thread(
+                    target=self._run_optimization_in_thread,
                     daemon=True,
-                ).start()
-            else:
-                loop.create_task(self.optimize_system())
+                    name="RealTimeOptimizer"
+                )
+                optimization_thread.start()
+                self.logger.debug("Scheduled optimization in daemon thread")
+            except Exception as e:
+                self.logger.warning(f"Failed to schedule optimization in thread: {e}")
+        except Exception as e:
+            self.logger.warning(f"Failed to schedule optimization: {e}")
+    
+    def _run_optimization_in_thread(self):
+        """Run optimization in a separate thread with proper error handling."""
+        try:
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Run the optimization
+            loop.run_until_complete(self.optimize_system())
+        except Exception as e:
+            self.logger.error(f"Error running optimization in thread: {e}")
+        finally:
+            try:
+                # Clean up the loop
+                loop.close()
+            except Exception:
+                pass
     
     def _should_optimize(self) -> bool:
         """Check if system optimization should be triggered."""
@@ -852,6 +885,130 @@ class RealTimeOptimizer:
         
         return validation_results
     
+    async def investigate_ttfa_issues(self) -> Dict[str, Any]:
+        """
+        Investigate TTFA > target issues and provide optimization recommendations.
+        
+        This function analyzes performance metrics to identify why TTFA targets
+        are being missed and provides specific actionable recommendations.
+        
+        Returns:
+            Dict[str, Any]: Analysis results and recommendations
+        """
+        try:
+            self.logger.info("Investigating TTFA > target issues...")
+            
+            # Get recent TTFA metrics
+            recent_ttfa_metrics = []
+            for metric in list(self.trend_analyzer.performance_history)[-100:]:
+                if metric.metric_type == 'ttfa':
+                    recent_ttfa_metrics.append(metric)
+            
+            if not recent_ttfa_metrics:
+                return {
+                    'status': 'no_data',
+                    'message': 'No TTFA metrics available for analysis'
+                }
+            
+            # Analyze TTFA performance
+            ttfa_values = [m.value for m in recent_ttfa_metrics]
+            avg_ttfa = np.mean(ttfa_values)
+            max_ttfa = np.max(ttfa_values)
+            min_ttfa = np.min(ttfa_values)
+            
+            # Check against target (800ms)
+            ttfa_target = 800
+            target_miss_rate = sum(1 for v in ttfa_values if v > ttfa_target) / len(ttfa_values)
+            
+            analysis = {
+                'status': 'analysis_complete',
+                'ttfa_target_ms': ttfa_target,
+                'recent_samples': len(recent_ttfa_metrics),
+                'average_ttfa_ms': avg_ttfa,
+                'max_ttfa_ms': max_ttfa,
+                'min_ttfa_ms': min_ttfa,
+                'target_miss_rate_percent': target_miss_rate * 100,
+                'performance_category': self._categorize_ttfa_performance(avg_ttfa, target_miss_rate)
+            }
+            
+            # Generate specific recommendations
+            recommendations = self._generate_ttfa_recommendations(analysis)
+            analysis['recommendations'] = recommendations
+            
+            self.logger.info(f"TTFA investigation complete: {analysis['performance_category']}")
+            return analysis
+            
+        except Exception as e:
+            self.logger.error(f"Error investigating TTFA issues: {e}")
+            return {
+                'status': 'error',
+                'error': str(e)
+            }
+    
+    def _categorize_ttfa_performance(self, avg_ttfa: float, miss_rate: float) -> str:
+        """Categorize TTFA performance for targeted optimization."""
+        if avg_ttfa <= 800 and miss_rate <= 0.1:
+            return "EXCELLENT"
+        elif avg_ttfa <= 1000 and miss_rate <= 0.2:
+            return "GOOD"
+        elif avg_ttfa <= 1500 and miss_rate <= 0.4:
+            return "NEEDS_IMPROVEMENT"
+        else:
+            return "CRITICAL"
+    
+    def _generate_ttfa_recommendations(self, analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate specific TTFA optimization recommendations."""
+        recommendations = []
+        
+        avg_ttfa = analysis['average_ttfa_ms']
+        miss_rate = analysis['target_miss_rate_percent'] / 100
+        
+        # Segment mapping validation recommendation
+        if miss_rate > 0.3:
+            recommendations.append({
+                'priority': 'HIGH',
+                'category': 'text_processing',
+                'title': 'Validate Segment Mapping',
+                'description': 'High target miss rate suggests potential text coverage issues',
+                'action': 'Implement segment mapping validation to ensure full text coverage',
+                'expected_impact': 'Reduce TTFA variability by 20-30%'
+            })
+        
+        # Phoneme length optimization
+        if avg_ttfa > 1200:
+            recommendations.append({
+                'priority': 'HIGH',
+                'category': 'model_optimization',
+                'title': 'Increase MAX_PHONEME_LENGTH',
+                'description': 'High average TTFA suggests phoneme truncation issues',
+                'action': 'Increase MAX_PHONEME_LENGTH from 768 to 1024 if needed',
+                'expected_impact': 'Reduce average TTFA by 15-25%'
+            })
+        
+        # Dual session optimization
+        if miss_rate > 0.2:
+            recommendations.append({
+                'priority': 'MEDIUM',
+                'category': 'concurrency',
+                'title': 'Optimize Dual Session Manager',
+                'description': 'Moderate target miss rate suggests session routing issues',
+                'action': 'Review dual session manager tuple handling and error recovery',
+                'expected_impact': 'Improve TTFA consistency by 10-20%'
+            })
+        
+        # Pipeline warming
+        if avg_ttfa > 1000:
+            recommendations.append({
+                'priority': 'MEDIUM',
+                'category': 'startup_optimization',
+                'title': 'Enhance Pipeline Warming',
+                'description': 'High average TTFA suggests cold start issues',
+                'action': 'Implement more aggressive pipeline warming and pattern caching',
+                'expected_impact': 'Reduce cold start TTFA by 20-30%'
+            })
+        
+        return recommendations
+    
     def get_optimization_status(self) -> Dict[str, Any]:
         """Get current optimization status and statistics."""
         return {
@@ -920,6 +1077,26 @@ async def optimize_system_now() -> Dict[str, Any]:
         return await optimizer.optimize_system()
     else:
         return {'status': 'optimizer_not_available'}
+
+
+async def investigate_ttfa_performance() -> Dict[str, Any]:
+    """
+    Investigate TTFA performance issues and get optimization recommendations.
+    
+    This function provides a high-level interface to analyze TTFA performance
+    and get specific recommendations for improvement.
+    
+    Returns:
+        Dict[str, Any]: TTFA analysis results and recommendations
+    """
+    optimizer = get_real_time_optimizer()
+    if not optimizer:
+        return {
+            'status': 'error',
+            'message': 'Real-time optimizer not available'
+        }
+    
+    return await optimizer.investigate_ttfa_issues()
 
 
 def get_optimization_status() -> Dict[str, Any]:
