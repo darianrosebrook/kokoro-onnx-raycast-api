@@ -3,26 +3,28 @@ Core TTS functionality for the Kokoro-ONNX API.
 
 This module handles the core TTS functionality, including:
 - Text processing and segmentation
-- Audio generation
-- Streaming audio
+- Audio generation with CoreML variation handling
+- Streaming audio with adaptive optimization
+- Self-optimizing threshold management
+
+Merged version combining clean architecture with CoreML precision handling.
 
 @author: @darianrosebrook
-@date: 2025-07-08
-@version: 1.0.0
+@date: 2025-08-15
+@version: 2.0.0
 @license: MIT
-@copyright: 2025 Darian Rosebrook
 @contact: hello@darianrosebrook.com
 @website: https://darianrosebrook.com
 @github: https://github.com/darianrosebrook/kokoro-onnx-raycast-api
 """
 
 import asyncio
-import io
+import hashlib
 import logging
-import re
 import struct
+import threading
 import time
-from typing import AsyncGenerator, Dict, Optional, Tuple, List, Set
+from typing import Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 from fastapi import HTTPException, Request
@@ -31,20 +33,20 @@ from kokoro_onnx import Kokoro
 
 from api.config import TTSConfig
 from api.model.loader import (
-    get_model,
-    get_model_status,
     get_active_provider,
     get_dual_session_manager,
+    get_model_status,
 )
-from api.performance.stats import update_inference_stats, update_endpoint_performance_stats
+from api.performance.stats import (
+    update_endpoint_performance_stats,
+    update_inference_stats,
+)
 from api.tts.text_processing import (
-    segment_text,
-    preprocess_text_for_inference,
     get_phoneme_cache_stats,
-    clear_phoneme_cache,
+    preprocess_text_for_inference,
+    segment_text as split_segments,   # avoid name shadowing with local identifiers
 )
-import threading
-import os
+from api.tts.audio_variation_handler import get_variation_handler
 
 logger = logging.getLogger(__name__)
 
@@ -52,16 +54,13 @@ logger = logging.getLogger(__name__)
 _model_cache: Dict[str, Kokoro] = {}
 _model_cache_lock = threading.Lock()
 
-# Enhanced inference pipeline caching for common requests
-# Reference: DEPENDENCY_RESEARCH.md section 5.2
-import hashlib
-from functools import lru_cache
-from typing import Tuple, Optional, Dict, Any
-
-# Inference result cache with TTL-like behavior
+# Inference result cache (audio -> (samples, ts, provider))
 _inference_cache: Dict[str, Tuple[np.ndarray, float, str]] = {}
+_inference_cache_lock = threading.Lock()
+_inference_cache_max_size = 1000
+_inference_cache_ttl = 3600  # seconds
 
-# Micro-cache for primer phonemes and initial inference to reduce TTFB
+# Primer micro-cache for the very first tiny segment (TTFA boost)
 _primer_microcache: Dict[str, Tuple[np.ndarray, float]] = {}
 _primer_microcache_ttl_s: float = 300.0  # 5 minutes
 _primer_microcache_hits: int = 0
@@ -69,83 +68,56 @@ _primer_microcache_misses: int = 0
 
 
 def _get_primer_cache_key(text: str, voice: str, speed: float, lang: str) -> str:
-    return hashlib.md5(
-        f"primer:{text[:700]}:{voice}:{speed}:{lang}".encode("utf-8")
-    ).hexdigest()
+    """Generate cache key for primer segments."""
+    return hashlib.md5(f"primer:{text[:700]}:{voice}:{speed}:{lang}".encode("utf-8")).hexdigest()
 
 
 def _get_cached_primer(key: str) -> Optional[np.ndarray]:
+    """Retrieve cached primer if valid."""
     entry = _primer_microcache.get(key)
     if not entry:
-        try:
-            globals()["_primer_microcache_misses"] += 1
-        except Exception:
-            pass
+        globals()["_primer_microcache_misses"] = globals().get("_primer_microcache_misses", 0) + 1
         return None
+    
     samples, ts = entry
     if (time.time() - ts) > _primer_microcache_ttl_s:
-        try:
-            del _primer_microcache[key]
-        except Exception:
-            pass
-        try:
-            globals()["_primer_microcache_misses"] += 1
-        except Exception:
-            pass
+        _primer_microcache.pop(key, None)
+        globals()["_primer_microcache_misses"] = globals().get("_primer_microcache_misses", 0) + 1
         return None
-    try:
-        globals()["_primer_microcache_hits"] += 1
-    except Exception:
-        pass
+    
+    globals()["_primer_microcache_hits"] = globals().get("_primer_microcache_hits", 0) + 1
     return samples
 
 
 def _put_cached_primer(key: str, samples: np.ndarray) -> None:
-    # Keep micro-cache size bounded
-    try:
-        if len(_primer_microcache) > 64:
-            # remove oldest ~8 entries
-            for k in list(_primer_microcache.keys())[:8]:
-                _primer_microcache.pop(k, None)
-        _primer_microcache[key] = (samples, time.time())
-    except Exception:
-        pass
+    """Store primer in micro-cache with size bounds."""
+    # Keep micro-cache bounded
+    if len(_primer_microcache) > 64:
+        for k in list(_primer_microcache.keys())[:8]:
+            _primer_microcache.pop(k, None)
+    _primer_microcache[key] = (samples, time.time())
 
 
 def get_primer_microcache_stats() -> Dict[str, Any]:
-    """
-    Return primer micro-cache telemetry for status endpoints.
-    """
-    try:
-        size = len(_primer_microcache)
-    except Exception:
-        size = 0
+    """Get primer cache statistics."""
+    size = len(_primer_microcache)
     hits = globals().get("_primer_microcache_hits", 0)
     misses = globals().get("_primer_microcache_misses", 0)
     total = hits + misses
-    hit_rate = (hits / total) * 100 if total > 0 else 0.0
     return {
         "entries": size,
         "ttl_seconds": _primer_microcache_ttl_s,
         "hits": hits,
         "misses": misses,
-        "hit_rate_percent": hit_rate,
+        "hit_rate_percent": (hits / total) * 100 if total > 0 else 0.0,
     }
 
 
-_inference_cache_lock = threading.Lock()
-_inference_cache_max_size = 1000  # Maximum number of cached results
-_inference_cache_ttl = 3600  # Cache TTL in seconds (1 hour)
-
-
 def _get_cached_model(provider: str) -> Kokoro:
-    """
-    Retrieves a cached Kokoro model instance or creates a new one if not available.
-    This is thread-safe.
-    """
+    """Thread-safe retrieval/creation of a Kokoro model bound to a provider."""
     with _model_cache_lock:
         if provider not in _model_cache:
-            logger.info(f"Creating new Kokoro model instance for provider: {provider}")
+            logger.info(f"Creating Kokoro model for provider: {provider}")
             _model_cache[provider] = Kokoro(
                 model_path=TTSConfig.MODEL_PATH,
                 voices_path=TTSConfig.VOICES_PATH,
@@ -155,534 +127,331 @@ def _get_cached_model(provider: str) -> Kokoro:
 
 
 def _create_inference_cache_key(text: str, voice: str, speed: float, lang: str) -> str:
-    """
-    Creates a unique cache key for inference results.
-
-    Args:
-        text: Input text
-        voice: Voice identifier
-        speed: Speech speed multiplier
-        lang: Language code
-
-    Returns:
-        Unique cache key string
-    """
-    # Create a hash of the input parameters
-    cache_input = f"{text}|{voice}|{speed:.3f}|{lang}"
-    return hashlib.md5(cache_input.encode("utf-8")).hexdigest()
+    """Create cache key for inference results."""
+    return hashlib.md5(f"{text}|{voice}|{speed:.3f}|{lang}".encode("utf-8")).hexdigest()
 
 
 def _get_cached_inference(cache_key: str) -> Optional[Tuple[np.ndarray, str]]:
-    """
-    Retrieves cached inference result if available and not expired.
-
-    Args:
-        cache_key: Cache key for the inference result
-
-    Returns:
-        Tuple of (audio_array, provider) if cached, None otherwise
-    """
+    """Retrieve cached inference result if valid."""
     with _inference_cache_lock:
-        if cache_key in _inference_cache:
-            audio_array, timestamp, provider = _inference_cache[cache_key]
-
-            # Check if cache entry is still valid
-            if time.time() - timestamp < _inference_cache_ttl:
-                logger.debug(f"Cache hit for key: {cache_key[:8]}...")
-                return audio_array, provider
-            else:
-                # Remove expired entry
-                del _inference_cache[cache_key]
-                logger.debug(f"Cache expired for key: {cache_key[:8]}...")
-
+        item = _inference_cache.get(cache_key)
+        if not item:
+            return None
+        
+        samples, ts, provider = item
+        if (time.time() - ts) < _inference_cache_ttl:
+            logger.debug(f"Cache hit {cache_key[:8]}…")
+            return samples, provider
+        
+        _inference_cache.pop(cache_key, None)
+        logger.debug(f"Cache expired {cache_key[:8]}…")
         return None
 
 
-def _cache_inference_result(cache_key: str, audio_array: np.ndarray, provider: str):
-    """
-    Caches inference result with timestamp and memory-efficient storage.
-
-    Args:
-        cache_key: Cache key for the inference result
-        audio_array: Generated audio array
-        provider: Provider used for generation
-    """
+def _cache_inference_result(cache_key: str, audio_array: np.ndarray, provider: str) -> None:
+    """Cache inference result with size management."""
     with _inference_cache_lock:
-        # Check cache size and evict oldest entries if needed
         if len(_inference_cache) >= _inference_cache_max_size:
-            # Remove oldest entries (simple FIFO eviction)
-            oldest_keys = list(_inference_cache.keys())[:50]  # Remove 50 oldest
-            for key in oldest_keys:
-                del _inference_cache[key]
-            logger.debug(f"Evicted {len(oldest_keys)} old cache entries")
-
-        # Memory-efficient storage: compress audio data if large
-        audio_to_cache = audio_array
-        if audio_array.size > 10000:  # Compress if > 10k samples
-            # Use float32 instead of float64 for memory efficiency
-            audio_to_cache = audio_array.astype(np.float32)
-
-        # Cache the result with timestamp
+            # Evict oldest entries
+            for k in list(_inference_cache.keys())[:50]:
+                _inference_cache.pop(k, None)
+            logger.debug("Evicted 50 old cache entries")
+        
+        # Store as float32 for large arrays to save memory
+        audio_to_cache = audio_array.astype(np.float32, copy=False) if audio_array.size > 10000 else audio_array
         _inference_cache[cache_key] = (audio_to_cache, time.time(), provider)
-        logger.debug(f"Cached inference result for key: {cache_key[:8]}...")
 
 
-def cleanup_inference_cache():
-    """
-    Cleans up expired inference cache entries to free memory.
-
-    This function implements memory-efficient cache cleanup to prevent
-    memory leaks and optimize performance.
-    """
+def cleanup_inference_cache() -> None:
+    """Clean up expired cache entries."""
     with _inference_cache_lock:
-        current_time = time.time()
-        expired_keys = []
-
-        for key, (_, timestamp, _) in _inference_cache.items():
-            if current_time - timestamp >= _inference_cache_ttl:
-                expired_keys.append(key)
-
-        for key in expired_keys:
-            del _inference_cache[key]
-
-        if expired_keys:
-            logger.debug(f"Cleaned up {len(expired_keys)} expired cache entries")
-
-        # Force garbage collection if we cleaned up many entries
-        if len(expired_keys) > 100:
+        now = time.time()
+        expired = [k for k, (_, ts, _) in _inference_cache.items() if (now - ts) >= _inference_cache_ttl]
+        for k in expired:
+            _inference_cache.pop(k, None)
+        if expired:
             import gc
-
             gc.collect()
-            logger.debug("Forced garbage collection after cache cleanup")
+            logger.debug(f"Cleaned {len(expired)} cache entries")
 
 
 def get_inference_cache_stats() -> Dict[str, Any]:
-    """
-    Returns statistics about the inference cache.
-
-    Returns:
-        Dictionary with cache statistics
-    """
+    """Get inference cache statistics."""
     with _inference_cache_lock:
-        current_time = time.time()
-        valid_entries = 0
-        expired_entries = 0
-
-        for _, (_, timestamp, _) in _inference_cache.items():
-            if current_time - timestamp < _inference_cache_ttl:
-                valid_entries += 1
-            else:
-                expired_entries += 1
-
+        now = time.time()
+        valid = sum(1 for _, (__, ts, ___) in _inference_cache.items() if (now - ts) < _inference_cache_ttl)
+        expired = len(_inference_cache) - valid
         return {
             "total_entries": len(_inference_cache),
-            "valid_entries": valid_entries,
-            "expired_entries": expired_entries,
-            "cache_size_mb": len(_inference_cache) * 0.1,  # Rough estimate
-            "hit_rate": getattr(get_inference_cache_stats, "_hit_rate", 0.0),
-            "miss_rate": getattr(get_inference_cache_stats, "_miss_rate", 0.0),
+            "valid_entries": valid,
+            "expired_entries": expired,
+            "cache_size_mb": len(_inference_cache) * 0.1,  # heuristic
+            "hit_rate": 0.0,
+            "miss_rate": 0.0,
         }
 
 
 def should_use_phoneme_preprocessing() -> bool:
-    """
-    Determine if phoneme preprocessing should be enabled.
-
-    Returns:
-        bool: True if phoneme preprocessing is enabled and beneficial
-    """
-    # Disable phoneme preprocessing for streaming requests (lower latency)
-    # to reduce first-chunk latency. This check can be extended to consider request context.
-
+    """Skip heavier preprocessing when FAST_STREAMING_MODE is set."""
     try:
-        from api.config import TTSConfig
-
-        # Check if we're in a high-performance mode where we want to skip preprocessing
-        # for faster TTFA (this can be controlled via environment variables)
-        if hasattr(TTSConfig, "FAST_STREAMING_MODE"):
-            return not TTSConfig.FAST_STREAMING_MODE
-
-        # Default behavior: use preprocessing for quality
+        return not getattr(TTSConfig, "FAST_STREAMING_MODE", False)
+    except Exception:
         return True
 
-    except ImportError:
-        return False
 
-
-# Fast segment processing for simple text
 def _is_simple_segment(text: str) -> bool:
-    """
-    Determine if a text segment is simple enough for fast processing.
-
-    This is used during streaming to identify segments that can bypass
-    heavy preprocessing and get audio chunks out faster.
-    """
-    if not text or len(text.strip()) > 150:
+    """Check if segment is simple enough to skip heavy preprocessing."""
+    if not text:
         return False
-
-    # Simple criteria: basic ASCII text without complex patterns
-    import re
-
-    # Check for complex patterns
-    complex_patterns = [
-        r"\d{4}-\d{2}-\d{2}",  # Dates
-        r"\d{2}:\d{2}:\d{2}",  # Times
-        r"[^\x00-\x7F]",  # Non-ASCII
-        r"[{}[\]()@#$%^&*+=<>]",  # Special chars
-        r"\d+\.\d+",  # Decimal numbers
+    s = text.strip()
+    if len(s) > 150:
+        return False
+    
+    import re as _re
+    patterns = [
+        r"\d{4}-\d{2}-\d{2}",
+        r"\d{2}:\d{2}:\d{2}",
+        r"[^\x00-\x7F]",
+        r"[{}[\]()@#$%^&*+=<>]",
+        r"\d+\.\d+",
     ]
-
-    for pattern in complex_patterns:
-        if re.search(pattern, text):
-            return False
-
-    return True
+    return not any(_re.search(p, s) for p in patterns)
 
 
 def get_tts_processing_stats() -> Dict[str, Any]:
-    """
-    Get comprehensive TTS processing statistics including phoneme cache performance.
-
-    Returns:
-        Dict[str, Any]: Combined statistics from inference cache and phoneme cache
-    """
+    """Get comprehensive TTS processing statistics."""
     try:
-        # Get inference cache stats
-        inference_stats = get_inference_cache_stats()
-
-        # Get phoneme cache stats
-        phoneme_stats = get_phoneme_cache_stats()
-
-        # Combine statistics
-        combined_stats = {
-            "inference_cache": inference_stats,
-            "phoneme_cache": phoneme_stats,
+        return {
+            "inference_cache": get_inference_cache_stats(),
+            "phoneme_cache": get_phoneme_cache_stats(),
+            "primer_cache": get_primer_microcache_stats(),
             "phoneme_preprocessing_enabled": should_use_phoneme_preprocessing(),
             "active_provider": get_active_provider(),
+            "variation_handler": get_variation_handler().get_statistics(),
         }
-
-        return combined_stats
-
     except Exception as e:
         logger.warning(f"Could not get TTS processing stats: {e}")
         return {
             "inference_cache": {},
             "phoneme_cache": {},
+            "primer_cache": {},
             "phoneme_preprocessing_enabled": False,
             "active_provider": "Unknown",
             "error": str(e),
         }
 
 
-def _generate_audio_segment(
-    idx: int, text: str, voice: str, speed: float, lang: str
-) -> Tuple[int, Optional[np.ndarray], str]:
+def _validate_and_handle_audio_corruption(audio_np: Any, segment_idx: int, request_id: str) -> Optional[np.ndarray]:
     """
-    Generates a single audio segment with enhanced caching and thread safety.
+    Validate audio output and handle CoreML corruption cases.
+    
+    This is the critical fix for CoreML precision variations that return scalar values
+    instead of proper audio arrays.
+    """
+    if audio_np is None:
+        return None
+    
+    # CRITICAL: Check for scalar corruption (CoreML precision issue)
+    if isinstance(audio_np, (int, float)):
+        logger.error(f"[{request_id}] CORRUPTION DETECTED: Segment {segment_idx} returned scalar {type(audio_np)}: {audio_np}")
+        return None
+    
+    # Convert to numpy array and validate
+    try:
+        audio_array = np.asarray(audio_np, dtype=np.float32)
+        
+        # Check for scalar arrays
+        if audio_array.ndim == 0:
+            logger.error(f"[{request_id}] CORRUPTION: Segment {segment_idx} returned scalar array: {audio_array}")
+            return None
+        
+        # Check for insufficient audio data
+        if audio_array.size <= 1:
+            logger.error(f"[{request_id}] CORRUPTION: Segment {segment_idx} returned array with size {audio_array.size}")
+            return None
+        
+        # Reshape to 1D and handle NaN/Inf
+        audio_array = audio_array.reshape(-1)
+        audio_array = np.nan_to_num(audio_array, nan=0.0, posinf=1.0, neginf=-1.0)
+        
+        logger.debug(f"[{request_id}] Segment {segment_idx} validated: shape={audio_array.shape}, size={audio_array.size}")
+        return audio_array
+        
+    except Exception as e:
+        logger.error(f"[{request_id}] Audio validation failed for segment {segment_idx}: {e}")
+        return None
 
-    This function implements inference pipeline caching for common requests
-    to avoid redundant processing and improve performance.
 
-    ## Phoneme Preprocessing Integration
-
-    This function now includes optional phoneme preprocessing for CoreML optimization:
-    - **Phoneme Conversion**: Converts text to phoneme sequences for consistency
-    - **Tensor Shape Padding**: Ensures consistent tensor shapes for CoreML graph reuse
-    - **Cache Integration**: Phoneme preprocessing results are cached for performance
-    - **Fallback Strategy**: Falls back to original text if phoneme processing fails
-
-    Reference: DEPENDENCY_RESEARCH.md section 5.2
+def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float, lang: str, 
+                                  request_id: str, no_cache: bool = False) -> Tuple[int, Optional[np.ndarray], str]:
+    """
+    Generate audio with corruption detection and fallback mechanisms.
+    Combines full-fidelity path with CoreML corruption handling.
     """
     if not text or len(text.strip()) < 3:
-        return idx, None, "Text too short (minimum 3 characters required)"
+        return idx, None, "Text too short"
 
     try:
-        # Phoneme preprocessing for CoreML optimization
         processed_text = text
         preprocessing_info = ""
 
-        if should_use_phoneme_preprocessing():
+        # Phoneme preprocessing for complex text
+        if should_use_phoneme_preprocessing() and not _is_simple_segment(text):
             try:
-                # Preprocess text for optimal inference with consistent tensor shapes
-                preprocessing_result = preprocess_text_for_inference(text)
-                processed_text = preprocessing_result["normalized_text"]
-
-                # Log preprocessing stats for monitoring
-                original_length = preprocessing_result["original_length"]
-                padded_length = preprocessing_result["padded_length"]
-                cache_hit = preprocessing_result["cache_hit"]
-                truncated = preprocessing_result["truncated"]
-
-                preprocessing_info = f"phonemes:{original_length}→{padded_length}"
-                if cache_hit:
+                prep = preprocess_text_for_inference(text)
+                processed_text = prep["normalized_text"]
+                preprocessing_info = f"phonemes:{prep.get('original_length')}→{prep.get('padded_length')}"
+                if prep.get("cache_hit"):
                     preprocessing_info += " (cached)"
-                if truncated:
+                if prep.get("truncated"):
                     preprocessing_info += " (truncated)"
-                    # Log detailed truncation warning for debugging
-                    logger.warning(
-                        f"[{idx}] Text truncated during phoneme processing: original {original_length} > max {padded_length}"
-                    )
-                    logger.warning(
-                        f"[{idx}] Truncated text may lose content at the end. Consider increasing DEFAULT_MAX_PHONEME_LENGTH"
-                    )
-
-                logger.debug(f"[{idx}] Phoneme preprocessing: {preprocessing_info}")
-
+                    logger.warning(f"[{idx}] Text truncated during phoneme processing")
             except Exception as e:
-                logger.warning(
-                    f"[{idx}] Phoneme preprocessing failed: {e}, falling back to original text"
-                )
+                logger.warning(f"[{idx}] Phoneme preprocessing failed: {e}; fallback to raw text")
                 processed_text = text
                 preprocessing_info = "fallback"
 
-        # Create cache key for this inference (using processed text for better cache efficiency)
+        # Check cache (unless bypassed)
         cache_key = _create_inference_cache_key(processed_text, voice, speed, lang)
+        if not no_cache:
+            cached = _get_cached_inference(cache_key)
+            if cached:
+                samples, provider = cached
+                update_inference_stats(0.001, provider)
+                info = f"{provider} (cached)"
+                if preprocessing_info:
+                    info += f" [{preprocessing_info}]"
+                return idx, samples, info
 
-        # Check cache first
-        cached_result = _get_cached_inference(cache_key)
-        if cached_result is not None:
-            samples, provider = cached_result
-            logger.debug(f"[{idx}] Using cached audio for: {processed_text[:50]}...")
-            # Update cache hit statistics
-            from api.performance.stats import update_inference_stats
-            update_inference_stats(0.001, provider)  # Minimal time for cache hit
-            cache_info = f"{provider} (cached)"
-            if preprocessing_info:
-                cache_info += f" [{preprocessing_info}]"
-            return idx, samples, cache_info
-
-        # Cache miss - generate new audio
-        # Use dual session manager for concurrent processing
-        dual_session_manager = get_dual_session_manager()
-
-        if dual_session_manager:
-            # Use dual session manager for optimal concurrent processing
-            logger.debug(
-                f"[{idx}] Generating audio using dual session manager for: {processed_text[:50]}..."
-            )
-            start_time = time.perf_counter()
-
+        # Primary path: Dual-session processing with corruption detection
+        dsm = get_dual_session_manager()
+        if dsm:
+            start = time.perf_counter()
             try:
-                samples, _ = dual_session_manager.process_segment_concurrent(
-                    processed_text, voice, speed, lang
-                )
-
-                inference_time = time.perf_counter() - start_time
-
-                # Get session utilization stats for logging
-                utilization_stats = dual_session_manager.get_utilization_stats()
-                active_sessions = utilization_stats.get("concurrent_segments_active", 0)
-
-                # Determine which session was likely used based on complexity
-                complexity = dual_session_manager.calculate_segment_complexity(
-                    processed_text
-                )
-                if complexity > 0.7:
-                    likely_session = (
-                        "ANE"
-                        if utilization_stats["sessions_available"]["ane"]
-                        else "GPU"
-                    )
-                else:
-                    likely_session = (
-                        "GPU"
-                        if utilization_stats["sessions_available"]["gpu"]
-                        else "ANE"
-                    )
-
-                from api.performance.stats import update_inference_stats
-                update_inference_stats(
-                    inference_time, f"DualSession-{likely_session}"
-                )
-
-                if samples is not None and samples.size > 0:
-                    # Cache the successful result
-                    _cache_inference_result(
-                        cache_key, samples, f"DualSession-{likely_session}"
-                    )
-
-                    result_info = (
-                        f"DualSession-{likely_session} (concurrent:{active_sessions})"
-                    )
+                result = dsm.process_segment_concurrent(processed_text, voice, speed, lang)
+                samples = result[0] if isinstance(result, tuple) else result
+                
+                # CRITICAL: Validate for CoreML corruption
+                validated_samples = _validate_and_handle_audio_corruption(samples, idx, request_id)
+                
+                if validated_samples is not None:
+                    dur = time.perf_counter() - start
+                    likely = "ANE" if dsm.get_utilization_stats().get("sessions_available", {}).get("ane") else "GPU"
+                    provider = f"DualSession-{likely}"
+                    
+                    update_inference_stats(dur, provider)
+                    if not no_cache:
+                        _cache_inference_result(cache_key, validated_samples, provider)
+                    
+                    info = provider
                     if preprocessing_info:
-                        result_info += f" [{preprocessing_info}]"
-
-                    logger.info(
-                        f"[{idx}] Segment processed in {inference_time:.4f}s using {result_info}"
-                    )
-                    return idx, samples, result_info
-                else:
-                    logger.warning(
-                        f"[{idx}] Dual session manager returned empty audio for text: {processed_text[:50]}..."
-                    )
-                    return idx, None, "Empty audio returned"
-
+                        info += f" [{preprocessing_info}]"
+                    return idx, validated_samples, info
+                
+                logger.warning(f"[{idx}] DualSession returned corrupted audio, falling back to single model")
+                
             except Exception as e:
-                logger.warning(
-                    f"[{idx}] Dual session processing failed: {e}, falling back to single model"
-                )
-                # Fall back to single model processing
-                pass
+                logger.warning(f"[{idx}] Dual session failed: {e}; falling back to single model")
 
-        # Fallback to single model processing
+        # Fallback path: Single model with corruption detection
         provider = get_active_provider()
-        local_model = _get_cached_model(provider)
-
-        logger.debug(
-            f"[{idx}] Generating audio using single model for: {processed_text[:50]}..."
-        )
-        start_time = time.perf_counter()
-
-        result = local_model.create(processed_text, voice, speed, lang)
+        model = _get_cached_model(provider)
         
-        # Handle different return formats
-        if isinstance(result, tuple):
-            if len(result) >= 2:
-                samples = result[0]  # First element is always samples
-            else:
-                samples = result[0]  # Single element tuple
-        else:
-            samples = result  # Direct return
-
-        inference_time = time.perf_counter() - start_time
-        from api.performance.stats import update_inference_stats
-        update_inference_stats(inference_time, provider)
-
-        if samples is not None and samples.size > 0:
-            # Cache the successful result
-            _cache_inference_result(cache_key, samples, provider)
-
-            result_info = f"{provider}"
-            if preprocessing_info:
-                result_info += f" [{preprocessing_info}]"
-
-            logger.info(
-                f"[{idx}] Segment processed in {inference_time:.4f}s using {result_info}"
-            )
-            return idx, samples, result_info
-        else:
-            logger.warning(
-                f"[{idx}] TTS model returned empty audio for text: {processed_text[:50]}..."
-            )
-            return idx, None, "Empty audio returned"
+        start = time.perf_counter()
+        result = model.create(processed_text, voice, speed, lang)
+        samples = result[0] if isinstance(result, tuple) else result
+        
+        # CRITICAL: Validate single model output too
+        validated_samples = _validate_and_handle_audio_corruption(samples, idx, request_id)
+        
+        if validated_samples is None:
+            logger.error(f"[{idx}] CRITICAL: Both DualSession and single model returned corrupted audio")
+            return idx, None, "All generation paths corrupted"
+        
+        dur = time.perf_counter() - start
+        update_inference_stats(dur, provider)
+        
+        if not no_cache:
+            _cache_inference_result(cache_key, validated_samples, provider)
+        
+        info = provider + (f" [{preprocessing_info}]" if preprocessing_info else "")
+        return idx, validated_samples, info
 
     except Exception as e:
-        logger.error(
-            f"[{idx}] TTS generation failed for text '{text[:50]}...': {e}",
-            exc_info=True,
-        )
+        logger.error(f"[{idx}] TTS generation failed: {e}", exc_info=True)
         return idx, None, str(e)
 
 
-def _fast_generate_audio_segment(
-    idx: int, text: str, voice: str, speed: float, lang: str
-) -> Tuple[int, Optional[np.ndarray], str]:
+def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, lang: str, 
+                                 request_id: str, no_cache: bool = False) -> Tuple[int, Optional[np.ndarray], str]:
     """
-    Fast audio segment generation for simple text with minimal preprocessing.
-
-    This bypasses heavy phoneme preprocessing for simple text to achieve
-    faster TTFA performance. Used for the first segment in streaming requests.
+    Latency-optimized path for primer segments with corruption detection.
     """
     if not text or len(text.strip()) < 3:
-        return idx, None, "Text too short (minimum 3 characters required)"
+        return idx, None, "Text too short"
 
     try:
-        # Skip heavy preprocessing for simple text
         processed_text = text.strip()
+        cache_key = _create_inference_cache_key(processed_text, voice, speed, lang)
 
-        # Create simple cache key
-        import hashlib
+        # Check cache (unless bypassed)
+        if not no_cache:
+            cached = _get_cached_inference(cache_key)
+            if cached:
+                samples, provider = cached
+                logger.debug(f"[{idx}] Fast path cache hit")
+                return idx, samples, f"{provider} (fast-cached)"
 
-        cache_key = hashlib.md5(
-            f"{processed_text}:{voice}:{speed}:{lang}".encode()
-        ).hexdigest()[:16]
-
-        # Check inference cache
-        cached_result = _get_cached_inference(cache_key)
-        if cached_result is not None:
-            samples, provider = cached_result
-            logger.debug(f"[{idx}] Fast path cache hit for: {processed_text[:50]}...")
-            return idx, samples, f"{provider} (fast-cached)"
-
-        # Generate audio directly without preprocessing
-        # Use dual session manager if available
-        dual_session_manager = get_dual_session_manager()
-
-        if dual_session_manager:
-            logger.debug(
-                f"[{idx}] Fast generation using dual session manager: {processed_text[:50]}..."
-            )
-            start_time = time.perf_counter()
-
+        # Fast dual-session path with corruption detection
+        dsm = get_dual_session_manager()
+        if dsm:
+            start = time.perf_counter()
             try:
-                ds_result = dual_session_manager.process_segment_concurrent(
-                    processed_text, voice, speed, lang
-                )
-
-                inference_time = time.perf_counter() - start_time
-
-                # DualSessionManager returns (samples, sample_rate)
-                if isinstance(ds_result, tuple) and len(ds_result) >= 1:
-                    samples = ds_result[0]
-                else:
-                    samples = ds_result
-
-                if samples is not None:
-                    try:
-                        samples = np.asarray(samples)
-                    except Exception:
-                        pass
-
-                if samples is not None and getattr(samples, "size", 0) > 0:
-                    # Cache the successful result
-                    _cache_inference_result(cache_key, samples, "DualSession-Fast")
-
-                    logger.info(
-                        f"[{idx}] Fast segment processed in {inference_time:.4f}s using DualSession-Fast"
-                    )
-                    return idx, samples, "DualSession-Fast"
-                else:
-                    logger.warning(f"[{idx}] Fast dual session returned empty audio")
-
+                result = dsm.process_segment_concurrent(processed_text, voice, speed, lang)
+                samples = result[0] if isinstance(result, tuple) else result
+                
+                # CRITICAL: Validate for corruption
+                validated_samples = _validate_and_handle_audio_corruption(samples, idx, request_id)
+                
+                if validated_samples is not None:
+                    dur = time.perf_counter() - start
+                    provider = "DualSession-Fast"
+                    
+                    if not no_cache:
+                        _cache_inference_result(cache_key, validated_samples, provider)
+                    
+                    logger.info(f"[{idx}] Fast segment in {dur:.4f}s via {provider}")
+                    return idx, validated_samples, provider
+                
+                logger.warning(f"[{idx}] Fast DualSession corrupted, falling back")
+                
             except Exception as e:
                 logger.warning(f"[{idx}] Fast dual session failed: {e}")
-                # Fall through to single model
 
-        # Fallback to single model
+        # Fast single model fallback
         provider = get_active_provider()
-        local_model = _get_cached_model(provider)
-
-        logger.debug(
-            f"[{idx}] Fast generation using single model: {processed_text[:50]}..."
-        )
-        start_time = time.perf_counter()
-
-        result = local_model.create(processed_text, voice, speed, lang)
+        model = _get_cached_model(provider)
         
-        # Handle different return formats
-        if isinstance(result, tuple):
-            if len(result) >= 2:
-                samples = result[0]  # First element is always samples
-            else:
-                samples = result[0]  # Single element tuple
-        else:
-            samples = result  # Direct return
-
-        inference_time = time.perf_counter() - start_time
-        from api.performance.stats import update_inference_stats
-        update_inference_stats(inference_time, f"{provider}-Fast")
-
-        if samples is not None and samples.size > 0:
-            # Cache the result
-            _cache_inference_result(cache_key, samples, f"{provider}-Fast")
-
-            logger.info(
-                f"[{idx}] Fast segment processed in {inference_time:.4f}s using {provider}-Fast"
-            )
-            return idx, samples, f"{provider}-Fast"
-        else:
-            logger.warning(f"[{idx}] Fast processing returned empty audio")
-            return idx, None, "Empty audio returned"
+        start = time.perf_counter()
+        result = model.create(processed_text, voice, speed, lang)
+        samples = result[0] if isinstance(result, tuple) else result
+        
+        # CRITICAL: Validate single model output
+        validated_samples = _validate_and_handle_audio_corruption(samples, idx, request_id)
+        
+        if validated_samples is None:
+            logger.error(f"[{idx}] CRITICAL: Fast path completely corrupted")
+            return idx, None, "Fast generation corrupted"
+        
+        dur = time.perf_counter() - start
+        fast_provider = f"{provider}-Fast"
+        update_inference_stats(dur, fast_provider)
+        
+        if not no_cache:
+            _cache_inference_result(cache_key, validated_samples, fast_provider)
+        
+        logger.info(f"[{idx}] Fast segment in {dur:.4f}s via {fast_provider}")
+        return idx, validated_samples, fast_provider
 
     except Exception as e:
         logger.error(f"[{idx}] Fast TTS generation failed: {e}", exc_info=True)
@@ -690,597 +459,340 @@ def _fast_generate_audio_segment(
 
 
 async def stream_tts_audio(
-    text: str, voice: str, speed: float, lang: str, format: str, request: Request
+    text: str, voice: str, speed: float, lang: str, format: str, request: Request, no_cache: bool = False
 ) -> AsyncGenerator[bytes, None]:
     """
-    Asynchronously generates and streams TTS audio.
-    This function processes text in segments, generates audio for each in parallel,
-    and streams the resulting audio bytes back to the client as they become available.
+    Generate and stream TTS audio with CoreML variation handling and self-optimization.
+    
+    This combines the clean architecture with adaptive threshold management and
+    corruption detection for robust streaming.
     """
     request_id = request.headers.get("x-request-id", "no-id")
     logger.info(
-        f"[{request_id}] Starting stream request: voice='{voice}', speed={speed}, format='{format}', text='{text[:30]}...'"
+        f"[{request_id}] Stream start: voice='{voice}', speed={speed}, format='{format}', "
+        f"no_cache={no_cache}, text='{text[:30]}…'"
     )
 
-    # Record request for workload analysis
     start_time = time.perf_counter()
-    concurrent_requests = 1  # TODO: Implement actual concurrent request tracking
+    stream_success = True
+    error_details = None
 
-    model_loaded = get_model_status()
-    if not model_loaded:
-        logger.error(f"[{request_id}] TTS model not ready, raising 503 error.")
+    # Get variation handler for CoreML precision tracking
+    variation_handler = get_variation_handler()
+    full_text_hash = variation_handler.get_text_hash(text, voice, speed, lang)
+
+    if not get_model_status():
+        logger.error(f"[{request_id}] Model not ready")
         raise HTTPException(status_code=503, detail="TTS model not ready.")
 
-    # Segment text for optimal processing
-    segments = segment_text(text, TTSConfig.MAX_SEGMENT_LENGTH)
-    total_segments = len(segments)
-    
-    # Validate segment mapping to ensure full text coverage
-    if not _validate_segment_mapping(text, segments, request_id):
-        logger.warning(f"[{request_id}] Segment mapping validation failed - this may affect TTFA performance")
-    
-    if total_segments == 0:
+    # Segment the text (use aliased import to avoid shadowing)
+    segments = split_segments(text, TTSConfig.MAX_SEGMENT_LENGTH)
+    if not segments:
         raise HTTPException(status_code=400, detail="No valid text segments found")
 
-    # Early TTFA primer: split first segment to stream ~5% of text ASAP
-    def _split_segment_for_early_ttfa(segment_text: str) -> Tuple[str, str]:
-        """
-        Split a segment for early TTFA optimization.
-        
-        This function implements the early-primer strategy by splitting text segments
-        to provide immediate audio output while processing the remainder.
-        
-        Args:
-            segment_text (str): Text segment to split
-            
-        Returns:
-            Tuple[str, str]: (early_text, remaining_text) for optimized TTFA
-        """
-        length = len(segment_text)
-        
-        # For very short segments, return as-is
-        if length <= 50:
-            return segment_text, ""
-        
-        # Calculate optimal split point for early TTFA
-        # Target 10-15% of text for immediate processing
-        split_percentage = min(0.15, max(0.10, 50.0 / length))
-        cut = int(length * split_percentage)
-        
-        # Ensure we don't cut in the middle of a word
-        for i in range(cut, min(length, cut + 50)):
-            if segment_text[i].isspace():
-                cut = i
-                break
-        
-        # Split the segment
-        early = segment_text[:cut].strip()
-        rest = segment_text[cut:].strip()
-        
-        # Ensure we have meaningful content in both parts
-        if not early or len(early) < 10:
-            return segment_text, ""
-        
-        return early, rest
+    logger.info(f"[{request_id}] Text segmented into {len(segments)} parts")
 
-    fast_indices: Set[int] = set()
-    primer_hint_key: Optional[str] = None  # Initialize to avoid UnboundLocalError
-
-    if segments:
-        logger.debug(
-            f"[{request_id}] Checking primer split for first segment: '{segments[0][:50]}...' (length: {len(segments[0])})"
-        )
-        early, rest = _split_segment_for_early_ttfa(segments[0])
-        logger.debug(
-            f"[{request_id}] Primer split result: early='{early[:30]}...' (length: {len(early)}), rest='{rest[:30]}...' (length: {len(rest)})"
-        )
-
-        if early and rest:
-            logger.debug(f"[{request_id}] Primer split successful, checking cache")
-            # Micro-cache lookup for primer inference
-            primer_key = _get_primer_cache_key(early, voice, speed, lang)
-            logger.debug(f"[{request_id}] Generated primer key: {primer_key[:8]}...")
-            cached_primer = _get_cached_primer(primer_key)
-            if cached_primer is not None and cached_primer.size > 0:
-                logger.debug(
-                    f"[{request_id}] Primer micro-cache hit; yielding cached primer audio"
-                )
-                try:
-                    scaled_audio = np.int16(cached_primer * 32767)
-                    segment_bytes = scaled_audio.tobytes()
-                    # yield a couple of small chunks to flush
-                    yield segment_bytes[: max(1024, len(segment_bytes) // 4)]
-                    if len(segment_bytes) > 2048:
-                        yield segment_bytes[
-                            max(1024, len(segment_bytes) // 4) : max(
-                                2048, len(segment_bytes) // 2
-                            )
-                        ]
-                except Exception as e:
-                    logger.debug(f"[{request_id}] Primer cached audio emit failed: {e}")
-            else:
-                logger.debug(
-                    f"[{request_id}] No cached primer found, setting up for storage"
-                )
-                # No cached primer; keep primer as first segment and mark fast-path
-                segments = [early, rest] + segments[1:]
-                fast_indices.add(0)  # force fast path for the early primer segment
-                # Store hint key for later caching after generation
-                primer_hint_key = primer_key
-                logger.debug(
-                    f"[{request_id}] Set primer_hint_key: {primer_hint_key[:8]}..."
-                )
-        else:
-            logger.debug(
-                f"[{request_id}] Primer split not triggered (early or rest empty)"
-            )
-            primer_hint_key = None
-    else:
-        logger.debug(f"[{request_id}] No segments to process")
-        primer_hint_key = None
-
-    total_segments = len(segments)
-    logger.info(f"[{request_id}] Text split into {total_segments} segments.")
-
-    if format == "wav":
-        try:
-            # Enhanced WAV header streaming with proper chunking
-            # This implements the optimization plan's requirement for streaming WAV header support
-            header_size = 44
-
-            # Create streaming-optimized WAV header
-            # Use placeholder for data size, will be handled by streaming response
-            estimated_data_size = 0xFFFFFFFF - header_size  # Maximum size for streaming
-
-            wav_header = bytearray(header_size)
-
-            # RIFF header with streaming optimization
-            struct.pack_into(
-                "<4sI4s",
-                wav_header,
-                0,
-                b"RIFF",
-                estimated_data_size + 36,  # File size - 8 bytes
-                b"WAVE",
-            )
-
-            # Format chunk with Kokoro-optimized parameters
-            struct.pack_into(
-                "<4sIHHIIHH",
-                wav_header,
-                12,
-                b"fmt ",
-                16,  # Format chunk size
-                1,  # PCM format
-                1,  # Mono channel (Kokoro default)
-                TTSConfig.SAMPLE_RATE,  # 24kHz sample rate
-                TTSConfig.SAMPLE_RATE * TTSConfig.BYTES_PER_SAMPLE * 1,  # Byte rate
-                TTSConfig.BYTES_PER_SAMPLE * 1,  # Block align
-                TTSConfig.BYTES_PER_SAMPLE * 8,  # Bits per sample (16-bit)
-            )
-
-            # Data chunk header with streaming placeholder
-            struct.pack_into(
-                "<4sI", wav_header, 36, b"data", estimated_data_size  # Data chunk size
-            )
-
-            # Immediate header yield for faster TTFA
-            # This ensures the client receives the WAV header immediately
-            logger.debug(
-                f"[{request_id}] Yielding optimized WAV header ({header_size} bytes) for streaming"
-            )
-            yield bytes(wav_header)
-
-            # Yield a tiny silence primer to force flush and begin playback immediately
-            # 50ms of silence at 24kHz, 16-bit mono → 24000 * 0.05 * 2 = 2400 bytes
-            try:
-                silence_ms = 50
-                silence_samples = int(TTSConfig.SAMPLE_RATE * (silence_ms / 1000))
-                silence_bytes = (np.int16(np.zeros(silence_samples)) * 0).tobytes()
-                if silence_bytes:
-                    logger.debug(
-                        f"[{request_id}] Yielding {silence_ms}ms silence primer ({len(silence_bytes)} bytes)"
-                    )
-                    yield silence_bytes
-            except Exception as e:
-                logger.debug(f"[{request_id}] Silence primer generation skipped: {e}")
-
-        except Exception as e:
-            logger.error(f"[{request_id}] WAV header generation failed: {e}")
-            # Graceful fallback to PCM format
-            logger.info(f"[{request_id}] Falling back to PCM format for streaming")
-            format = "pcm"
-
-    # True streaming - process segments one by one
-    # This is the key fix: instead of creating all tasks upfront and waiting,
-    # we process each segment immediately and yield chunks as they complete
-
-    successful_segments = 0
-    chunk_timing_state = {
+    # Streaming state tracking
+    chunk_state = {
         "chunk_count": 0,
         "first_chunk_time": None,
-        "request_start_time": start_time,
         "stream_start_time": time.monotonic(),
-        "total_audio_duration_ms": 0,
+        "total_audio_duration_ms": 0.0,
         "ttfa_target_ms": 800,
         "efficiency_target": 0.90,
     }
 
     try:
-        # Process segments with dual session manager for concurrency
-        # Get dual session manager for concurrent processing
-        from api.model.loader import get_dual_session_manager
+        # Primer optimization for TTFA
+        fast_indices: Set[int] = set()
+        primer_hint_key: Optional[str] = None
+        segments_override: Optional[List[str]] = None  # holds [early, rest, ...] if we split the primer
 
-        dual_session_manager = get_dual_session_manager()
+        def _split_segment_for_early_ttfa(seg: str) -> Tuple[str, str]:
+            """Split first segment for faster TTFA."""
+            length = len(seg)
+            if length <= 50:
+                return seg, ""
+            
+            split_percentage = min(0.15, max(0.10, 50.0 / length))
+            cut = int(length * split_percentage)
+            
+            # Find word boundary
+            for i in range(cut, min(length, cut + 50)):
+                if seg[i].isspace():
+                    cut = i
+                    break
+            
+            early = seg[:cut].strip()
+            rest = seg[cut:].strip()
+            
+            if not early or len(early) < 10:
+                return seg, ""
+            
+            return early, rest
 
-        if dual_session_manager:
-            logger.info(
-                f"[{request_id}] Dual session manager available for concurrent processing"
-            )
-            dual_stats = dual_session_manager.get_utilization_stats()
-            logger.info(f"[{request_id}] Dual session stats: {dual_stats}")
-        else:
-            logger.warning(
-                f"[{request_id}] Dual session manager not available, falling back to sequential processing"
-            )
-
-        # Create tasks for concurrent processing
-        segment_tasks = []
-        for i, seg_text in enumerate(segments):
-            logger.debug(
-                f"[{request_id}] Creating task for segment {i+1}/{total_segments}: '{seg_text[:30]}...'"
-            )
-
-            # Use fast processing for first simple segment
-            # Force fast-path for primer segment and for first segment regardless of complexity
-            use_fast_processing = (i in fast_indices) or (i == 0)
-
-            # Create task for this segment
-            if use_fast_processing:
-                logger.debug(
-                    f"[{request_id}] Using fast processing for segment {i+1} to improve TTFA"
-                )
-                task = run_in_threadpool(
-                    _fast_generate_audio_segment, i, seg_text, voice, speed, lang
-                )
-            else:
-                # Use dual session manager for concurrent processing
-                if dual_session_manager:
-                    logger.debug(
-                        f"[{request_id}] Using dual session manager for concurrent processing of segment {i+1}"
-                    )
-                    task = run_in_threadpool(
-                        dual_session_manager.process_segment_concurrent,
-                        seg_text,
-                        voice,
-                        speed,
-                        lang,
-                    )
-                else:
-                    logger.debug(
-                        f"[{request_id}] Dual session manager not available, using standard processing for segment {i+1}"
-                    )
-                    task = run_in_threadpool(
-                        _generate_audio_segment, i, seg_text, voice, speed, lang
-                    )
-
-            segment_tasks.append((i, task))
-
-        # Process segments as they complete (maintain order for streaming)
-        completed_segments = {}
-
-        # Start all tasks
-        for i, task in segment_tasks:
-            try:
-                segment_start_time = time.perf_counter()
-
-                # Wait for segment to complete
-                if dual_session_manager and i not in fast_indices:
-                    # Dual session manager returns (samples, sample_rate)
-                    audio_data = await task
-                    if isinstance(audio_data, tuple):
-                        if len(audio_data) >= 2:
-                            audio_np = audio_data[0]  # First element is always samples
-                            sample_rate = audio_data[1]  # Second element is sample rate
-                        else:
-                            # Handle single element tuple
-                            audio_np = audio_data[0]
-                            sample_rate = 24000  # Default sample rate
-                            logger.warning(f"[{request_id}] Dual session returned single element tuple, using default sample rate")
-                    else:
-                        # Handle direct return
-                        audio_np = audio_data
-                        sample_rate = 24000  # Default sample rate
-                        logger.debug(f"[{request_id}] Dual session returned direct audio data")
-                    
-                    provider = "DualSession"
-                    
-                    # Validate audio data
-                    if audio_np is None or (hasattr(audio_np, 'size') and audio_np.size == 0):
-                        logger.error(f"[{request_id}] Dual session returned invalid audio data for segment {i}")
-                        raise ValueError(f"Invalid audio data from dual session for segment {i}")
-                        
-                else:
-                    # Standard processing returns (idx, audio_np, provider)
+        # Handle primer segment for immediate TTFA
+        if segments:
+            early, rest = _split_segment_for_early_ttfa(segments[0])
+            if early and rest:
+                primer_key = _get_primer_cache_key(early, voice, speed, lang)
+                cached_primer = None if no_cache else _get_cached_primer(primer_key)
+                
+                if cached_primer is not None and cached_primer.size > 0:
+                    # Emit cached primer immediately
                     try:
-                        result = await task
-                        if isinstance(result, tuple) and len(result) >= 3:
-                            idx, audio_np, provider = result
-                        elif isinstance(result, tuple) and len(result) == 2:
-                            # Handle case where provider might be missing
-                            idx, audio_np = result
-                            provider = "Standard"
-                            logger.debug(f"[{request_id}] Standard processing returned 2-element tuple for segment {i}")
-                        else:
-                            logger.error(f"[{request_id}] Unexpected result format from standard processing: {type(result)}")
-                            raise ValueError(f"Unexpected result format for segment {i}")
+                        scaled = np.int16(np.asarray(cached_primer, dtype=np.float32) * 32767)
+                        primer_bytes = scaled.tobytes()
+                        
+                        # Yield in small chunks for immediate playback
+                        yield primer_bytes[:max(1024, len(primer_bytes) // 4)]
+                        if len(primer_bytes) > 2048:
+                            yield primer_bytes[max(1024, len(primer_bytes) // 4):max(2048, len(primer_bytes) // 2)]
+                        
+                        logger.info(f"[{request_id}] Primer emitted from cache ({len(primer_bytes)} bytes)")
+                        
                     except Exception as e:
-                        logger.error(f"[{request_id}] Error unpacking standard processing result for segment {i}: {e}")
-                        raise
+                        logger.debug(f"[{request_id}] Primer emit failed: {e}")
+                else:
+                    # Split segment and mark first for fast processing
+                    segments_override = [early, rest] + segments[1:]
+                    fast_indices.add(0)
+                    primer_hint_key = primer_key
 
-                segment_duration = time.perf_counter() - segment_start_time
-
-                logger.debug(
-                    f"[{request_id}] Segment {i} completed in {segment_duration:.2f}s by {provider}"
+        # WAV header (if requested)
+        if format.lower() == "wav":
+            try:
+                header_size = 44
+                wav_header = bytearray(header_size)
+                
+                # RIFF header
+                struct.pack_into("<4sI4s", wav_header, 0, b"RIFF", 0xFFFFFFFF - 8, b"WAVE")
+                
+                # fmt chunk (PCM, mono, 16-bit)
+                struct.pack_into(
+                    "<4sIHHIIHH",
+                    wav_header, 12,
+                    b"fmt ", 16, 1, 1,
+                    TTSConfig.SAMPLE_RATE,
+                    TTSConfig.SAMPLE_RATE * TTSConfig.BYTES_PER_SAMPLE,
+                    TTSConfig.BYTES_PER_SAMPLE,
+                    TTSConfig.BYTES_PER_SAMPLE * 8,
                 )
+                
+                # data chunk with placeholder size
+                struct.pack_into("<4sI", wav_header, 36, b"data", 0xFFFFFFFF - header_size)
+                yield bytes(wav_header)
 
-                completed_segments[i] = (audio_np, provider)
-
+                # Add tiny silence for playback kickstart
+                silence_ms = 50
+                silence_samples = int(TTSConfig.SAMPLE_RATE * (silence_ms / 1000))
+                yield np.int16(np.zeros(silence_samples)).tobytes()
+                
             except Exception as e:
-                logger.error(f"[{request_id}] Error processing segment {i}: {e}")
-                completed_segments[i] = (None, "error")
+                logger.error(f"[{request_id}] WAV header generation failed: {e}; falling back to PCM")
+                format = "pcm"
 
-        # Process completed segments in order for streaming
-        for i in range(len(segments)):
-            if i not in completed_segments:
-                logger.error(f"[{request_id}] Segment {i} not completed")
-                continue
+        # Process segments with adaptive generation
+        processed_count = 0
+        total_audio_bytes = 0
+        
+        # Use overridden segments if primer split was applied; otherwise use original segments
+        segments_to_process: List[str] = segments_override if segments_override is not None else segments
 
-            audio_np, provider = completed_segments[i]
-
-            # If the segment is None, it means the segment failed to generate audio.
-            # Check the tuple for any other information that might be useful.
-            if audio_np is None:
-                logger.error(f"[{request_id}] Segment {i} failed to generate audio")
-                continue
-            else:
-                # Normalize and convert audio to bytes immediately
-                try:
-                    audio_np = np.asarray(audio_np)
-                    if audio_np.dtype == object:
-                        # Concatenate nested arrays/lists if present
-                        audio_np = np.concatenate([
-                            np.asarray(x, dtype=np.float32).reshape(-1)
-                            for x in audio_np
-                        ])
-                    else:
-                        audio_np = audio_np.astype(np.float32, copy=False)
-                    if audio_np.ndim > 1:
-                        audio_np = audio_np.reshape(-1)
-                    # Guard against NaN/Inf
-                    audio_np = np.nan_to_num(audio_np, nan=0.0, posinf=1.0, neginf=-1.0)
-                except Exception as norm_err:
-                    logger.warning(f"[{request_id}] Audio normalization failed: {norm_err}")
-                    audio_np = np.asarray(audio_np, dtype=np.float32).reshape(-1)
-
-                scaled_audio = np.clip(audio_np * 32767.0, -32768, 32767).astype(np.int16)
-                segment_bytes = scaled_audio.tobytes()
-
-                # If this was the primer segment, put into micro-cache
-                try:
-                    logger.debug(
-                        f"[{request_id}] Checking primer storage conditions: i={i}, fast_indices={fast_indices}, primer_hint_key={primer_hint_key}"
+        for i, seg_text in enumerate(segments_to_process):
+            segment_start = time.perf_counter()
+            
+            try:
+                # Choose processing path
+                use_fast = (i in fast_indices) or (i == 0 and len(segments) == 1)
+                
+                if use_fast:
+                    idx, audio_np, provider = await run_in_threadpool(
+                        _fast_generate_audio_segment, i, seg_text, voice, speed, lang, request_id, no_cache
+                    )
+                else:
+                    idx, audio_np, provider = await run_in_threadpool(
+                        _generate_audio_with_fallback, i, seg_text, voice, speed, lang, request_id, no_cache
                     )
 
-                    if i in fast_indices and primer_hint_key:
-                        logger.debug(
-                            f"[{request_id}] Storing primer in micro-cache: key={primer_hint_key[:8]}..., audio_size={audio_np.size}"
-                        )
+                segment_duration = time.perf_counter() - segment_start
+                logger.debug(f"[{request_id}] Segment {i} completed in {segment_duration:.3f}s via {provider}")
+
+                # Handle failed segments gracefully
+                if audio_np is None:
+                    logger.error(f"[{request_id}] Segment {i} produced no audio, skipping")
+                    continue
+
+                processed_count += 1
+
+                # Store primer if applicable
+                if (i in fast_indices) and primer_hint_key and (not no_cache):
+                    try:
                         _put_cached_primer(primer_hint_key, audio_np)
-                        logger.debug(
-                            f"[{request_id}] Primer storage completed successfully"
-                        )
-                    else:
-                        logger.debug(
-                            f"[{request_id}] Primer storage conditions not met: i={i}, fast_indices={fast_indices}, primer_hint_key={primer_hint_key}"
-                        )
-                except Exception as e:
-                    logger.warning(f"[{request_id}] Primer storage failed: {e}")
-                    logger.warning(
-                        f"[{request_id}] Exception details: {type(e).__name__}: {str(e)}"
-                    )
+                        logger.debug(f"[{request_id}] Primer stored in micro-cache")
+                    except Exception as e:
+                        logger.debug(f"[{request_id}] Primer cache store failed: {e}")
 
-                # Yield chunks immediately in smaller pieces
-                # Smaller initial chunks for primer segment to improve TTFA
-                chunk_size = TTSConfig.CHUNK_SIZE_BYTES
-                if i in fast_indices:
-                    chunk_size = max(1024, TTSConfig.CHUNK_SIZE_BYTES // 2)
+                # Convert to streaming format
+                scaled = np.clip(audio_np * 32767.0, -32768, 32767).astype(np.int16)
+                segment_bytes = scaled.tobytes()
+                total_audio_bytes += len(segment_bytes)
+
+                # Track audio size variation for optimization (use the *actual* list being processed)
+                if i == len(segments_to_process) - 1:
+                    variation_analysis = variation_handler.record_audio_size(full_text_hash, total_audio_bytes)
+                    
+                    if not variation_analysis['is_consistent']:
+                        logger.info(
+                            f"[{request_id}] 🎯 Audio size variation detected: {variation_analysis['variation_pct']:.1f}% "
+                            f"(current: {total_audio_bytes}, baseline: {variation_analysis['baseline_size']}, "
+                            f"threshold: {variation_analysis['threshold_used']:.1f}%)"
+                        )
+
+                # Stream in optimized chunks
+                chunk_size = max(1024, TTSConfig.CHUNK_SIZE_BYTES // 2) if use_fast else TTSConfig.CHUNK_SIZE_BYTES
                 offset = 0
 
                 while offset < len(segment_bytes):
-                    chunk = segment_bytes[offset : offset + chunk_size]
+                    chunk = segment_bytes[offset:offset + chunk_size]
                     current_time = time.monotonic()
-                    chunk_timing_state["chunk_count"] += 1
+                    chunk_state["chunk_count"] += 1
 
-                    # Track first chunk for TTFA calculation
-                    if chunk_timing_state["first_chunk_time"] is None:
-                        chunk_timing_state["first_chunk_time"] = current_time
-                        ttfa_ms = (
-                            current_time - chunk_timing_state["stream_start_time"]
-                        ) * 1000
-                        logger.info(
-                            f"[{request_id}] First chunk yielded in {ttfa_ms:.2f}ms"
-                        )
+                    # Track TTFA
+                    if chunk_state["first_chunk_time"] is None:
+                        chunk_state["first_chunk_time"] = current_time
+                        ttfa_ms = (current_time - chunk_state["stream_start_time"]) * 1000.0
+                        logger.info(f"[{request_id}] First chunk in {ttfa_ms:.2f} ms")
 
-                        if ttfa_ms < chunk_timing_state["ttfa_target_ms"]:
-                            logger.info(
-                                f"[{request_id}] ✅ TARGET ACHIEVED: TTFA < {chunk_timing_state['ttfa_target_ms']}ms"
-                            )
-                        else:
-                            logger.warning(
-                                f"[{request_id}] ⚠️ TARGET MISSED: TTFA {ttfa_ms:.2f}ms > {chunk_timing_state['ttfa_target_ms']}ms"
-                            )
-
-                    # Calculate actual audio duration represented by this chunk
-                    actual_audio_duration_ms = (
+                    # Track audio duration
+                    chunk_state["total_audio_duration_ms"] += (
                         len(chunk) / TTSConfig.BYTES_PER_SAMPLE / TTSConfig.SAMPLE_RATE
-                    ) * 1000
-                    chunk_timing_state[
-                        "total_audio_duration_ms"
-                    ] += actual_audio_duration_ms
+                    ) * 1000.0
 
-                    # Log progress every 10 chunks
-                    if chunk_timing_state["chunk_count"] % 10 == 0:
-                        elapsed_time = (
-                            current_time - chunk_timing_state["stream_start_time"]
-                        )
-                        expected_time = (
-                            chunk_timing_state["total_audio_duration_ms"] / 1000
-                        )
-                        current_efficiency = (
-                            expected_time / elapsed_time if elapsed_time > 0 else 0
-                        )
-                        logger.debug(
-                            f"[{request_id}] Chunk {chunk_timing_state['chunk_count']}: Efficiency {current_efficiency*100:.1f}%"
-                        )
+                    # Periodic efficiency logging
+                    if (chunk_state["chunk_count"] % 10) == 0:
+                        elapsed = current_time - chunk_state["stream_start_time"]
+                        expected = chunk_state["total_audio_duration_ms"] / 1000.0
+                        efficiency = (expected / elapsed) if elapsed > 0 else 0.0
+                        logger.debug(f"[{request_id}] Chunk {chunk_state['chunk_count']}: efficiency {efficiency*100:.1f}%")
 
-                    # Yield the chunk immediately
-                    logger.debug(
-                        f"[{request_id}] Yielding chunk {chunk_timing_state['chunk_count']} of {len(chunk)} bytes from segment {i+1}"
-                    )
                     yield chunk
-
                     offset += chunk_size
 
-                successful_segments += 1
+                # Clean up segment memory
+                del audio_np, scaled, segment_bytes
 
-                # Clear the numpy array to free memory immediately
-                del audio_np, scaled_audio
+            except Exception as e:
+                logger.error(f"[{request_id}] Error processing segment {i}: {e}", exc_info=True)
+                error_details = str(e)
+                continue
 
-        # Final streaming statistics
+        # Final statistics and cleanup
         total_time = time.perf_counter() - start_time
-        total_stream_time = time.monotonic() - chunk_timing_state["stream_start_time"]
+        stream_time = time.monotonic() - chunk_state["stream_start_time"]
+        
+        # Calculate performance metrics
+        first_chunk_time = chunk_state["first_chunk_time"]
+        ttfa_ms = ((first_chunk_time - chunk_state["stream_start_time"]) * 1000.0) if first_chunk_time else None
+        audio_seconds = chunk_state["total_audio_duration_ms"] / 1000.0
+        rtf = (total_time / audio_seconds) if audio_seconds > 0 else 0.0
+        efficiency = (audio_seconds / stream_time) if stream_time > 0 else 0.0
 
-        logger.info(f"[{request_id}] Streaming completed")
-        logger.info(f"[{request_id}] Final statistics:")
-        logger.info(f"[{request_id}]   • Total time: {total_time:.2f}s")
-        logger.info(f"[{request_id}]   • Stream time: {total_stream_time:.2f}s")
-        logger.info(
-            f"[{request_id}]   • Segments processed: {successful_segments}/{total_segments}"
+        # Performance compliance check
+        compliant = bool(
+            (ttfa_ms is not None and ttfa_ms < chunk_state["ttfa_target_ms"]) and
+            (rtf < 1.0) and
+            (efficiency >= chunk_state["efficiency_target"])
         )
-        logger.info(
-            f"[{request_id}]   • Chunks yielded: {chunk_timing_state['chunk_count']}"
-        )
-        logger.info(
-            f"[{request_id}]   • Audio duration: {chunk_timing_state['total_audio_duration_ms']:.1f}ms"
-        )
 
-        if chunk_timing_state["first_chunk_time"]:
-            ttfa_ms = (
-                chunk_timing_state["first_chunk_time"]
-                - chunk_timing_state["stream_start_time"]
-            ) * 1000
-            logger.info(f"[{request_id}]   • TTFA: {ttfa_ms:.2f}ms")
-
-            if ttfa_ms < chunk_timing_state["ttfa_target_ms"]:
-                logger.info(f"[{request_id}] ✅ TTFA target achieved")
-            else:
-                logger.warning(
-                    f"[{request_id}] ⚠️ OPTIMAL TIMING NEEDS IMPROVEMENT: TTFA target not met"
-                )
-
-        # Update endpoint-level performance metrics
+        # Update performance stats
         try:
-            from api.performance.stats import update_endpoint_performance_stats
-
-            # Compute RTF and streaming efficiency
-            audio_duration_sec = chunk_timing_state["total_audio_duration_ms"] / 1000.0
-            rtf = (total_time / audio_duration_sec) if audio_duration_sec > 0 else 0.0
-            efficiency = (
-                audio_duration_sec / total_stream_time if total_stream_time > 0 else 0.0
-            )
-
-            compliant = (
-                (ttfa_ms if chunk_timing_state["first_chunk_time"] else 1e9)
-                < chunk_timing_state["ttfa_target_ms"]
-                and rtf < 1.0
-                and efficiency >= chunk_timing_state["efficiency_target"]
-            )
-
             update_endpoint_performance_stats(
                 endpoint="stream_tts_audio",
                 processing_time=total_time,
                 success=True,
-                ttfa_ms=float(ttfa_ms) if chunk_timing_state["first_chunk_time"] else 0.0,
+                ttfa_ms=float(ttfa_ms) if ttfa_ms is not None else 0.0,
                 rtf=float(rtf),
                 streaming_efficiency=float(efficiency),
-                compliant=bool(compliant),
+                compliant=compliant,
             )
-        except Exception as metrics_err:
-            logger.debug(f"[{request_id}] Endpoint metrics update failed: {metrics_err}")
+        except Exception as e:
+            logger.debug(f"[{request_id}] Metrics update failed: {e}")
+
+        # Session cleanup
+        dual_session_manager = get_dual_session_manager()
+        if dual_session_manager:
+            try:
+                dual_session_manager.cleanup_sessions()
+                logger.debug(f"[{request_id}] Session cleanup completed")
+            except Exception as e:
+                logger.warning(f"[{request_id}] Session cleanup failed: {e}")
+                if not error_details:
+                    error_details = f"Session cleanup failed: {e}"
+
+        # Record stream health for optimization
+        variation_handler.record_stream_health(
+            text_hash=full_text_hash,
+            stream_success=stream_success and processed_count > 0,
+            error_details=error_details,
+            latency_ms=stream_time * 1000,
+            chunk_count=chunk_state["chunk_count"]
+        )
+
+        # Final logging
+        logger.info(f"[{request_id}] Streaming completed successfully")
+        logger.info(f"[{request_id}] Stats: segments={processed_count}/{len(segments_to_process)}, "
+                   f"chunks={chunk_state['chunk_count']}, TTFA={ttfa_ms:.1f}ms, RTF={rtf:.2f}, "
+                   f"efficiency={efficiency:.1f}%, compliant={compliant}")
+
+        if processed_count == 0:
+            logger.error(f"[{request_id}] No segments processed successfully")
+            raise HTTPException(status_code=500, detail="Audio generation failed")
 
     except Exception as e:
         logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)
+        
+        # Record failed stream for optimization
+        try:
+            variation_handler.record_stream_health(
+                text_hash=full_text_hash,
+                stream_success=False,
+                error_details=str(e),
+                latency_ms=None,
+                chunk_count=chunk_state.get("chunk_count", 0)
+            )
+        except Exception as health_err:
+            logger.debug(f"[{request_id}] Failed to record stream health: {health_err}")
+        
+        # Session cleanup on error
+        try:
+            dual_session_manager = get_dual_session_manager()
+            if dual_session_manager:
+                dual_session_manager.cleanup_sessions()
+        except Exception as cleanup_err:
+            logger.warning(f"[{request_id}] Error cleanup failed: {cleanup_err}")
+        
         raise
-
-    if successful_segments == 0:
-        logger.error(f"[{request_id}] No segments were successfully processed")
-        raise HTTPException(
-            status_code=500, detail="Audio generation failed for all segments"
-        )
 
 
 def _validate_segment_mapping(text: str, segments: List[str], request_id: str) -> bool:
-    """
-    Validate that segment mapping preserves full text coverage.
+    """Ensure segmentation preserved content (lenient whitespace normalization)."""
+    original = " ".join(text.replace("\r", " ").replace("\n", " ").split())
+    seg_joined = " ".join(" ".join(segments).replace("\r", " ").replace("\n", " ").split())
     
-    This function ensures that no text content is lost during segmentation,
-    which is critical for maintaining audio quality and preventing TTFA issues.
-    
-    Args:
-        text (str): Original input text
-        segments (List[str]): Segmented text chunks
-        request_id (str): Request identifier for logging
-        
-    Returns:
-        bool: True if full coverage is maintained, False otherwise
-    """
-    # Normalize both original and segmented text for comparison
-    original_normalized = text.replace('\n', ' ').replace('\r', ' ').strip()
-    segmented_normalized = ' '.join(segments).replace('\n', ' ').replace('\r', ' ').strip()
-    
-    # Remove extra whitespace for comparison
-    original_clean = ' '.join(original_normalized.split())
-    segmented_clean = ' '.join(segmented_normalized.split())
-    
-    # Check for exact match
-    if original_clean == segmented_clean:
-        logger.debug(f"[{request_id}] ✅ Segment mapping validation passed: full text coverage maintained")
+    if original == seg_joined:
+        logger.debug(f"[{request_id}] Segment mapping OK (exact match)")
         return True
     
-    # Check for length-based validation
-    original_length = len(original_clean)
-    segmented_length = len(segmented_clean)
-    
-    if abs(original_length - segmented_length) <= 5:  # Allow small differences due to normalization
-        logger.debug(f"[{request_id}] ✅ Segment mapping validation passed: length difference within tolerance ({original_length} vs {segmented_length})")
+    if abs(len(original) - len(seg_joined)) <= 5:
+        logger.debug(f"[{request_id}] Segment mapping OK (length tolerance)")
         return True
-    
-    # Detailed analysis for failures
-    logger.warning(f"[{request_id}] ⚠️ Segment mapping validation failed:")
-    logger.warning(f"[{request_id}]   Original length: {original_length} chars")
-    logger.warning(f"[{request_id}]   Segmented length: {segmented_length} chars")
-    logger.warning(f"[{request_id}]   Difference: {abs(original_length - segmented_length)} chars")
-    
-    # Log sample of differences for debugging
-    if original_length > segmented_length:
-        missing_chars = original_length - segmented_length
-        logger.warning(f"[{request_id}]   Missing approximately {missing_chars} characters")
-        
-        # Try to identify where the loss occurred
-        if len(segments) > 1:
-            total_segmented = sum(len(seg) for seg in segments)
-            logger.warning(f"[{request_id}]   Total segment lengths: {total_segmented} chars")
-            logger.warning(f"[{request_id}]   Segment count: {len(segments)}")
-    
+
+    logger.warning(f"[{request_id}] Segment mapping mismatch: {len(original)} vs {len(seg_joined)}")
     return False
+
+
+# Compatibility aliases for existing imports
+def _generate_audio_segment(idx: int, text: str, voice: str, speed: float, lang: str) -> Tuple[int, Optional[np.ndarray], str]:
+    """Compatibility wrapper for the legacy function name."""
+    return _generate_audio_with_fallback(idx, text, voice, speed, lang, f"legacy-{idx}", no_cache=False)

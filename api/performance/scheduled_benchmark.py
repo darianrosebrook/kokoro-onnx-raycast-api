@@ -113,7 +113,7 @@ async def run_scheduled_benchmark() -> Dict[str, Any]:
     
     try:
         # Run the benchmark script
-        script_path = Path("scripts/run_benchmark.py")
+        script_path = Path("scripts/run_bench.py")
         if not script_path.exists():
             raise FileNotFoundError(f"Benchmark script not found: {script_path}")
         

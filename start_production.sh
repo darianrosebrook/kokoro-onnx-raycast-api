@@ -35,9 +35,86 @@ fi
 # Activate virtual environment
 source .venv/bin/activate
 
+# --- Audio Dependencies Check ---
+check_audio_dependencies() {
+    echo "🔊 Checking audio dependencies..."
+    
+    local missing_deps=()
+    
+    # Check for sox
+    if ! command -v sox &> /dev/null; then
+        missing_deps+=("sox")
+    fi
+    
+    # Check for ffplay (from ffmpeg)
+    if ! command -v ffplay &> /dev/null; then
+        missing_deps+=("ffmpeg")
+    fi
+    
+    # afplay is built into macOS, but check anyway
+    if ! command -v afplay &> /dev/null; then
+        echo "⚠️  Warning: afplay not found (unusual for macOS)"
+    fi
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo "⚠️  Missing audio dependencies: ${missing_deps[*]}"
+        
+        # Check if we have brew available
+        if command -v brew &> /dev/null; then
+            echo "📦 Installing missing audio dependencies with Homebrew..."
+            for dep in "${missing_deps[@]}"; do
+                echo "   Installing $dep..."
+                brew install "$dep" || echo "❌ Failed to install $dep"
+            done
+            echo "✅ Audio dependency installation complete"
+        else
+            echo "❌ Homebrew not found. Please install the following manually:"
+            echo "   brew install ${missing_deps[*]}"
+            echo "   Or install Homebrew first: https://brew.sh"
+            echo ""
+            echo "The system will fall back to afplay if available, but optimal performance requires sox or ffplay."
+        fi
+    else
+        echo "✅ All audio dependencies available"
+    fi
+    echo ""
+}
+
+# Run audio dependency check
+check_audio_dependencies
+
 # --- Production Environment Setup ---
 # Enable production optimizations
 export KOKORO_PRODUCTION=true
+
+# --- Temp Directory Configuration ---
+# Set up local temp directories to avoid permission issues on work-provisioned machines
+# This must be done before any Python processes start to prevent ONNX Runtime from using system temp
+CACHE_DIR="$(pwd)/.cache"
+COREML_TEMP_DIR="${CACHE_DIR}/coreml_temp"
+ORT_TEMP_DIR="${CACHE_DIR}/ort"
+
+# Create directories if they don't exist
+mkdir -p "${COREML_TEMP_DIR}"
+mkdir -p "${ORT_TEMP_DIR}"
+
+# Set proper permissions
+chmod 755 "${COREML_TEMP_DIR}"
+chmod 755 "${ORT_TEMP_DIR}"
+
+# Export environment variables for all child processes
+export TMPDIR="${COREML_TEMP_DIR}"
+export TMP="${COREML_TEMP_DIR}"
+export TEMP="${COREML_TEMP_DIR}"
+export COREML_TEMP_DIR="${COREML_TEMP_DIR}"
+export ONNXRUNTIME_TEMP_DIR="${COREML_TEMP_DIR}"
+export ONNXRUNTIME_TEMP="${COREML_TEMP_DIR}"
+export ONNXRUNTIME_CACHE_DIR="${COREML_TEMP_DIR}"
+
+echo "📁 Configured temp directories:"
+echo "   TMPDIR: ${TMPDIR}"
+echo "   COREML_TEMP_DIR: ${COREML_TEMP_DIR}"
+echo "   ONNXRUNTIME_TEMP_DIR: ${ONNXRUNTIME_TEMP_DIR}"
 
 # Misaki G2P configuration for production
 export KOKORO_MISAKI_ENABLED="${KOKORO_MISAKI_ENABLED:-true}"

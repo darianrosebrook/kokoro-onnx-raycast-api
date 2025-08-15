@@ -102,6 +102,10 @@ PHONEME_CACHE_SIZE = 1000  # Maximum size for phoneme conversion cache
 # Phoneme conversion cache for performance optimization
 _phoneme_cache: Dict[str, List[str]] = {}
 
+# Cache hit rate tracking
+_cache_requests = 0
+_cache_hits = 0
+
 # Lazy import for phonemizer to avoid import errors if not available
 _phonemizer_backend = None
 
@@ -413,7 +417,11 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
     
     # Check cache first for performance (unified cache for all methods)
     cache_key = f"{text.strip().lower()}:{lang}"
+    global _cache_requests, _cache_hits
+    _cache_requests += 1
+    
     if cache_key in _phoneme_cache:
+        _cache_hits += 1
         logger.debug(f"Cache hit for phoneme conversion: '{text[:30]}...'")
         return _phoneme_cache[cache_key]
     
@@ -796,11 +804,15 @@ def get_phoneme_cache_stats() -> Dict[str, Any]:
     # Calculate efficiency metric (cache usage vs max capacity)
     efficiency = cache_size / PHONEME_CACHE_SIZE if PHONEME_CACHE_SIZE > 0 else 0.0
     
+    # Calculate cache hit rate from tracking data
+    global _cache_requests, _cache_hits
+    cache_hit_rate = (_cache_hits / _cache_requests * 100) if _cache_requests > 0 else 0.0
+    
     return {
         'cache_size': cache_size,
         'max_cache_size': PHONEME_CACHE_SIZE,
-        'cache_hit_rate': 0.0,  # TODO: Implement hit rate tracking
-        'hit_rate': 0.0,  # Alias for compatibility
+        'cache_hit_rate': cache_hit_rate,  # Calculated from cache statistics
+        'hit_rate': cache_hit_rate,  # Alias for compatibility
         'efficiency': efficiency,
         'backend_available': backend is not None,
         'padding_token': PHONEME_PADDING_TOKEN,
@@ -1065,19 +1077,30 @@ def segment_text(text: str, max_len: int) -> List[str]:
     if not cleaned: 
         return []
     
+    # Log detailed text processing for debugging non-deterministic behavior
+    logger.info(f"TEXT_PROCESSING: original_len={len(text)}, normalized_len={len(normalized_text)}, cleaned_len={len(cleaned)}")
+    logger.info(f"TEXT_ORIGINAL: '{text[:100]}...'")
+    logger.info(f"TEXT_NORMALIZED: '{normalized_text[:100]}...'")
+    logger.info(f"TEXT_CLEANED: '{cleaned[:100]}...'")
+    logger.info(f"SEGMENTATION: text_len={len(cleaned)}, max_len={max_len}, boundary={max_len}")
+    
+    # Store the boundary check for consistent logging
+    within_single_segment_limit = len(cleaned) <= max_len
+    within_moderate_text_limit = len(cleaned) <= 1000
+    
     # PHASE 1 OPTIMIZATION: Keep short texts as single segments for better TTFA
     # This reduces unnecessary segmentation overhead and improves processing speed
-    if len(cleaned) <= max_len:
-        logger.debug(f"PHASE1: Keeping short text as single segment ({len(cleaned)} chars)")
+    if within_single_segment_limit:
+        logger.info(f"SEGMENTATION RESULT: Single segment (text ≤ max_len: {len(cleaned)} ≤ {max_len})")
         return [cleaned] if cleaned.strip() else []
     
-    # PHASE 1 OPTIMIZATION: For moderately long texts (< 1000 chars), try to keep as single segment
-    # This reduces processing overhead and improves streaming performance
-    if len(cleaned) <= 1000:
-        # Only segment if the text is significantly longer than max_len
-        if len(cleaned) <= max_len * 1.2:  # Allow 20% buffer for single segment processing
-            logger.debug(f"PHASE1: Keeping moderately long text as single segment ({len(cleaned)} chars)")
-            return [cleaned]
+    # PHASE 1 OPTIMIZATION: For moderately long texts, apply strict deterministic rules
+    # This ensures consistent segmentation behavior across identical requests
+    if within_moderate_text_limit:
+        # Text exceeds max_len but is under 1000 chars - must segment
+        logger.info(f"SEGMENTATION RESULT: Multiple segments required (text > max_len: {len(cleaned)} > {max_len})")
+    else:
+        logger.info(f"SEGMENTATION RESULT: Long text segmentation (text > 1000: {len(cleaned)} chars)")
     
     # For longer texts, proceed with intelligent segmentation
     logger.debug(f"Segmenting long text ({len(cleaned)} chars) into multiple segments")

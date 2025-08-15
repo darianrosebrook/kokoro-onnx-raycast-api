@@ -118,6 +118,40 @@ export class PlaybackManager implements IPlaybackManager {
   }
 
   /**
+   * Signal stream completion to the audio daemon
+   * This ensures the daemon properly resets its state for subsequent requests
+   */
+  async signalStreamCompletion(): Promise<void> {
+    if (!this.initialized) {
+      console.warn("Cannot signal stream completion - playback manager not initialized", {
+        component: this.name,
+        method: "signalStreamCompletion",
+      });
+      return;
+    }
+
+    console.log("Signaling stream completion to audio daemon", {
+      component: this.name,
+      method: "signalStreamCompletion",
+    });
+
+    try {
+      await this.audioDaemon.endStream();
+      console.log("Stream completion signal sent successfully", {
+        component: this.name,
+        method: "signalStreamCompletion",
+      });
+    } catch (error) {
+      console.error("Failed to signal stream completion to daemon", {
+        component: this.name,
+        method: "signalStreamCompletion",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Play audio with memory-based playback
    */
   async playAudio(context: PlaybackContext, _signal: AbortSignal): Promise<void> {

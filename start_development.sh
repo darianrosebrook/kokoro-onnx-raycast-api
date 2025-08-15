@@ -2,14 +2,91 @@
 # Description: Starts the development server with Uvicorn and hot-reloading.
 # This script ensures the application runs with optimal settings for a development environment.
 
+# --- Cleanup Check ---
+# Check if temp files need cleanup (runs weekly)
+CLEANUP_MARKER=".last_cleanup_check"
+if [[ ! -f "$CLEANUP_MARKER" ]] || [[ $(find "$CLEANUP_MARKER" -mtime +7 2>/dev/null) ]]; then
+    echo "🧹 Checking for old temporary files..."
+    if python3 scripts/cleanup_temp_files.py --dry-run --force 2>/dev/null | grep -q "Would remove"; then
+        echo "💡 Hint: Run 'python3 scripts/cleanup_temp_files.py' to clean up old temp files"
+    fi
+    touch "$CLEANUP_MARKER"
+fi
+
 # --- Configuration ---
 HOST=${HOST:-"127.0.0.1"}
 PORT=${PORT:-8000}
 LOG_LEVEL=${LOG_LEVEL:-"info"}
 # Automatically enable reload in development, unless explicitly disabled.
-UVICORN_RELOAD=${UVICORN_RELOAD:-"1"}
+# DISABLED by default to reduce memory usage from multiprocessing
+UVICORN_RELOAD=${UVICORN_RELOAD:-"0"}
 # Set a flag to indicate development mode for the application logic
 export KOKORO_DEVELOPMENT_MODE="true"
+
+# Set development performance profile
+# Options: minimal, stable, optimized, benchmark
+# - minimal: CPU-only, fastest startup, minimal memory usage
+# - stable: CoreML EP with conservative settings, good for debugging (default)
+# - optimized: Full optimization testing, may use more memory
+# - benchmark: Enable all optimizations and benchmarking for performance testing
+export KOKORO_DEV_PERFORMANCE_PROFILE="${KOKORO_DEV_PERFORMANCE_PROFILE:-stable}"
+
+# Legacy environment variables (now controlled by profile)
+# export KOKORO_DISABLE_DUAL_SESSIONS="true"  # Controlled by profile
+# export KOKORO_FORCE_CPU_PROVIDER="true"     # Controlled by profile
+
+# --- Temp Directory Configuration ---
+# Set up local temp directories to avoid permission issues on work-provisioned machines
+# This must be done before any Python processes start to prevent ONNX Runtime from using system temp
+CACHE_DIR="$(pwd)/.cache"
+COREML_TEMP_DIR="${CACHE_DIR}/coreml_temp"
+ORT_TEMP_DIR="${CACHE_DIR}/ort"
+
+# Create directories if they don't exist
+mkdir -p "${COREML_TEMP_DIR}"
+mkdir -p "${ORT_TEMP_DIR}"
+
+# Set proper permissions
+chmod 755 "${COREML_TEMP_DIR}"
+chmod 755 "${ORT_TEMP_DIR}"
+
+# Export environment variables for all child processes
+export TMPDIR="${COREML_TEMP_DIR}"
+export TMP="${COREML_TEMP_DIR}"
+export TEMP="${COREML_TEMP_DIR}"
+export COREML_TEMP_DIR="${COREML_TEMP_DIR}"
+export ONNXRUNTIME_TEMP_DIR="${COREML_TEMP_DIR}"
+
+# Additional ONNX Runtime temp directory overrides
+export ONNXRUNTIME_TEMP="${COREML_TEMP_DIR}"
+export ONNXRUNTIME_CACHE_DIR="${COREML_TEMP_DIR}"
+export COREML_CACHE_DIR="${COREML_TEMP_DIR}"
+export ML_TEMP_DIR="${COREML_TEMP_DIR}"
+
+# Set Python tempfile module environment variables
+export PYTHONTEMPDIR="${COREML_TEMP_DIR}"
+export PYTHON_TEMP="${COREML_TEMP_DIR}"
+
+echo "📁 Configured temp directories:"
+echo "   TMPDIR: ${TMPDIR}"
+echo "   COREML_TEMP_DIR: ${COREML_TEMP_DIR}"
+echo "   ONNXRUNTIME_TEMP_DIR: ${ONNXRUNTIME_TEMP_DIR}"
+
+# Verify environment variables are set
+if [ "$TMPDIR" != "$COREML_TEMP_DIR" ]; then
+    echo "❌ ERROR: TMPDIR not set correctly!"
+    echo "   Expected: $COREML_TEMP_DIR"
+    echo "   Actual: $TMPDIR"
+    exit 1
+fi
+
+echo "✅ Environment variables verified successfully"
+echo ""
+
+# Development mode configuration
+export ENVIRONMENT="development"
+export KOKORO_DEV_MODE="true"
+export DEBUG="true"
 
 # Misaki G2P configuration for development
 export KOKORO_MISAKI_ENABLED="${KOKORO_MISAKI_ENABLED:-true}"
@@ -28,7 +105,53 @@ fi
 # Activate virtual environment
 source .venv/bin/activate
 
+# --- Audio Dependencies Check ---
+check_audio_dependencies() {
+    echo "🔊 Checking audio dependencies..."
+    
+    local missing_deps=()
+    
+    # Check for sox
+    if ! command -v sox &> /dev/null; then
+        missing_deps+=("sox")
+    fi
+    
+    # Check for ffplay (from ffmpeg)
+    if ! command -v ffplay &> /dev/null; then
+        missing_deps+=("ffmpeg")
+    fi
+    
+    # afplay is built into macOS, but check anyway
+    if ! command -v afplay &> /dev/null; then
+        echo "⚠️  Warning: afplay not found (unusual for macOS)"
+    fi
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo "⚠️  Missing audio dependencies: ${missing_deps[*]}"
+        
+        # Check if we have brew available
+        if command -v brew &> /dev/null; then
+            echo "📦 Installing missing audio dependencies with Homebrew..."
+            for dep in "${missing_deps[@]}"; do
+                echo "   Installing $dep..."
+                brew install "$dep" || echo "❌ Failed to install $dep"
+            done
+            echo "✅ Audio dependency installation complete"
+        else
+            echo "❌ Homebrew not found. Please install the following manually:"
+            echo "   brew install ${missing_deps[*]}"
+            echo "   Or install Homebrew first: https://brew.sh"
+            echo ""
+            echo "The system will fall back to afplay if available, but optimal performance requires sox or ffplay."
+        fi
+    else
+        echo "✅ All audio dependencies available"
+    fi
+    echo ""
+}
 
+# Run audio dependency check
+check_audio_dependencies
 
 # Check for ORT model and inform user about first-time conversion
 if [[ "$(uname -m)" == "arm64" ]] && [ ! -f ".cache/ort/kokoro-v1.0.int8.ort" ]; then
@@ -140,12 +263,18 @@ echo "ℹ️  Development mode features:"
 echo "   • API documentation: http://${HOST}:${PORT}/docs"
 echo "   • Standard JSON serialization (not ORJSON)"
 echo "   • No security headers or compression"
-echo "   • Fast startup (reduced benchmarking)"
+echo "   • Performance profile: ${KOKORO_DEV_PERFORMANCE_PROFILE}"
 echo "   • Misaki G2P with fallback enabled: ${KOKORO_MISAKI_ENABLED}"
 if [ "$AUDIO_DAEMON_DISABLED" != "true" ]; then
     echo "   • Persistent audio daemon: http://${HOST}:${AUDIO_DAEMON_PORT}/health"
     echo "   • WebSocket endpoint: ws://${HOST}:${AUDIO_DAEMON_PORT}"
 fi
+echo ""
+echo "📊 Performance profiles available:"
+echo "   • minimal: CPU-only, fastest startup (KOKORO_DEV_PERFORMANCE_PROFILE=minimal)"
+echo "   • stable: CoreML + conservative settings (current: default)"
+echo "   • optimized: Full optimization testing"
+echo "   • benchmark: All optimizations + benchmarking"
 echo ""
 echo "💡 For production optimizations, use: ./start_production.sh"
 
@@ -155,8 +284,12 @@ start_persistent_audio_daemon
 # Start TTS API server
 echo "🚀 Starting TTS API server on http://${HOST}:${PORT}..."
 
-# Use uvicorn directly without exec so we can handle both processes
-uvicorn api.main:app --host "${HOST}" --port "${PORT}" --log-level "${LOG_LEVEL}" $([ "$UVICORN_RELOAD" = "1" ] && echo "--reload") &
+# Use uvicorn directly without exec so we can handle both processes (reload is disabled by default) due to memory usage
+if [ "$UVICORN_RELOAD" = "1" ]; then
+    uvicorn api.main:app --host "${HOST}" --port "${PORT}" --log-level "${LOG_LEVEL}"  &
+else
+    uvicorn api.main:app --host "${HOST}" --port "${PORT}" --log-level "${LOG_LEVEL}" &
+fi
 TTS_PID=$!
 
 # Wait for TTS server and monitor

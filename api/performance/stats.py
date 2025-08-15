@@ -449,6 +449,16 @@ def handle_coreml_context_warning():
             coreml_performance_stats['memory_cleanup_count'] += 1
             logger.debug(" Triggered memory cleanup due to CoreML context warnings")
             
+            # Also trigger the new advanced memory management system
+            try:
+                from api.model.memory.coreml_leak_mitigation import force_coreml_memory_cleanup
+                cleanup_result = force_coreml_memory_cleanup()
+                freed_mb = cleanup_result.get('memory_freed_mb', 0)
+                if freed_mb > 0:
+                    logger.debug(f"🧠 Advanced memory cleanup freed {freed_mb:.1f}MB")
+            except Exception as cleanup_e:
+                logger.debug(f"⚠️ Could not trigger advanced memory cleanup: {cleanup_e}")
+            
     except Exception as e:
         logger.debug(f"Error handling CoreML context warning: {e}")
 
@@ -865,7 +875,7 @@ def calculate_load_balancing_efficiency():
             # Efficiency is the percentage of requests using accelerated sessions
             return accelerated_ratio * 100
             
-        else:
+        elif cpu_available:
             # Only CPU available - efficiency is 100% if we're using it
             return 100.0 if utilization_stats['cpu_requests'] > 0 else 0.0
             
@@ -931,7 +941,7 @@ def get_memory_fragmentation_stats():
         # Calculate memory trend
         memory_trend = 'stable'
         fragmentation_score = 0
-        current_memory = watchdog.get_current_memory_usage()
+        current_memory = watchdog._get_memory_usage()
         
         if len(watchdog.memory_usage_history) >= 10:
             recent_memory = list(watchdog.memory_usage_history)[-10:]
@@ -1049,7 +1059,7 @@ def get_dynamic_memory_optimization_stats():
         # Calculate derived metrics
         performance_impact = 'neutral'
         optimization_efficiency = 0.0
-        needs_optimization = dynamic_memory_manager.should_optimize_arena_size()
+        needs_optimization = dynamic_memory_manager.should_optimize()
         
         # Calculate optimization efficiency
         if len(dynamic_memory_manager.performance_history) >= 10:

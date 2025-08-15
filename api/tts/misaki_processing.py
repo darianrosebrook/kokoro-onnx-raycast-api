@@ -96,6 +96,10 @@ _misaki_stats = MisakiStats()
 _misaki_cache: Dict[Tuple[str, str], List[str]] = {}
 _misaki_cache_max_size = 1000  # Maximum cache size
 
+# Cache hit rate tracking
+_misaki_cache_requests = 0
+_misaki_cache_hits = 0
+
 # Thread safety for backend initialization and cache access
 _misaki_lock = threading.Lock()
 
@@ -240,7 +244,11 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
         
         # Check cache first
         cache_key = (processed_text.strip(), lang)
+        global _misaki_cache_requests, _misaki_cache_hits
+        _misaki_cache_requests += 1
+        
         if cache_key in _misaki_cache:
+            _misaki_cache_hits += 1
             logger.debug(f"Cache hit for Misaki phonemization: '{text[:30]}...'")
             return _misaki_cache[cache_key]
     
@@ -381,7 +389,7 @@ def get_misaki_stats() -> Dict[str, Any]:
         "fallback_available": _fallback_available,
         "cache_size": len(_misaki_cache),
         "cache_max_size": _misaki_cache_max_size,
-        "cache_hit_rate": 0.0  # TODO: Implement cache hit tracking
+        "cache_hit_rate": (_misaki_cache_hits / _misaki_cache_requests * 100) if _misaki_cache_requests > 0 else 0.0
     }
 
 

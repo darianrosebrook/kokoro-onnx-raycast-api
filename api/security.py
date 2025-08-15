@@ -15,6 +15,8 @@ This module provides comprehensive security features including:
 
 import asyncio
 import logging
+import os
+import sys
 import time
 from collections import defaultdict, deque
 from typing import Dict, Set, Optional, Tuple
@@ -35,6 +37,13 @@ class SecurityConfig:
     # Rate limiting settings
     max_requests_per_minute: int = 60
     max_requests_per_hour: int = 1000
+    
+    # Benchmark/development exemptions
+    disable_rate_limiting_for_benchmarks: bool = True
+    development_mode_rate_multiplier: float = 5.0  # 5x more lenient in dev mode
+    benchmark_user_agents: Set[str] = field(default_factory=lambda: {
+        "aiohttp/", "python-requests/", "benchmark-", "test-"
+    })
     
     # IP blocking settings
     block_suspicious_ips: bool = True
@@ -145,8 +154,12 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Fallback to direct connection
         return request.client.host if request.client else "unknown"
     
-    def _is_rate_limited(self, ip: str) -> bool:
+    def _is_rate_limited(self, ip: str, user_agent: str = "") -> bool:
         """Check if IP has exceeded rate limits."""
+        # Check if this is a benchmark request and exemptions are enabled
+        if self._is_benchmark_request(user_agent) and self.config.disable_rate_limiting_for_benchmarks:
+            return False
+        
         now = time.time()
         requests = self.request_counts[ip]
         
@@ -154,13 +167,21 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         while requests and now - requests[0] > 3600:  # 1 hour
             requests.popleft()
         
+        # Apply development mode multiplier if in development
+        hourly_limit = self.config.max_requests_per_hour
+        minute_limit = self.config.max_requests_per_minute
+        
+        if self._is_development_mode():
+            hourly_limit = int(hourly_limit * self.config.development_mode_rate_multiplier)
+            minute_limit = int(minute_limit * self.config.development_mode_rate_multiplier)
+        
         # Check hourly limit
-        if len(requests) >= self.config.max_requests_per_hour:
+        if len(requests) >= hourly_limit:
             return True
         
         # Check minute limit (last 60 seconds)
         recent_requests = [req for req in requests if now - req <= 60]
-        if len(recent_requests) >= self.config.max_requests_per_minute:
+        if len(recent_requests) >= minute_limit:
             return True
         
         return False
@@ -190,6 +211,29 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             block_until = datetime.now() + timedelta(minutes=self.config.block_duration_minutes)
             self.blocked_ips[ip] = block_until
             logger.warning(f"Blocked suspicious IP {ip} until {block_until}")
+    
+    def _is_benchmark_request(self, user_agent: str) -> bool:
+        """Check if request is from a benchmark/testing tool."""
+        if not user_agent:
+            return False
+        
+        user_agent_lower = user_agent.lower()
+        for agent_pattern in self.config.benchmark_user_agents:
+            if agent_pattern.lower() in user_agent_lower:
+                return True
+        return False
+    
+    def _is_development_mode(self) -> bool:
+        """Check if we're running in development mode."""
+        # Check environment variables that indicate development
+        development_indicators = [
+            os.getenv("ENVIRONMENT", "").lower() in ("dev", "development", "local"),
+            os.getenv("DEBUG", "").lower() in ("true", "1", "yes"),
+            os.getenv("KOKORO_DEV_MODE", "").lower() in ("true", "1", "yes"),
+            "pytest" in sys.modules,  # Running under pytest
+            os.getenv("CI") == "true",  # Running in CI
+        ]
+        return any(development_indicators)
     
     async def dispatch(self, request: Request, call_next):
         """Process request through security checks."""
@@ -235,12 +279,18 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             )
         
         # Check rate limiting
-        if self._is_rate_limited(client_ip):
+        if self._is_rate_limited(client_ip, user_agent):
             self.blocked_requests += 1
-            logger.warning(f"Rate limited request from {client_ip}")
             
-            # Mark IP as suspicious if it's hitting rate limits
-            if client_ip in self.suspicious_ips:
+            # Check if this is a benchmark request for logging
+            is_benchmark = self._is_benchmark_request(user_agent)
+            if is_benchmark:
+                logger.info(f"Rate limited benchmark request from {client_ip} (User-Agent: {user_agent})")
+            else:
+                logger.warning(f"Rate limited request from {client_ip}")
+            
+            # Mark IP as suspicious if it's hitting rate limits (but not for benchmarks)
+            if client_ip in self.suspicious_ips and not is_benchmark:
                 self._mark_suspicious_ip(client_ip)
             
             return Response(

@@ -6,6 +6,20 @@ plans/
 archive/
 summary/
 
+# Temporary development files (created during debugging/testing)
+temp/
+*.log
+debug_*.py
+test_*.pcm
+test_*.wav
+test-*.txt
+.last_cleanup_check
+
+# Process files and runtime artifacts
+*.pid
+.audio-daemon.pid
+.daemon.pid
+
 # Temporary files and cache artifacts
 .cache/tmp*
 .cache/coreml_context_*
@@ -50,6 +64,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Deployment
+deploy/
+
 # Raycast
 .DS_Store
 .raycast-history.json
@@ -81,3 +98,9 @@ Thumbs.db
 # Backup files from emoji cleanup script
 *.backup
 
+.cursor/
+.cursorrules
+.cursorignore
+.cursorignorerules 
+
+.audio-daemon.pid

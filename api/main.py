@@ -216,6 +216,7 @@ from api.model.loader import (
 from api.performance.startup_profiler import get_timings as get_startup_timings
 from api.performance.stats import get_performance_stats
 from api.tts.core import _generate_audio_segment, stream_tts_audio, get_tts_processing_stats
+# from api.tts.core_merged import stream_tts_audio as stream_tts_audio_merged  # Temporarily disabled for testing
 from api.tts.core import get_primer_microcache_stats
 from api.utils.cache_cleanup import cleanup_cache, get_cache_info
 from api.tts.text_processing import segment_text
@@ -608,6 +609,16 @@ configure_onnx_runtime_logging()
 setup_coreml_warning_handler()
 suppress_phonemizer_warnings()
 
+# Initialize CoreML memory management system early to prevent auto-initialization duplicates
+logger.debug("Initializing CoreML memory management...")
+try:
+    from api.model.memory.coreml_leak_mitigation import initialize_coreml_memory_management
+    initialize_coreml_memory_management()
+except ImportError:
+    logger.debug("CoreML memory management not available")
+except Exception as e:
+    logger.warning(f"CoreML memory management initialization failed: {e}")
+
 # Note: Stderr interceptor is already activated at module import time in warnings.py
 # This ensures early warning suppression before any ONNX Runtime operations
 
@@ -699,7 +710,7 @@ async def initialize_model():
 
     try:
         update_startup_progress(5, "Setting up warning management...")
-        setup_coreml_warning_handler()
+        # Note: Warning handler already setup at module level, skipping duplicate call
 
         # Set TMPDIR to local cache to avoid CoreML permission issues
         local_cache_dir = os.path.abspath(".cache")
@@ -977,17 +988,8 @@ async def lifespan(app: FastAPI):
     validate_environment()
     validate_patch_status()
 
-    # Trigger pipeline warm-up in background (after model initialization)
-    try:
-        from api.model.loader import get_pipeline_warmer
-        try:
-            pipeline_warmer = get_pipeline_warmer()
-            if pipeline_warmer:
-                asyncio.create_task(pipeline_warmer.trigger_warm_up_if_needed())
-        except Exception as e:
-            logger.debug(f"Pipeline warm-up trigger failed at startup: {e}")
-    except Exception as e:
-        logger.debug(f"Startup warm-up setup failed: {e}")
+    # Note: Pipeline warm-up is handled automatically by the heavy components initialization
+    # in fast_init.py to avoid duplicate initialization. No additional trigger needed here.
 
     # Perform cold-start warm-up inference (delayed to wait for model)
     asyncio.create_task(delayed_cold_start_warmup())
@@ -1074,6 +1076,14 @@ else:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 
+# Include performance monitoring router
+from api.routes.performance import router as performance_router
+app.include_router(performance_router)
+
+# Include benchmark router for comprehensive performance testing
+from api.routes.benchmarks import router as benchmark_router
+app.include_router(benchmark_router, prefix="/benchmarks", tags=["benchmarks"])
+
 # Startup logic moved to lifespan context manager
 
 
@@ -1139,6 +1149,183 @@ async def trigger_cache_cleanup(aggressive: bool = False):
             "success": True,
             "cleanup_result": cleanup_result,
             "message": f"Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/clear-inference-cache")
+async def clear_inference_cache():
+    """
+    Clear the TTS inference cache to force fresh audio generation
+    """
+    try:
+        from api.tts.core import cleanup_inference_cache, get_inference_cache_stats
+        
+        # Get stats before clearing
+        stats_before = get_inference_cache_stats()
+        
+        # Clear the cache
+        cleanup_inference_cache()
+        
+        # Force complete cache clear
+        from api.tts.core import _inference_cache, _inference_cache_lock
+        with _inference_cache_lock:
+            cache_size_before = len(_inference_cache)
+            _inference_cache.clear()
+            
+        return {
+            "success": True,
+            "message": f"Inference cache cleared: {cache_size_before} entries removed",
+            "stats_before": stats_before
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/audio-variation-stats")
+async def get_audio_variation_stats():
+    """
+    Get statistics about audio size variations from CoreML execution
+    """
+    try:
+        from api.tts.audio_variation_handler import get_variation_handler
+        
+        variation_handler = get_variation_handler()
+        stats = variation_handler.get_statistics()
+        
+        return {
+            "success": True,
+            "variation_stats": stats,
+            "message": f"Consistency rate: {stats['consistency_rate_pct']:.1f}%"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/optimize-variation-threshold")
+async def optimize_variation_threshold():
+    """
+    Manually trigger variation threshold optimization
+    """
+    try:
+        from api.tts.audio_variation_handler import get_variation_handler
+        
+        variation_handler = get_variation_handler()
+        result = variation_handler.optimize_threshold()
+        
+        return {
+            "success": True,
+            "optimization_result": result,
+            "message": f"Optimization {result['action']}: {result.get('old_threshold', 0):.1f}% -> {result.get('new_threshold', 0):.1f}%"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/start-soak-test")
+async def start_soak_test(duration_minutes: int = 30, test_interval_seconds: int = 60):
+    """
+    Start a soak test to continuously optimize variation thresholds
+    """
+    try:
+        from api.tts.audio_variation_handler import get_variation_handler
+        import asyncio
+        import threading
+        
+        variation_handler = get_variation_handler()
+        
+        # Run soak test in background thread to avoid blocking
+        def run_soak_test():
+            return variation_handler.run_soak_test(duration_minutes, test_interval_seconds)
+        
+        # Start the soak test in a background thread
+        def background_soak_test():
+            try:
+                result = run_soak_test()
+                # Store result somewhere accessible (in production, you'd use a proper task queue)
+                setattr(variation_handler, '_last_soak_result', result)
+            except Exception as e:
+                setattr(variation_handler, '_last_soak_error', str(e))
+        
+        soak_thread = threading.Thread(target=background_soak_test, daemon=True)
+        soak_thread.start()
+        
+        return {
+            "success": True,
+            "message": f"Soak test started: {duration_minutes} minutes, {test_interval_seconds}s intervals",
+            "duration_minutes": duration_minutes,
+            "test_interval_seconds": test_interval_seconds
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/soak-test-status")
+async def get_soak_test_status():
+    """
+    Get the status/results of the last soak test
+    """
+    try:
+        from api.tts.audio_variation_handler import get_variation_handler
+        
+        variation_handler = get_variation_handler()
+        
+        # Check for completed soak test result
+        last_result = getattr(variation_handler, '_last_soak_result', None)
+        last_error = getattr(variation_handler, '_last_soak_error', None)
+        
+        if last_error:
+            return {
+                "success": False,
+                "error": last_error,
+                "status": "failed"
+            }
+        elif last_result:
+            return {
+                "success": True,
+                "soak_result": last_result,
+                "status": "completed",
+                "message": f"Soak test completed: {last_result['threshold_changes']} optimizations"
+            }
+        else:
+            return {
+                "success": True,
+                "status": "running_or_none",
+                "message": "No completed soak test results available"
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/configure-variation-system")
+async def configure_variation_system(
+    min_threshold: float = 5.0,
+    max_threshold: float = 30.0,
+    optimization_enabled: bool = True
+):
+    """
+    Configure the adaptive variation system parameters
+    """
+    try:
+        from api.tts.audio_variation_handler import get_variation_handler
+        
+        variation_handler = get_variation_handler()
+        
+        # Set threshold bounds
+        variation_handler.set_threshold_bounds(min_threshold, max_threshold)
+        
+        # Enable/disable optimization
+        variation_handler.enable_optimization(optimization_enabled)
+        
+        return {
+            "success": True,
+            "configuration": {
+                "min_threshold": min_threshold,
+                "max_threshold": max_threshold,
+                "optimization_enabled": optimization_enabled
+            },
+            "message": f"Variation system configured: {min_threshold:.1f}%-{max_threshold:.1f}%, optimization {'enabled' if optimization_enabled else 'disabled'}"
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -1366,6 +1553,390 @@ async def get_security_status():
     except Exception as e:
         return {
             "security_enabled": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@app.get("/ttfa-performance")
+async def get_ttfa_performance():
+    """
+    Get comprehensive TTFA (Time to First Audio) performance metrics
+    
+    Returns detailed performance statistics including:
+    - Target achievement rates
+    - Timing breakdowns
+    - Bottleneck identification  
+    - Optimization recommendations
+    """
+    try:
+        from api.performance.ttfa_monitor import get_ttfa_monitor
+        monitor = get_ttfa_monitor()
+        performance_data = monitor.get_performance_summary()
+        
+        return {
+            "ttfa_performance": performance_data,
+            "monitoring": {
+                "active": True,
+                "target_ttfa_ms": monitor.target_ttfa_ms,
+                "optimal_ttfa_ms": monitor.optimal_ttfa_ms,
+                "critical_threshold_ms": monitor.critical_ttfa_ms
+            },
+            "status": "active"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving TTFA performance data: {e}")
+        return {
+            "error": f"Failed to retrieve TTFA performance: {str(e)}",
+            "ttfa_performance": None,
+            "monitoring": {"active": False},
+            "status": "error"
+        }
+
+
+@app.get("/ttfa-measurements")
+async def get_ttfa_measurements(limit: int = 50):
+    """
+    Get recent TTFA measurements for detailed analysis
+    
+    Args:
+        limit: Number of recent measurements to return (default: 50, max: 1000)
+    """
+    try:
+        # Limit to prevent excessive memory usage
+        limit = min(limit, 1000)
+        
+        from api.performance.ttfa_monitor import get_ttfa_monitor
+        monitor = get_ttfa_monitor()
+        measurements = monitor.export_measurements(limit)
+        
+        return {
+            "measurements": measurements,
+            "count": len(measurements),
+            "limit": limit,
+            "status": "success"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving TTFA measurements: {e}")
+        return {
+            "error": f"Failed to retrieve measurements: {str(e)}",
+            "measurements": [],
+            "status": "error"
+        }
+
+
+@app.post("/session-reset")
+async def reset_session_state():
+    """
+    Reset session state to fix concurrent request blocking
+    
+    This endpoint forces a reset of session locks, semaphores, and concurrent 
+    counters to resolve session resource leaks that cause subsequent requests to fail.
+    """
+    try:
+        from api.model.sessions.dual_session import get_dual_session_manager
+        dual_session_manager = get_dual_session_manager()
+        
+        if dual_session_manager:
+            # Reset session state
+            dual_session_manager.reset_session_state()
+            
+            # Perform full cleanup
+            dual_session_manager.cleanup_sessions()
+            
+            # Get updated stats
+            stats = dual_session_manager.get_utilization_stats()
+            
+            return {
+                "success": True,
+                "message": "Session state reset successfully",
+                "session_stats": stats,
+                "actions_performed": [
+                    "Reset concurrent segment counter",
+                    "Released all session locks", 
+                    "Reset semaphore state",
+                    "Performed garbage collection"
+                ]
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Dual session manager not available",
+                "session_stats": None
+            }
+            
+    except Exception as e:
+        logger.error(f"Session reset failed: {e}")
+        return {
+            "success": False,
+            "error": f"Session reset failed: {str(e)}",
+            "session_stats": None
+        }
+
+
+@app.get("/session-status")
+async def get_session_status():
+    """
+    Get current session status and concurrent request information
+    """
+    try:
+        from api.model.sessions.dual_session import get_dual_session_manager
+        dual_session_manager = get_dual_session_manager()
+        
+        if dual_session_manager:
+            stats = dual_session_manager.get_utilization_stats()
+            detailed_stats = dual_session_manager.get_statistics()
+            
+            return {
+                "session_available": True,
+                "utilization_stats": stats,
+                "detailed_stats": detailed_stats,
+                "health_check": {
+                    "concurrent_segments_active": stats.get("current_concurrent", 0),
+                    "peak_concurrent": stats.get("peak_concurrent", 0),
+                    "total_requests": stats.get("total_requests", 0),
+                    "blocking_risk": stats.get("current_concurrent", 0) >= 2  # Max concurrent is 2
+                }
+            }
+        else:
+            return {
+                "session_available": False,
+                "message": "Dual session manager not initialized"
+            }
+            
+    except Exception as e:
+        logger.error(f"Session status check failed: {e}")
+        return {
+            "session_available": False,
+            "error": f"Session status check failed: {str(e)}"
+        }
+
+
+@app.get("/coreml-memory-status")
+async def get_coreml_memory_status():
+    """
+    Get CoreML memory management status and statistics.
+    
+    This endpoint provides detailed information about the CoreML memory leak
+    mitigation system, including memory usage, cleanup statistics, and the
+    status of context leak suppression.
+    
+    **Response Format**:
+    ```json
+    {
+        "memory_management": {
+            "active": boolean,
+            "current_memory_mb": number,
+            "baseline_memory_mb": number,
+            "memory_increase_mb": number,
+            "aggressive_mode": boolean,
+            "operation_count": number,
+            "cleanup_statistics": object
+        },
+        "context_leak_suppression": {
+            "warnings_suppressed": number,
+            "total_warnings": number,
+            "suppression_rate": number,
+            "last_warning": string,
+            "warning_rate_per_minute": number
+        },
+        "objective_c_cleanup": {
+            "available": boolean,
+            "last_cleanup": string,
+            "cleanup_count": number
+        },
+        "recommendations": object
+    }
+    ```
+    
+    **Context Leak Mitigation**:
+    
+    This endpoint reports on the system's ability to handle the "Context leak detected,
+    msgtracer returned -1" warnings that occur with CoreML Execution Provider on
+    M-series Macs. The system provides:
+    
+    1. **Warning Suppression**: Hides cosmetic warning messages from logs
+    2. **Memory Leak Mitigation**: Actually cleans up leaked memory using:
+       - Direct Objective-C autorelease pool management via ctypes
+       - Aggressive garbage collection after CoreML operations
+       - Memory pressure monitoring and automatic cleanup
+    
+    **Usage**:
+    Monitor this endpoint to ensure the memory management system is working
+    effectively and memory usage remains stable over time.
+    """
+    try:
+        from api.model.providers.coreml import get_coreml_memory_status
+        from api.warnings import get_context_leak_suppression_status
+        from api.performance.stats import get_performance_stats
+        
+        # Get memory management status
+        memory_status = get_coreml_memory_status()
+        
+        # Get context leak suppression status
+        suppression_status = get_context_leak_suppression_status()
+        
+        # Get performance stats for CoreML warnings
+        perf_stats = get_performance_stats()
+        coreml_warnings = perf_stats.get('coreml_context_warnings', 0)
+        
+        # Calculate recommendations
+        recommendations = []
+        
+        if memory_status.get('memory_manager_active'):
+            memory_mgmt = memory_status.get('memory_management', {})
+            memory_increase = memory_mgmt.get('memory_increase_mb', 0)
+            
+            if memory_increase > 500:
+                recommendations.append({
+                    "type": "warning",
+                    "message": f"Memory usage increased by {memory_increase:.1f}MB. Consider manual cleanup.",
+                    "action": "POST /coreml-memory-cleanup"
+                })
+            elif memory_increase < 50:
+                recommendations.append({
+                    "type": "info", 
+                    "message": "Memory usage is stable. Memory management is working well.",
+                    "action": None
+                })
+            
+            operation_count = memory_mgmt.get('operation_count', 0)
+            cleanup_count = memory_mgmt.get('stats', {}).get('cleanups_triggered', 0)
+            
+            if operation_count > 100 and cleanup_count == 0:
+                recommendations.append({
+                    "type": "info",
+                    "message": "Many operations completed without needing cleanup. System is efficient.",
+                    "action": None
+                })
+        else:
+            recommendations.append({
+                "type": "error",
+                "message": "CoreML memory management is not active. Context leaks may accumulate.",
+                "action": "Check system logs for initialization errors"
+            })
+        
+        return {
+            "memory_management": {
+                "active": memory_status.get('memory_manager_active', False),
+                "statistics": memory_status.get('memory_management', {}),
+                "configuration": memory_status.get('configuration', {})
+            },
+            "context_leak_suppression": {
+                "active": suppression_status.get('standard_suppression_active', False),
+                "aggressive_available": suppression_status.get('aggressive_suppression_available', False),
+                "global_suppressor": suppression_status.get('global_context_leak_suppressor', False),
+                "statistics": suppression_status.get('suppression_stats', {}),
+                "environment_vars": suppression_status.get('environment_variables', {})
+            },
+            "coreml_warnings": {
+                "total_detected": coreml_warnings,
+                "memory_cleanups_triggered": perf_stats.get('memory_cleanup_count', 0)
+            },
+            "recommendations": recommendations,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting CoreML memory status: {e}")
+        return {
+            "error": str(e),
+            "memory_management": {"active": False},
+            "context_leak_suppression": {"active": False},
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@app.post("/coreml-memory-cleanup")
+async def force_coreml_memory_cleanup():
+    """
+    Force immediate CoreML memory cleanup.
+    
+    This endpoint triggers aggressive memory cleanup to address CoreML context
+    leaks and accumulated memory usage. It combines multiple cleanup strategies:
+    
+    1. **Objective-C Autorelease Pool Cleanup**: Direct interaction with the
+       Objective-C runtime to drain autorelease pools
+    2. **Python Garbage Collection**: Force collection of Python objects
+    3. **ONNX Runtime Cache Clearing**: Clear internal ONNX Runtime caches
+    
+    **Response Format**:
+    ```json
+    {
+        "cleanup_performed": boolean,
+        "memory_before_mb": number,
+        "memory_after_mb": number,
+        "memory_freed_mb": number,
+        "cleanup_methods": string[],
+        "timestamp": string
+    }
+    ```
+    
+    **When to Use**:
+    - When memory usage is higher than expected
+    - After prolonged CoreML operations
+    - When "Context leak detected" warnings are frequent
+    - For periodic maintenance in production
+    
+    **Note**: This operation is safe to perform during normal system operation.
+    """
+    try:
+        from api.model.providers.coreml import force_coreml_cleanup
+        
+        # Record memory before cleanup
+        memory_before = 0
+        try:
+            import psutil
+            process = psutil.Process()
+            memory_before = process.memory_info().rss / 1024 / 1024
+        except:
+            pass
+        
+        # Perform cleanup
+        cleanup_result = force_coreml_cleanup()
+        
+        # Record memory after cleanup
+        memory_after = 0
+        try:
+            import psutil
+            process = psutil.Process()
+            memory_after = process.memory_info().rss / 1024 / 1024
+        except:
+            pass
+        
+        # Calculate actual memory freed
+        actual_freed = memory_before - memory_after if memory_before > 0 and memory_after > 0 else 0
+        
+        if 'error' in cleanup_result:
+            return {
+                "cleanup_performed": False,
+                "error": cleanup_result['error'],
+                "memory_before_mb": memory_before,
+                "memory_after_mb": memory_after,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        return {
+            "cleanup_performed": True,
+            "memory_before_mb": memory_before,
+            "memory_after_mb": memory_after,
+            "memory_freed_mb": actual_freed,
+            "reported_freed_mb": cleanup_result.get('memory_freed_mb', 0),
+            "objective_c_cleanup": cleanup_result.get('objective_c_cleanup_attempted', False),
+            "cleanup_methods": [
+                "objective_c_autorelease_pool",
+                "python_garbage_collection",
+                "onnx_runtime_cache_clearing"
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error performing CoreML memory cleanup: {e}")
+        return {
+            "cleanup_performed": False,
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
@@ -1729,16 +2300,19 @@ async def get_voices():
     @returns JSON object with available voices and metadata
     @raises HTTPException: If model is not loaded or voice data unavailable
     """
-    if not model_initialization_complete:
+    # Use the same model status check as the status endpoint for consistency
+    from api.model.loader import get_model_status
+    if not get_model_status():
         raise HTTPException(
             status_code=503,
             detail="TTS model not loaded. Please wait for initialization to complete."
         )
 
     try:
-        # Get the global Kokoro model instance
-        from api.model.loader import kokoro_model
+        # Get the current model instance through the session manager
+        from api.model.loader import get_model
         
+        kokoro_model = get_model()
         if kokoro_model is None:
             raise HTTPException(
                 status_code=503,
@@ -1876,6 +2450,7 @@ async def create_speech(request: Request, tts_request: TTSRequest, config: TTSCo
             normalized_lang,
             tts_request.format,
             request,
+            tts_request.no_cache,
         )
 
         return StreamingResponse(generator, media_type=media_type)
@@ -1940,6 +2515,56 @@ async def create_speech(request: Request, tts_request: TTSRequest, config: TTSCo
             iter([audio_io.getvalue()]),
             media_type=media_type
         )
+
+
+@app.post("/v1/audio/speech-merged")
+async def create_speech_merged(request: Request, tts_request: TTSRequest, config: TTSConfig = Depends(get_tts_config)):
+    """
+    TEST ENDPOINT: OpenAI-compatible TTS using merged core implementation.
+    Side-by-side comparison endpoint for testing the refactored core.
+    """
+    # Ensure model is loaded before processing
+    if not model_initialization_complete:
+        raise HTTPException(
+            status_code=503,
+            detail="TTS model not loaded. Please wait for initialization to complete."
+        )
+
+    # Handle streaming requests with real-time audio delivery
+    if tts_request.stream:
+        # Determine appropriate MIME type for streaming response
+        media_type = (
+            "audio/wav"
+            if tts_request.format == "wav"
+            else "audio/L16;rate=24000;channels=1"
+        )
+
+        # Create streaming generator for real-time audio delivery using merged core
+        # Normalize language to avoid espeak backend errors (e.g., map 'en' -> 'en-us')
+        normalized_lang = (tts_request.lang or "en-us").lower()
+        if normalized_lang in ("en", "en_us", "en-us-001"):
+            normalized_lang = "en-us"
+
+        # Temporarily use original implementation until merged core is fixed
+        generator = stream_tts_audio(
+            tts_request.text,
+            tts_request.voice,
+            tts_request.speed,
+            normalized_lang,
+            tts_request.format,
+            request,
+            tts_request.no_cache,
+        )
+
+        return StreamingResponse(generator, media_type=media_type)
+
+    # Handle non-streaming requests - use original implementation for now
+    else:
+        raise HTTPException(
+            status_code=501,
+            detail="Non-streaming mode not implemented for merged endpoint. Use stream=true."
+        )
+
 
 # Development server entry point
 if __name__ == "__main__":

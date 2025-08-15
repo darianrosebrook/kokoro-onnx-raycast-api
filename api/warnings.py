@@ -164,6 +164,13 @@ class StderrInterceptor:
             re.compile(r"number of partitions supported", re.IGNORECASE),
             re.compile(r"words count mismatch", re.IGNORECASE),
             re.compile(r"EP Error.*PhonemeBasedPadding", re.IGNORECASE), # Suppress EP Error for PhonemeBasedPadding
+            # Additional CoreML context leak patterns
+            re.compile(r"Context leak detected, msgtracer returned -1", re.IGNORECASE),
+            re.compile(r"msgtracer.*returned -1", re.IGNORECASE),
+            re.compile(r"Context leak.*msgtracer", re.IGNORECASE),
+            # CoreML session initialization noise
+            re.compile(r"CoreML.*context.*leak", re.IGNORECASE),
+            re.compile(r"context.*leak.*detected", re.IGNORECASE),
         ]
         
         self.show_patterns = [
@@ -566,7 +573,7 @@ def setup_coreml_warning_handler():
     
     # Prevent duplicate handler registration
     if _warning_handler_setup:
-        logger.debug(" CoreML warning handler already initialized, skipping setup")
+        logger.debug("✅ CoreML warning handler already initialized, skipping duplicate setup")
         return
     
     logger.info(" Initializing CoreML warning management system...")
@@ -635,7 +642,10 @@ def setup_coreml_warning_handler():
                 "Some nodes were not assigned" in msg_str or
                 "Rerunning with verbose output" in msg_str or
                 "words count mismatch" in msg_str or
-                "CoreMLExecutionProvider::GetCapability" in msg_str):
+                "CoreMLExecutionProvider::GetCapability" in msg_str or
+                "Context leak detected, msgtracer returned -1" in msg_str or
+                "msgtracer" in msg_str and "returned -1" in msg_str or
+                "CoreML" in msg_str and "context" in msg_str and "leak" in msg_str):
                 # These are known harmless warnings - suppress display but track performance
                 logger.debug(f" Suppressing known warning: {msg_str[:50]}...")
                 
@@ -687,13 +697,28 @@ def setup_coreml_warning_handler():
             # Fallback for older ONNX Runtime versions
             logger.debug(" ONNX Runtime logging level setting not available")
         
+        # Additional ONNX Runtime logging configuration
+        try:
+            # Set environment variables to reduce ONNX Runtime logging
+            os.environ['ORT_LOGGING_LEVEL'] = '3'  # Error level only
+            os.environ['ORT_LOGGING_SEVERITY'] = '3'  # Error level only
+            logger.debug(" ONNX Runtime environment logging level set to error-only")
+        except Exception as e:
+            logger.debug(f"⚠️ Could not set ONNX Runtime environment logging: {e}")
+        
         # Suppress specific ONNX Runtime warnings about node assignment
         # These are normal and expected with CoreML provider
         warnings.filterwarnings("ignore", message=".*Some nodes were not assigned.*")
         warnings.filterwarnings("ignore", message=".*Rerunning with verbose output.*")
         warnings.filterwarnings("ignore", message=".*Context leak detected.*")
         warnings.filterwarnings("ignore", message=".*msgtracer returned -1.*")
-        logger.debug(" ONNX Runtime node assignment warnings suppressed")
+        # Additional context leak suppression patterns
+        warnings.filterwarnings("ignore", message=".*Context leak detected, msgtracer returned -1.*")
+        warnings.filterwarnings("ignore", message=".*msgtracer.*returned -1.*")
+        warnings.filterwarnings("ignore", message=".*Context leak.*msgtracer.*")
+        warnings.filterwarnings("ignore", message=".*CoreML.*context.*leak.*")
+        warnings.filterwarnings("ignore", message=".*context.*leak.*detected.*")
+        logger.debug(" ONNX Runtime node assignment and context leak warnings suppressed")
     except Exception as e:
         logger.debug(f"⚠️ Could not configure ONNX Runtime logging: {e}")
 
@@ -724,5 +749,187 @@ def get_warning_suppression_stats():
         return {"error": str(e)}
 
 
+def suppress_coreml_context_leaks_aggressively():
+    """
+    Aggressively suppress CoreML context leak warnings using multiple approaches.
+    
+    This function implements a comprehensive approach to suppress context leak warnings
+    that may bypass the standard warning system. It uses multiple suppression methods
+    to ensure maximum coverage.
+    """
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Method 1: Python warnings filters
+        warnings.filterwarnings("ignore", message=".*Context leak.*")
+        warnings.filterwarnings("ignore", message=".*msgtracer.*")
+        warnings.filterwarnings("ignore", message=".*CoreML.*context.*")
+        
+        # Method 2: Environment variables for ONNX Runtime
+        os.environ['ORT_LOGGING_LEVEL'] = '4'  # Fatal only
+        os.environ['ORT_LOGGING_SEVERITY'] = '4'  # Fatal only
+        os.environ['ORT_LOGGING_VERBOSE'] = '0'  # Disable verbose logging
+        
+        # Method 3: CoreML specific environment variables
+        os.environ['COREML_LOGGING_LEVEL'] = '4'  # Fatal only
+        os.environ['COREML_VERBOSE'] = '0'  # Disable verbose logging
+        
+        # Method 4: Redirect stderr for CoreML operations
+        import contextlib
+        import io
+        
+        def suppress_coreml_stderr():
+            """Context manager to suppress stderr during CoreML operations."""
+            return contextlib.redirect_stderr(io.StringIO())
+        
+        # Store the context manager for use during CoreML operations
+        globals()['_suppress_coreml_stderr'] = suppress_coreml_stderr
+        
+        # Create a decorator for CoreML operations
+        def suppress_coreml_warnings(func):
+            """Decorator to suppress CoreML warnings during function execution."""
+            def wrapper(*args, **kwargs):
+                with suppress_coreml_stderr():
+                    return func(*args, **kwargs)
+            return wrapper
+        
+        # Store the decorator for use
+        globals()['suppress_coreml_warnings'] = suppress_coreml_warnings
+        
+        # Method 5: Global stderr suppression for context leaks
+        # This is more aggressive and suppresses ALL stderr output containing context leak messages
+        class ContextLeakSuppressor:
+            """Global stderr suppressor for context leak messages."""
+            
+            def __init__(self):
+                self.original_stderr = sys.stderr
+                self.suppressed_count = 0
+                self.line_buffer = ""
+                
+                # Patterns to suppress
+                self.suppress_patterns = [
+                    re.compile(r"Context leak detected", re.IGNORECASE),
+                    re.compile(r"msgtracer returned -1", re.IGNORECASE),
+                    re.compile(r"Context leak detected, msgtracer returned -1", re.IGNORECASE),
+                ]
+                
+                # Patterns to always show (important messages)
+                self.show_patterns = [
+                    re.compile(r"ERROR", re.IGNORECASE),
+                    re.compile(r"CRITICAL", re.IGNORECASE),
+                    re.compile(r"FATAL", re.IGNORECASE),
+                    re.compile(r"Exception", re.IGNORECASE),
+                    re.compile(r"Traceback", re.IGNORECASE),
+                ]
+            
+            def write(self, text: str):
+                """Intercept and filter stderr writes."""
+                self.line_buffer += text
+                
+                # Process complete lines
+                while '\n' in self.line_buffer:
+                    line, self.line_buffer = self.line_buffer.split('\n', 1)
+                    self._process_line(line)
+            
+            def _process_line(self, line: str):
+                """Process a single line and decide whether to suppress it."""
+                # Check if this is a context leak message
+                is_context_leak = any(pattern.search(line) for pattern in self.suppress_patterns)
+                
+                # Check if this is an important message we should always show
+                is_important = any(pattern.search(line) for pattern in self.show_patterns)
+                
+                if is_context_leak and not is_important:
+                    # Suppress the context leak message
+                    self.suppressed_count += 1
+                    return
+                
+                # Pass through to original stderr
+                try:
+                    self.original_stderr.write(line + '\n')
+                    self.original_stderr.flush()
+                except Exception:
+                    pass
+            
+            def flush(self):
+                """Flush the buffer."""
+                if self.line_buffer:
+                    self._process_line(self.line_buffer)
+                    self.line_buffer = ""
+                try:
+                    self.original_stderr.flush()
+                except Exception:
+                    pass
+            
+            def close(self):
+                """Close the original stderr."""
+                self.flush()
+                try:
+                    self.original_stderr.close()
+                except Exception:
+                    pass
+        
+        # Install the global context leak suppressor
+        try:
+            context_leak_suppressor = ContextLeakSuppressor()
+            sys.stderr = context_leak_suppressor
+            globals()['_context_leak_suppressor'] = context_leak_suppressor
+            logger.debug("✅ Global context leak suppressor installed")
+        except Exception as e:
+            logger.debug(f"⚠️ Could not install global context leak suppressor: {e}")
+        
+        logger.debug("✅ Aggressive CoreML context leak suppression configured")
+        return True
+        
+    except Exception as e:
+        logger.debug(f"⚠️ Could not configure aggressive context leak suppression: {e}")
+        return False
+
+
+def get_context_leak_suppression_status():
+    """
+    Get the current status of context leak suppression.
+    
+    @returns dict: Context leak suppression status and statistics
+    """
+    try:
+        stats = get_warning_suppression_stats()
+        
+        # Check if aggressive suppression is available
+        aggressive_suppression = '_suppress_coreml_stderr' in globals()
+        
+        # Get global suppressor stats
+        global_suppressor_stats = {}
+        if '_context_leak_suppressor' in globals():
+            suppressor = globals()['_context_leak_suppressor']
+            global_suppressor_stats = {
+                "suppressed_count": getattr(suppressor, 'suppressed_count', 0),
+                "active": True
+            }
+        else:
+            global_suppressor_stats = {
+                "suppressed_count": 0,
+                "active": False
+            }
+        
+        return {
+            "standard_suppression_active": _stderr_interceptor_active,
+            "aggressive_suppression_available": aggressive_suppression,
+            "global_context_leak_suppressor": '_context_leak_suppressor' in globals(),
+            "global_suppressor_stats": global_suppressor_stats,
+            "suppression_stats": stats,
+            "environment_variables": {
+                "ORT_LOGGING_LEVEL": os.environ.get('ORT_LOGGING_LEVEL', 'Not set'),
+                "ORT_LOGGING_SEVERITY": os.environ.get('ORT_LOGGING_SEVERITY', 'Not set'),
+                "COREML_LOGGING_LEVEL": os.environ.get('COREML_LOGGING_LEVEL', 'Not set'),
+            }
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # Activate stderr interceptor at module import time for early warning suppression
-activate_stderr_interceptor() 
+activate_stderr_interceptor()
+
+# Configure aggressive context leak suppression
+suppress_coreml_context_leaks_aggressively() 

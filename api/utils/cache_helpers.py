@@ -125,14 +125,27 @@ def compute_system_fingerprint(model_path: str, voices_path: str) -> str:
         return hashlib.sha1(json.dumps(fallback, sort_keys=True).encode()).hexdigest()
 
 
+def _resolve_cache_path(name: str) -> str:
+    """Resolve a cache file name to an absolute path under CACHE_DIR.
+    - Strips any leading slashes
+    - Strips an accidental leading '.cache/' prefix to avoid double nesting
+    - Joins with CACHE_DIR
+    """
+    cleaned = (name or "").strip().lstrip("/\\")
+    cache_prefix = f"{CACHE_DIR}{os.sep}"
+    if cleaned.startswith(cache_prefix):
+        cleaned = cleaned[len(cache_prefix):]
+    return os.path.join(CACHE_DIR, cleaned)
+
+
 def load_json_cache(name: str) -> Optional[Dict[str, Any]]:
     """
     Load JSON data from cache file.
     
-    @param name: Cache file name
+    @param name: Cache file name (relative to '.cache'). Accepts paths with or without a leading '.cache/'.
     @returns: Cached data or None if not found/invalid
     """
-    path = os.path.join(CACHE_DIR, name)
+    path = _resolve_cache_path(name)
     try:
         with open(path, "r") as f:
             data = json.load(f)
@@ -147,12 +160,16 @@ def save_json_cache_atomic(name: str, data: Dict[str, Any]) -> bool:
     """
     Save JSON data to cache file atomically.
     
-    @param name: Cache file name
+    @param name: Cache file name (relative to '.cache'). Accepts paths with or without a leading '.cache/'.
     @param data: Data to cache
     @returns: True if successful, False otherwise
     """
     try:
-        path = os.path.join(CACHE_DIR, name)
+        path = _resolve_cache_path(name)
+        # Ensure parent directory exists
+        parent_dir = os.path.dirname(path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         tmp = path + ".tmp"
         
         # Write to temporary file first

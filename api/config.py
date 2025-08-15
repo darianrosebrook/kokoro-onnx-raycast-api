@@ -259,6 +259,11 @@ class TTSRequest(BaseModel):
         default="pcm",
         description="Audio format: 'wav' for complete file with headers, 'pcm' for raw audio data."
     )
+    
+    no_cache: bool = Field(
+        default=False,
+        description="Bypass inference cache to force fresh audio generation. Useful for testing or when identical text should produce new audio."
+    )
 
 from api.article import BENCHMARK_ARTICLE_TEXT
 
@@ -386,21 +391,89 @@ class TTSConfig:
     if BENCHMARK_FREQUENCY not in BENCHMARK_FREQUENCY_OPTIONS:
         BENCHMARK_FREQUENCY = "daily"
     
-    # Development mode settings for faster startup
+    # Development mode settings for faster startup and optimization testing
     DEVELOPMENT_MODE = os.environ.get("KOKORO_DEVELOPMENT_MODE", "false").lower() == "true"
     SKIP_BENCHMARKING = os.environ.get("KOKORO_SKIP_BENCHMARKING", "false").lower() == "true"
     FAST_STARTUP = os.environ.get("KOKORO_FAST_STARTUP", "false").lower() == "true"
+    
+    # Development mode performance profiles
+    # Allow testing Apple Silicon optimizations during development
+    DEV_PERFORMANCE_PROFILE = os.environ.get("KOKORO_DEV_PERFORMANCE_PROFILE", "stable").lower()
+    
+    # Available development profiles:
+    # - "minimal": CPU-only, fastest startup, minimal memory usage
+    # - "stable": CoreML EP with conservative settings, good for debugging
+    # - "optimized": Full optimization testing, may use more memory
+    # - "benchmark": Enable all optimizations and benchmarking for performance testing
+    DEV_PERFORMANCE_PROFILES = {
+        "minimal": {
+            "force_cpu_provider": True,
+            "disable_dual_sessions": True,
+            "skip_background_benchmarking": True,
+            "enable_coreml_optimizations": False,
+            "chunk_duration_ms": 100,  # Larger chunks for stability
+            "max_segment_length": 600,  # Smaller segments for safety
+        },
+        "stable": {
+            "force_cpu_provider": False,
+            "disable_dual_sessions": False,  # Enable dual sessions for Apple Silicon optimization testing
+            "skip_background_benchmarking": True,  # Skip benchmarking but enable optimizations
+            "enable_coreml_optimizations": True,
+            "chunk_duration_ms": 50,   # Standard chunks
+            "max_segment_length": 800,  # Current default
+        },
+        "optimized": {
+            "force_cpu_provider": False,
+            "disable_dual_sessions": False,
+            "skip_background_benchmarking": False,
+            "enable_coreml_optimizations": True,
+            "chunk_duration_ms": 50,   # Optimized chunks
+            "max_segment_length": 1200,  # Larger segments for performance
+        },
+        "benchmark": {
+            "force_cpu_provider": False,
+            "disable_dual_sessions": False,
+            "skip_background_benchmarking": False,
+            "enable_coreml_optimizations": True,
+            "chunk_duration_ms": 40,   # Aggressive chunks
+            "max_segment_length": 1500,  # Maximum segments for testing
+        }
+    }
+    
+    # Validate and get current profile settings
+    if DEV_PERFORMANCE_PROFILE not in DEV_PERFORMANCE_PROFILES:
+        DEV_PERFORMANCE_PROFILE = "stable"
+    
+    _current_profile = DEV_PERFORMANCE_PROFILES[DEV_PERFORMANCE_PROFILE]
+    
+    # Apply profile settings when in development mode
+    if DEVELOPMENT_MODE:
+        # Override defaults with profile-specific values
+        FORCE_CPU_PROVIDER = _current_profile["force_cpu_provider"]
+        DISABLE_DUAL_SESSIONS = _current_profile["disable_dual_sessions"] 
+        SKIP_BACKGROUND_BENCHMARKING = _current_profile["skip_background_benchmarking"]
+        ENABLE_COREML_OPTIMIZATIONS = _current_profile["enable_coreml_optimizations"]
+        # Note: chunk_duration_ms and max_segment_length will be applied below
+    else:
+        # Production defaults
+        FORCE_CPU_PROVIDER = False
+        DISABLE_DUAL_SESSIONS = False
+        SKIP_BACKGROUND_BENCHMARKING = False
+        ENABLE_COREML_OPTIMIZATIONS = True
     
     # Audio processing parameters optimized for Kokoro model
     SAMPLE_RATE = 24000  # Kokoro default sample rate for optimal quality
     BYTES_PER_SAMPLE = 2  # 16-bit PCM for efficient processing
     
     # Streaming configuration for real-time audio delivery
-    CHUNK_DURATION_MS = 50  # 50ms chunks for smooth playback without latency
+    # Apply profile-specific chunk duration if in development mode
+    if DEVELOPMENT_MODE and _current_profile.get("chunk_duration_ms"):
+        CHUNK_DURATION_MS = _current_profile["chunk_duration_ms"]
+    else:
+        CHUNK_DURATION_MS = 50  # 50ms chunks for smooth playback without latency
     
     # Calculate optimal chunk size for streaming
     # Formula: (duration_ms / 1000) * sample_rate * bytes_per_sample
-    # Result: 50ms at 24kHz, 16-bit, mono = 2400 bytes
     CHUNK_SIZE_BYTES = int(CHUNK_DURATION_MS / 1000 * SAMPLE_RATE * BYTES_PER_SAMPLE)
     
     # Performance tuning parameters
@@ -410,10 +483,14 @@ class TTSConfig:
     STREAM_IDLE_TIMEOUT_SECONDS = 30.0  # Client disconnect detection
     
     # Text processing limits for optimal performance
-    MAX_TEXT_LENGTH = 4500  # OpenAI API compatibility limit
-    # This allows moderately long texts to be processed as single segments,
-    # reducing server-side processing overhead and improving time-to-first-audio
-    MAX_SEGMENT_LENGTH = 800  
+    MAX_TEXT_LENGTH = 4500  # Extended from OpenAI API compatibility limit for optimization testing
+    # Apply profile-specific segment length if in development mode
+    if DEVELOPMENT_MODE and _current_profile.get("max_segment_length"):
+        MAX_SEGMENT_LENGTH = _current_profile["max_segment_length"]
+    else:
+        # Production optimized: allow larger segments for better single-segment processing
+        # reducing server-side processing overhead and improving time-to-first-audio
+        MAX_SEGMENT_LENGTH = 1200  # Increased from 800 based on optimization gains  
     
     # ORT (ONNX Runtime) optimization settings
     ORT_OPTIMIZATION_ENABLED = os.environ.get("KOKORO_ORT_OPTIMIZATION", "auto").lower()
@@ -638,6 +715,15 @@ class TTSConfig:
         logger.info(f"   - Max segment length: {cls.MAX_SEGMENT_LENGTH} characters")
         logger.info(f"   - Misaki G2P: {'Enabled' if cls.MISAKI_ENABLED else 'Disabled'}")
         
+        # Log development mode configuration if active
+        if cls.DEVELOPMENT_MODE:
+            logger.info(f" Development mode configuration:")
+            logger.info(f"   - Performance profile: {cls.DEV_PERFORMANCE_PROFILE}")
+            logger.info(f"   - Force CPU provider: {cls.FORCE_CPU_PROVIDER}")
+            logger.info(f"   - Disable dual sessions: {cls.DISABLE_DUAL_SESSIONS}")
+            logger.info(f"   - Skip background benchmarking: {cls.SKIP_BACKGROUND_BENCHMARKING}")
+            logger.info(f"   - CoreML optimizations: {cls.ENABLE_COREML_OPTIMIZATIONS}")
+        
         return True
 
     @classmethod
@@ -692,18 +778,31 @@ class TTSConfig:
         # Get base duration from frequency setting
         base_duration = cls.BENCHMARK_FREQUENCY_OPTIONS.get(cls.BENCHMARK_FREQUENCY, 86400)
         
-        # Apply development mode extensions
+        # Apply development mode extensions based on performance profile
         if cls.DEVELOPMENT_MODE or cls.FAST_STARTUP:
-            # In development mode, extend cache duration significantly
-            # This prevents frequent benchmarking during development cycles
-            if cls.BENCHMARK_FREQUENCY == "daily":
-                return 7 * 86400  # 7 days
-            elif cls.BENCHMARK_FREQUENCY == "weekly":
-                return 14 * 86400  # 2 weeks
-            elif cls.BENCHMARK_FREQUENCY == "monthly":
-                return 60 * 86400  # 2 months
-            else:  # manually
-                return base_duration
+            # Different cache durations based on development profile
+            if cls.DEV_PERFORMANCE_PROFILE == "minimal":
+                # Minimal profile: very long cache (avoid benchmarking entirely)
+                return 30 * 86400  # 30 days
+            elif cls.DEV_PERFORMANCE_PROFILE == "stable":
+                # Stable profile: extended cache for development convenience
+                return 7 * 86400   # 7 days
+            elif cls.DEV_PERFORMANCE_PROFILE == "optimized":
+                # Optimized profile: moderate cache, allow some benchmarking
+                return 3 * 86400   # 3 days
+            elif cls.DEV_PERFORMANCE_PROFILE == "benchmark":
+                # Benchmark profile: shorter cache for performance testing
+                return 86400       # 1 day
+            else:
+                # Default development extension
+                if cls.BENCHMARK_FREQUENCY == "daily":
+                    return 7 * 86400  # 7 days
+                elif cls.BENCHMARK_FREQUENCY == "weekly":
+                    return 14 * 86400  # 2 weeks
+                elif cls.BENCHMARK_FREQUENCY == "monthly":
+                    return 60 * 86400  # 2 months
+                else:  # manually
+                    return base_duration
         
         return base_duration
 

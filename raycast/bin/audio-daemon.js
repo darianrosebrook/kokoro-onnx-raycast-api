@@ -156,9 +156,44 @@ class AudioRingBuffer {
     this.readIndex = 0;
     this.writeIndex = 0;
     this.size = 0;
+    this.isFinished = false;
+  }
+
+  // Dynamically grow the ring buffer to accommodate additional bytes while preserving order
+  _ensureCapacity(additionalBytes) {
+    const required = this.size + additionalBytes;
+    if (required <= this.capacity) return;
+
+    // Grow capacity with headroom (1.5x) until it fits the required size
+    let newCapacity = this.capacity;
+    while (newCapacity < required) {
+      newCapacity = Math.ceil(newCapacity * 1.5);
+    }
+
+    const newBuffer = Buffer.alloc(newCapacity);
+
+    // Copy existing data in logical order (from readIndex, wrapping if needed)
+    const firstPart = Math.min(this.size, this.capacity - this.readIndex);
+    this.buffer.copy(newBuffer, 0, this.readIndex, this.readIndex + firstPart);
+    if (firstPart < this.size) {
+      this.buffer.copy(newBuffer, firstPart, 0, this.size - firstPart);
+    }
+
+    // Swap buffers and reset indices to linear layout
+    this.buffer = newBuffer;
+    this.capacity = newCapacity;
+    this.readIndex = 0;
+    this.writeIndex = this.size;
+
+    debugLog(
+      `Ring buffer grown to ${this.capacity} bytes (~${(this.capacity / (1024 * 1024)).toFixed(2)} MB)`
+    );
   }
 
   write(data) {
+    // Ensure capacity so we never drop audio for longer streams
+    this._ensureCapacity(data.length);
+
     const available = this.capacity - this.size;
     available === 0 &&
       debugLog(`Buffer is full`, "color: #FFAAAA; background-color: #222222; font-weight: bold");
@@ -216,6 +251,11 @@ class AudioRingBuffer {
     this.readIndex = 0;
     this.writeIndex = 0;
     this.size = 0;
+    this.isFinished = false;
+  }
+
+  markFinished() {
+    this.isFinished = true;
   }
 }
 
@@ -227,8 +267,8 @@ class AudioProcessor extends EventEmitter {
     super();
     this.instanceId = this.constructor.name + "_" + Date.now();
     this.format = format;
-    // Increase buffer size to accommodate longer audio streams (10 seconds instead of 2)
-    this.ringBuffer = new AudioRingBuffer(this.format.bytesPerSecond * 10); // 10 seconds buffer
+    // Start with smaller buffer for better TTFA, will grow dynamically if needed
+    this.ringBuffer = new AudioRingBuffer(this.format.bytesPerSecond * 2); // 2 seconds initial buffer
     this.audioProcess = null;
     this.isPlaying = false;
     this.isPaused = false;
@@ -281,10 +321,40 @@ class AudioProcessor extends EventEmitter {
   async start() {
     if (this.isPlaying) return;
 
-    // Reset stopping flag when starting new process
+    console.log(`[${this.instanceId}] Starting new audio session - resetting state`);
+
+    // Complete session reset for new playback
     this.isStopping = false;
     this.isStopped = false;
-    this.restartAttempts = 0; // Reset restart attempts on new start
+    this.restartAttempts = 0;
+    this.isEndingStream = false;
+    this.afplayMode = false;
+
+    // Clear ring buffer completely
+    this.ringBuffer.clear();
+
+    // Reset audio process
+    if (this.audioProcess) {
+      try {
+        this.audioProcess.kill("SIGTERM");
+      } catch (e) {
+        // Process might already be dead
+      }
+      this.audioProcess = null;
+    }
+
+    // Clear any timers
+    if (this.processKeepAliveTimer) {
+      clearTimeout(this.processKeepAliveTimer);
+      this.processKeepAliveTimer = null;
+    }
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout);
+      this.restartTimeout = null;
+    }
+
+    // Cleanup afplay mode
+    this.cleanupAfplayMode();
 
     // Reset timing stats for new playback session
     this.stats.playbackStartTime = 0;
@@ -407,13 +477,18 @@ class AudioProcessor extends EventEmitter {
         // If process exited normally (code 0), it finished playing successfully
         if (code === 0) {
           console.log("Audio playback completed successfully");
-          // Clear any remaining buffer data
+          // Clear any remaining buffer data and reset state
           if (this.ringBuffer.size > 0) {
             console.log(
               `[${this.instanceId}] Clearing remaining buffer data: ${this.ringBuffer.size} bytes`
             );
             this.ringBuffer.clear();
           }
+          // Reset state for next playback
+          this.isPlaying = false;
+          this.isStopped = false;
+          this.isStopping = false;
+          this.restartAttempts = 0;
           this.emit("completed");
         } else {
           console.log("Audio process exited with error, restarting...");
@@ -482,8 +557,8 @@ class AudioProcessor extends EventEmitter {
   waitForDataAndStart() {
     console.log(`[${this.instanceId}] waitForDataAndStart called`);
     const chunkSize = this.format.bytesPerSecond * 0.05; // 50ms chunks
-    const minBufferSize = chunkSize * 4; // Wait for at least 4 chunks
-    const fallbackBufferSize = chunkSize * 2; // Fallback after timeout
+    const minBufferSize = chunkSize * 1; // Wait for just 1 chunk (50ms) for faster TTFA
+    const fallbackBufferSize = chunkSize * 1; // Start immediately after timeout
     const maxWaitTime = 2000; // 2 seconds max wait
     const startTime = performance.now();
 
@@ -574,9 +649,216 @@ class AudioProcessor extends EventEmitter {
       // Mirror sox: wait for buffer before starting playback
       this.waitForDataAndStart();
     } catch (error) {
-      console.error("Both sox and ffplay failed:", error.message);
+      console.error("ffplay failed, trying afplay:", error.message);
+      this.startWithAfplay();
+    }
+  }
+
+  /**
+   * Final fallback to afplay (macOS native player) if sox and ffplay fail
+   * Uses chunked temporary files for streaming-like playback
+   */
+  startWithAfplay() {
+    try {
+      const fs = require("fs");
+      const os = require("os");
+      const path = require("path");
+
+      // Initialize afplay chunked streaming mode
+      this.afplayMode = true;
+      this.tempDir = path.join(os.tmpdir(), `audio-daemon-${this.instanceId}`);
+      this.chunkCounter = 0;
+      this.playbackQueue = [];
+      this.currentlyPlaying = null;
+      this.isPlaying = true;
+
+      // Create temp directory
+      if (!fs.existsSync(this.tempDir)) {
+        fs.mkdirSync(this.tempDir, { recursive: true });
+      }
+
+      console.log(
+        `[${this.instanceId}] Started afplay chunked mode using temp dir: ${this.tempDir}`
+      );
+
+      // Start the chunk processing loop
+      this.processAfplayChunks();
+    } catch (error) {
+      console.error("All audio players (sox, ffplay, afplay) failed:", error.message);
       this.emit("error", new Error("No compatible audio player found"));
     }
+  }
+
+  /**
+   * Process incoming audio data in afplay mode by creating temporary WAV files
+   */
+  processAfplayChunks() {
+    const fs = require("fs");
+    const path = require("path");
+
+    let chunkBuffer = Buffer.alloc(0);
+    const CHUNK_SIZE = this.format.sampleRate * 2; // 1 second of 16-bit mono audio
+
+    const processChunk = () => {
+      if (!this.afplayMode || !this.isPlaying) return;
+
+      // Check if we have enough data for a chunk
+      const available = this.ringBuffer.size;
+      if (available >= CHUNK_SIZE || (available > 0 && this.ringBuffer.isFinished)) {
+        const chunkSize = Math.min(available, CHUNK_SIZE);
+        const audioData = Buffer.alloc(chunkSize);
+
+        this.ringBuffer.read(audioData);
+
+        // Create WAV file from PCM data
+        const wavData = this.createWAVFromPCM(audioData);
+        const chunkFile = path.join(this.tempDir, `chunk_${this.chunkCounter++}.wav`);
+
+        fs.writeFileSync(chunkFile, wavData);
+        this.playbackQueue.push(chunkFile);
+
+        console.log(`[${this.instanceId}] Created audio chunk: ${chunkFile} (${chunkSize} bytes)`);
+
+        // Start playback if not already playing
+        if (!this.currentlyPlaying) {
+          this.playNextChunk();
+        }
+      }
+
+      // Continue processing
+      setTimeout(processChunk, 50); // Check every 50ms
+    };
+
+    processChunk();
+  }
+
+  /**
+   * Play the next chunk in the queue
+   */
+  playNextChunk() {
+    if (!this.afplayMode || this.playbackQueue.length === 0) return;
+
+    const nextFile = this.playbackQueue.shift();
+    this.currentlyPlaying = nextFile;
+
+    console.log(`[${this.instanceId}] Playing chunk: ${nextFile}`);
+
+    const afplayProcess = spawn("afplay", [nextFile], {
+      stdio: "ignore",
+      detached: false,
+    });
+
+    afplayProcess.on("exit", (code) => {
+      console.log(`[${this.instanceId}] Chunk finished: ${nextFile}`);
+
+      // Clean up the temporary file
+      try {
+        require("fs").unlinkSync(nextFile);
+      } catch (err) {
+        console.warn(`[${this.instanceId}] Failed to clean up ${nextFile}:`, err.message);
+      }
+
+      this.currentlyPlaying = null;
+
+      // Play next chunk or signal completion
+      if (this.playbackQueue.length > 0) {
+        this.playNextChunk();
+      } else if (this.ringBuffer.isFinished && this.ringBuffer.size === 0) {
+        this.isPlaying = false;
+        this.cleanupAfplayMode();
+        this.emit("completed");
+      } else {
+        // Wait for more chunks
+        setTimeout(() => this.playNextChunk(), 100);
+      }
+    });
+
+    afplayProcess.on("error", (error) => {
+      console.error(`[${this.instanceId}] afplay error:`, error.message);
+      this.currentlyPlaying = null;
+      this.emit("error", error);
+    });
+  }
+
+  /**
+   * Create WAV file data from PCM buffer
+   */
+  createWAVFromPCM(pcmData) {
+    const sampleRate = this.format.sampleRate;
+    const channels = this.format.channels;
+    const bitDepth = this.format.bitDepth;
+    const byteRate = sampleRate * channels * (bitDepth / 8);
+    const blockAlign = channels * (bitDepth / 8);
+    const dataSize = pcmData.length;
+    const fileSize = 36 + dataSize;
+
+    const header = Buffer.alloc(44);
+    let offset = 0;
+
+    // RIFF header
+    header.write("RIFF", offset);
+    offset += 4;
+    header.writeUInt32LE(fileSize, offset);
+    offset += 4;
+    header.write("WAVE", offset);
+    offset += 4;
+
+    // fmt chunk
+    header.write("fmt ", offset);
+    offset += 4;
+    header.writeUInt32LE(16, offset);
+    offset += 4; // chunk size
+    header.writeUInt16LE(1, offset);
+    offset += 2; // PCM format
+    header.writeUInt16LE(channels, offset);
+    offset += 2;
+    header.writeUInt32LE(sampleRate, offset);
+    offset += 4;
+    header.writeUInt32LE(byteRate, offset);
+    offset += 4;
+    header.writeUInt16LE(blockAlign, offset);
+    offset += 2;
+    header.writeUInt16LE(bitDepth, offset);
+    offset += 2;
+
+    // data chunk
+    header.write("data", offset);
+    offset += 4;
+    header.writeUInt32LE(dataSize, offset);
+
+    return Buffer.concat([header, pcmData]);
+  }
+
+  /**
+   * Clean up afplay temporary files and directory
+   */
+  cleanupAfplayMode() {
+    if (!this.tempDir) return;
+
+    try {
+      const fs = require("fs");
+
+      // Clean up any remaining files
+      if (fs.existsSync(this.tempDir)) {
+        const files = fs.readdirSync(this.tempDir);
+        for (const file of files) {
+          try {
+            const path = require("path");
+            fs.unlinkSync(path.join(this.tempDir, file));
+          } catch (err) {
+            console.warn(`[${this.instanceId}] Failed to clean up ${file}:`, err.message);
+          }
+        }
+        fs.rmdirSync(this.tempDir);
+      }
+
+      console.log(`[${this.instanceId}] Cleaned up afplay temp directory`);
+    } catch (error) {
+      console.warn(`[${this.instanceId}] afplay cleanup error:`, error.message);
+    }
+
+    this.afplayMode = false;
+    this.tempDir = null;
   }
 
   async restartAudioProcess() {
@@ -830,8 +1112,8 @@ class AudioProcessor extends EventEmitter {
     }, 5000);
   }
 
-  // TODO: Replace sox/ffplay with node-speaker or native CoreAudio for true native playback
-  // TODO: Implement client backpressure signaling (ws.send({ ready: true })) for flow control
+  // Note: Current implementation uses sox/ffplay with afplay fallback for reliable cross-platform audio
+  // Note: Client backpressure signaling is implemented via handleFlowControl() method
 
   /**
    * Calculate expected duration based on audio format and data size
@@ -1299,8 +1581,9 @@ class AudioDaemon extends EventEmitter {
       });
     });
 
+    // CRITICAL FIX: Forward AudioProcessor "completed" event to WebSocket clients
     this.audioProcessor.on("completed", () => {
-      console.log(`[${this.instanceId}] Audio playback completed naturally`);
+      console.log(`[${this.instanceId}] Audio processing completed - broadcasting to clients`);
       this.broadcast({
         type: "completed",
         timestamp: Date.now(),
@@ -1434,7 +1717,14 @@ class AudioDaemon extends EventEmitter {
     if (!this.audioProcessor) return;
 
     console.log("End stream received, stopping audio processor");
-    this.audioProcessor.stop();
+
+    // Mark ring buffer as finished for afplay mode
+    if (this.audioProcessor.afplayMode) {
+      this.audioProcessor.ringBuffer.markFinished();
+      console.log(`[${this.instanceId}] Marked ring buffer as finished for afplay mode`);
+    } else {
+      this.audioProcessor.stop();
+    }
   }
 
   /**

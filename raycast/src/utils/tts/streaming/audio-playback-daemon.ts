@@ -160,6 +160,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
   private config: {
     daemonPath: string;
     daemonScriptPath: string;
+    nodeExecutable: string;
     port: number;
     bufferSize: number;
     heartbeatInterval: number;
@@ -202,6 +203,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     this.config = {
       daemonPath: environment.assetsPath,
       daemonScriptPath: localDaemonPath,
+      nodeExecutable: "", // Will be set after detection
       port: config.daemonPort ?? 8080,
       bufferSize: config.bufferSize ?? 1024 * 512, // 512 KB buffer
       heartbeatInterval: 3000,
@@ -211,12 +213,66 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     // --- Daemon Script Path Resolution ---
     let daemonScriptPath: string | null = null;
+
+    // 1) Prefer an already-copied local script in Raycast's support directory
     if (existsSync(localDaemonPath)) {
       daemonScriptPath = localDaemonPath;
-    } else {
-      // Find project root using the marker file
-      const projectRoot = findKokoroProjectRoot(process.cwd()) ?? process.env.KOKORO_PROJECT_ROOT;
+    }
 
+    // 2) If env var is provided, honor it and copy into supportPath for stable access
+    if (!daemonScriptPath) {
+      const envDaemonPath = process.env.KOKORO_AUDIO_DAEMON_PATH;
+      if (envDaemonPath && existsSync(envDaemonPath)) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const fs = require("fs");
+          fs.copyFileSync(envDaemonPath, localDaemonPath);
+          daemonScriptPath = localDaemonPath;
+          console.log("Copied daemon script from KOKORO_AUDIO_DAEMON_PATH", {
+            component: this.name,
+            method: "constructor",
+            envDaemonPath,
+            localDaemonPath,
+          });
+        } catch (copyError) {
+          console.warn("Failed to copy daemon script from env path", {
+            component: this.name,
+            method: "constructor",
+            envDaemonPath,
+            error: copyError instanceof Error ? copyError.message : "Unknown error",
+          });
+        }
+      }
+    }
+
+    // 3) Try pulling it from the packaged assets directory if present
+    if (!daemonScriptPath) {
+      const assetDaemonPath = join(environment.assetsPath, "audio-daemon.js");
+      if (existsSync(assetDaemonPath)) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const fs = require("fs");
+          fs.copyFileSync(assetDaemonPath, localDaemonPath);
+          daemonScriptPath = localDaemonPath;
+          console.log("Copied daemon script from assets", {
+            component: this.name,
+            method: "constructor",
+            assetDaemonPath,
+            localDaemonPath,
+          });
+        } catch (copyError) {
+          console.warn("Failed to copy daemon script from assets", {
+            component: this.name,
+            method: "constructor",
+            error: copyError instanceof Error ? copyError.message : "Unknown error",
+          });
+        }
+      }
+    }
+
+    // 4) Development fallback: try to locate the repo via marker/env and copy from raycast/bin
+    if (!daemonScriptPath) {
+      const projectRoot = findKokoroProjectRoot(process.cwd()) ?? process.env.KOKORO_PROJECT_ROOT;
       if (projectRoot) {
         const sourcePath = join(projectRoot, "raycast/bin/audio-daemon.js");
         if (existsSync(sourcePath)) {
@@ -232,7 +288,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
               localDaemonPath,
             });
           } catch (copyError) {
-            console.warn("Failed to copy daemon script", {
+            console.warn("Failed to copy daemon script from project root", {
               component: this.name,
               method: "constructor",
               error: copyError instanceof Error ? copyError.message : "Unknown error",
@@ -244,12 +300,14 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     if (!daemonScriptPath) {
       const error = new Error(
-        "Audio daemon script not found. Please ensure the project is set up correctly."
+        "Audio daemon script not found. Ensure one of the following: 1) set KOKORO_AUDIO_DAEMON_PATH, 2) place audio-daemon.js in raycast/assets, or 3) run raycast/setup-daemon-path.sh."
       );
       console.error("Daemon script resolution failed", {
         component: this.name,
         method: "constructor",
         localDaemonPath,
+        assetsPath: environment.assetsPath,
+        "process.env.KOKORO_AUDIO_DAEMON_PATH": process.env.KOKORO_AUDIO_DAEMON_PATH,
         "process.env.KOKORO_PROJECT_ROOT": process.env.KOKORO_PROJECT_ROOT,
       });
       throw error;
@@ -316,6 +374,9 @@ export class AudioPlaybackDaemon extends EventEmitter {
       });
       throw error;
     }
+
+    // Store the detected node executable in config
+    this.config.nodeExecutable = nodeExecutable;
   }
 
   /**
@@ -655,12 +716,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     try {
       console.warn(`[${this.instanceId}] Spawning daemon process with:`);
-      console.warn("  - Node executable:", this.config.daemonPath);
+      console.warn("  - Node executable:", this.config.nodeExecutable);
       console.warn("  - Daemon script:", this.config.daemonScriptPath);
       console.warn("  - Port:", this.config.port);
 
       const daemonProcess = spawn(
-        this.config.daemonPath,
+        this.config.nodeExecutable,
         [this.config.daemonScriptPath, "--port", this.config.port.toString()],
         {
           stdio: ["ignore", "pipe", "pipe"],
@@ -871,12 +932,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
         } catch (error) {
           console.log(
             `[${this.instanceId}] Failed to parse WebSocket message:`,
-            JSON.stringify(error)
+            error instanceof Error ? error.message : String(error)
           );
           console.error("Failed to parse WebSocket message", {
             component: this.name,
             method: "establishWebSocketConnection",
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : String(error),
           });
         }
       });
@@ -1256,7 +1317,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
       }
       case "error": {
         const error = message as DaemonMessage;
-        this.handleDaemonError(new Error(error.data as string));
+        // Handle both legacy string format and new object format
+        const errorMessage =
+          typeof error.data === "string"
+            ? error.data
+            : ((error.data as { message: string })?.message ?? "Unknown daemon error");
+        this.handleDaemonError(new Error(errorMessage));
         break;
       }
       default:
