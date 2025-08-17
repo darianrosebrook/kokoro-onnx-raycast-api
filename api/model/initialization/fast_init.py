@@ -315,24 +315,36 @@ def initialize_model_fast():
 
                 logger.info("✅ Enhanced session warming completed - cold start eliminated")
                 
-                # CRITICAL: Pre-warm CPU model cache for adaptive provider
-                # This prevents 2+ second cache misses when streaming uses CPU for short text
+                # CRITICAL: Pre-warm ALL model caches used by adaptive provider
+                # This prevents 2+ second cache misses when streaming switches providers
                 try:
                     from api.tts.core import _get_cached_model
-                    logger.info("🔥 Pre-warming CPU model cache for adaptive provider...")
-                    cpu_start = time.perf_counter()
+                    logger.info("🔥 Pre-warming model cache for adaptive provider scenarios...")
+                    adaptive_start = time.perf_counter()
                     
-                    # Create and cache CPU model 
-                    cpu_model = _get_cached_model("CPUExecutionProvider")
+                    # Get the current active provider (already initialized)
+                    current_provider = "CoreMLExecutionProvider" if "CoreML" in str(model.__class__) else "CPUExecutionProvider"
+                    logger.debug(f"Current provider: {current_provider}")
                     
-                    # Warm it up with a short text (typical adaptive provider scenario)
-                    cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
+                    # Pre-warm CPU model (for short text < 200 chars)
+                    if current_provider != "CPUExecutionProvider":
+                        logger.info("🔥 Pre-warming CPU model for short text...")
+                        cpu_model = _get_cached_model("CPUExecutionProvider")
+                        cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
+                        logger.debug("✅ CPU model cache ready")
                     
-                    cpu_time = (time.perf_counter() - cpu_start) * 1000
-                    logger.info(f"✅ CPU model cache pre-warming completed in {cpu_time:.1f}ms")
+                    # Pre-warm CoreML model (for medium/long text > 200 chars)
+                    if current_provider != "CoreMLExecutionProvider":
+                        logger.info("🔥 Pre-warming CoreML model for medium/long text...")
+                        coreml_model = _get_cached_model("CoreMLExecutionProvider")
+                        coreml_model.create("This is a longer test to warm up CoreML", "af_heart", 1.0, "en-us")
+                        logger.debug("✅ CoreML model cache ready")
                     
-                except Exception as cpu_err:
-                    logger.debug(f"CPU model pre-warming failed: {cpu_err}")
+                    adaptive_time = (time.perf_counter() - adaptive_start) * 1000
+                    logger.info(f"✅ Adaptive provider cache pre-warming completed in {adaptive_time:.1f}ms")
+                    
+                except Exception as adaptive_err:
+                    logger.debug(f"Adaptive provider cache pre-warming failed: {adaptive_err}")
     except Exception as e:
         logger.debug(f"Enhanced session warming failed: {e}")
 
