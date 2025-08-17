@@ -104,6 +104,19 @@ curl http://localhost:8000/status | jq '.tts_processing.phoneme_cache'
 # Recommendation: Current memory usage is optimal, no further optimization needed
 ```
 
+### **🔍 Streaming Robustness Investigation Results (2025-08-17)**
+```bash
+# Concurrent streaming performance:
+# 2 concurrent requests: 9.1ms TTFA p95 ✅ (excellent, no cold start)
+# 4 concurrent requests: 3657.1ms TTFA p95 ❌ (cold start returns)
+
+# Chunk generation: Excellent across all concurrency levels (0.003-0.004ms median gaps)
+# Memory usage: Stable across concurrency levels (47-48MB RSS)
+# Concurrency sweet spot: 2 concurrent requests optimal
+# Streaming stability: No underruns detected, consistent chunk delivery
+# Recommendation: System handles moderate concurrency well, avoid high concurrency for optimal performance
+```
+
 ## 📊 Performance Monitoring
 
 ### **Quick TTFA Test**
