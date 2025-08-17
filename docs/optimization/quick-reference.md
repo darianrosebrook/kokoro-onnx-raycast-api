@@ -54,12 +54,18 @@ KOKORO_COREML_COMPUTE_UNITS=CPUOnly python scripts/run_bench.py --preset=short -
 python scripts/run_bench.py --preset=long --memory --trials=3 --verbose
 ```
 
-### **P1: Audio Chunk Timing Optimization**
+### **🔍 Audio Chunk Timing Investigation Results (2025-08-17)**
 ```bash
-# Test different chunk sizes for optimal buffer growth
-python scripts/run_bench.py --preset=short --stream --trials=3 --chunk-size=30 --verbose
-python scripts/run_bench.py --preset=short --stream --trials=3 --chunk-size=80 --verbose
-python scripts/run_bench.py --preset=short --stream --trials=3 --chunk-size=120 --verbose
+# Tested different chunk sizes via performance profiles:
+# 50ms chunks (stable): 152ms TTFA p95 ✅ (best performance)
+# 40ms chunks (benchmark): 4671.8ms TTFA p95 ❌ (worse, more underruns)
+# 100ms chunks (safe): 3943.4ms TTFA p95 ❌ (worse cold start, good steady state)
+
+# Chunk generation timing: Excellent across all sizes (0.003-0.005ms median gaps)
+# Cold start penalty: Consistent across all chunk sizes (~4 seconds first request)
+# Steady state performance: 4-6ms TTFA for all chunk sizes after warmup
+# Underrun analysis: 40ms chunks had 307ms max gap, 50ms/100ms chunks stable
+# Recommendation: Keep 50ms chunks (optimal balance of latency and stability)
 ```
 
 ### **P1: Advanced Caching (If Needed)**

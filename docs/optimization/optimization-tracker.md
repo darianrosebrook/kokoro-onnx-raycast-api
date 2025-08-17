@@ -247,6 +247,16 @@ Based on current implementation status analysis:
   python scripts/run_bench.py --preset=short --stream --trials=3 --chunk-size=120 --verbose
   ```
 
+  **🔍 INVESTIGATION RESULTS (2025-08-17):**
+  - **50ms chunks (stable profile)**: 152ms TTFA p95 ✅ (best performance)
+  - **40ms chunks (benchmark profile)**: 4671.8ms TTFA p95 ❌ (worse, more underruns)
+  - **100ms chunks (safe profile)**: 3943.4ms TTFA p95 ❌ (worse cold start, good steady state)
+  - **Chunk generation timing**: Excellent across all sizes (0.003-0.005ms median gaps)
+  - **Cold start penalty**: Consistent across all chunk sizes (~4 seconds first request)
+  - **Steady state performance**: 4-6ms TTFA for all chunk sizes after warmup
+  - **Underrun analysis**: 40ms chunks had 307ms max gap, 50ms/100ms chunks stable
+  - **Recommendation**: Keep 50ms chunks (optimal balance of latency and stability)
+
 - [ ] **Memory Usage Optimization for Long Text:** Reduce 606.9MB memory usage
   **Status:** P1 - Long text memory exceeds 300MB target
   **Evidence:** Long text processing uses 606.9MB vs 70.9MB for short text
