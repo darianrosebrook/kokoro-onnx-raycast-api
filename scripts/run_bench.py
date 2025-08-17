@@ -274,6 +274,47 @@ class BenchmarkRunner:
                 break
             await asyncio.sleep(self.profile_interval_s)
 
+    async def _clear_cache_between_trials(self):
+        """
+        Clear model and session caches between benchmark trials for consistent results.
+        This prevents cache pollution from affecting subsequent trials.
+        """
+        try:
+            # Clear model cache via API endpoint if available
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.post(f"{self.url.replace('/v1/audio/speech', '/clear_cache')}", timeout=5) as resp:
+                        if resp.status == 200:
+                            self.logger.debug("✅ Model cache cleared via API")
+                            return
+                except Exception:
+                    pass  # API endpoint not available, fall back to file cleanup
+            
+            # Fallback: Clear cache files manually
+            cache_dirs = [
+                Path(".cache"),
+                Path("temp"),
+                Path("artifacts/cache"),
+            ]
+            
+            cleared_count = 0
+            for cache_dir in cache_dirs:
+                if cache_dir.exists():
+                    for cache_file in cache_dir.glob("*.cache"):
+                        try:
+                            cache_file.unlink()
+                            cleared_count += 1
+                        except Exception:
+                            pass
+            
+            if cleared_count > 0:
+                self.logger.debug(f"✅ Cleared {cleared_count} cache files")
+            else:
+                self.logger.debug("ℹ️  No cache files found to clear")
+                
+        except Exception as e:
+            self.logger.warning(f"⚠️  Cache clearing failed: {e}")
+
     def _gate(self, key: str, value: float) -> Tuple[bool, Optional[float]]:
         """
         Compare 'value' to expected_bands threshold if present.
@@ -418,6 +459,9 @@ class BenchmarkRunner:
 
             # Run N trials
             for i in range(self.trials):
+                # Clear cache between trials for consistent results
+                if i > 0:  # Skip first trial (baseline)
+                    await self._clear_cache_between_trials()
                 await run_one(i)
 
             # Optional soak (concurrency supported)

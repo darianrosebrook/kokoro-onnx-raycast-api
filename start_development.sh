@@ -94,6 +94,9 @@ export KOKORO_MISAKI_FALLBACK="${KOKORO_MISAKI_FALLBACK:-true}"
 export KOKORO_MISAKI_CACHE_SIZE="${KOKORO_MISAKI_CACHE_SIZE:-1000}"
 export KOKORO_MISAKI_QUALITY_THRESHOLD="${KOKORO_MISAKI_QUALITY_THRESHOLD:-0.8}"
 
+# Provider configuration for development (CPU provider for consistent performance)
+export KOKORO_COREML_COMPUTE_UNITS="${KOKORO_COREML_COMPUTE_UNITS:-CPUOnly}"
+
 # --- Pre-flight Checks ---
 # Check if .venv exists
 if [ ! -d ".venv" ]; then

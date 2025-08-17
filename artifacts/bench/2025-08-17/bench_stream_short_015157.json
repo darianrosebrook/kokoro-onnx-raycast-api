@@ -1,0 +1,137 @@
+{
+  "config": {
+    "url": "http://localhost:8000/v1/audio/speech",
+    "headers": {},
+    "base_payload": {
+      "voice": "af_heart",
+      "speed": 1.0,
+      "lang": "en-us",
+      "format": "wav"
+    },
+    "trials": 3,
+    "stream": true,
+    "preset": "short",
+    "timeout_s": 120,
+    "concurrency": 1,
+    "soak_iterations": 0
+  },
+  "measurements": {
+    "ttfa_ms": [
+      10.597540998787736,
+      5.575082999712322,
+      4.652165998777491
+    ],
+    "rtf": [
+      0.0060895899093838125,
+      0.0046249681267995215,
+      0.004896582410067975
+    ],
+    "lufs": [],
+    "dbtp": [],
+    "mem_samples": [
+      {
+        "t": 1755420717.164624,
+        "rss_mb": 46.890625,
+        "cpu_pct": 87.8
+      }
+    ],
+    "trial_artifacts": [
+      {
+        "ttfa_ms": 10.597540998787736,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.003583998477552086,
+          "p95_gap_ms": 2.8254170010768576,
+          "max_gap_ms": 2.8827079986513127,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      },
+      {
+        "ttfa_ms": 5.575082999712322,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.0038329999370034784,
+          "p95_gap_ms": 2.5427920008951332,
+          "max_gap_ms": 3.0465830004686723,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      },
+      {
+        "ttfa_ms": 4.652165998777491,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.00437500057159923,
+          "p95_gap_ms": 3.3162910003738943,
+          "max_gap_ms": 3.3193749986821786,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      }
+    ],
+    "cadence": [
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.003583998477552086,
+        "p95_gap_ms": 2.8254170010768576,
+        "max_gap_ms": 2.8827079986513127,
+        "underrun_suspected": false
+      },
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.0038329999370034784,
+        "p95_gap_ms": 2.5427920008951332,
+        "max_gap_ms": 3.0465830004686723,
+        "underrun_suspected": false
+      },
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.00437500057159923,
+        "p95_gap_ms": 3.3162910003738943,
+        "max_gap_ms": 3.3193749986821786,
+        "underrun_suspected": false
+      }
+    ],
+    "soak_metrics": []
+  },
+  "summary": {
+    "ttfa": {
+      "count": 3,
+      "mean": 6.9415966657591825,
+      "p50": 5.575082999712322,
+      "p95": 10.597540998787736,
+      "min": 4.652165998777491,
+      "max": 10.597540998787736
+    },
+    "rtf": {
+      "count": 3,
+      "mean": 0.00520371348208377,
+      "p50": 0.004896582410067975,
+      "p95": 0.0060895899093838125,
+      "min": 0.0046249681267995215,
+      "max": 0.0060895899093838125
+    },
+    "lufs": {},
+    "dbtp": {},
+    "mem": {
+      "rss_min_mb": 46.890625,
+      "rss_max_mb": 46.890625,
+      "rss_range_mb": 0.0
+    },
+    "stream_max_gap_ms": 3.3193749986821786,
+    "stream_p95_gap_ms": 3.3162910003738943
+  },
+  "gates": {
+    "ttfa_p95_ms": {
+      "value": 10.597540998787736,
+      "threshold": 500,
+      "pass": true
+    },
+    "rss_range_mb": {
+      "value": 0.0,
+      "threshold": 300,
+      "pass": true
+    }
+  }
+}

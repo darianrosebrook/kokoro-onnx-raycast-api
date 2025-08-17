@@ -16,11 +16,38 @@ export KOKORO_COREML_SPECIALIZATION=FastPrediction
 # Results: TTFA 5.5ms, RTF 0.000, Memory 70.9MB (short text)
 ```
 
+### **🚨 CRITICAL DISCOVERY - Provider Performance**
+```bash
+# CPU Provider dramatically outperforms CoreML
+# CPU: 10.6ms TTFA p95 ✅ (target ≤500ms)
+# CoreML: 4422ms TTFA p95 ❌ (target ≤500ms)
+# Recommendation: Use CPU provider for production
+
+# Switch to CPU provider for consistent performance
+export KOKORO_COREML_COMPUTE_UNITS=CPUOnly
+```
+
+### **P1: CoreML Provider Investigation**
+```bash
+# Investigate CoreML cold start penalty (4422ms vs 10.6ms CPU)
+KOKORO_COREML_COMPUTE_UNITS=ALL python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
+KOKORO_COREML_COMPUTE_UNITS=CPUAndGPU python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
+KOKORO_COREML_COMPUTE_UNITS=CPUOnly python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
+```
+
 ### **P1: Memory Optimization for Long Text**
 ```bash
 # Current long text memory: 606.9MB (target: ≤300MB)
 # Investigate memory usage patterns for long paragraphs
 python scripts/run_bench.py --preset=long --memory --trials=3 --verbose
+```
+
+### **P1: Audio Chunk Timing Optimization**
+```bash
+# Test different chunk sizes for optimal buffer growth
+python scripts/run_bench.py --preset=short --stream --trials=3 --chunk-size=30 --verbose
+python scripts/run_bench.py --preset=short --stream --trials=3 --chunk-size=80 --verbose
+python scripts/run_bench.py --preset=short --stream --trials=3 --chunk-size=120 --verbose
 ```
 
 ### **P1: Advanced Caching (If Needed)**
@@ -90,13 +117,19 @@ KOKORO_MEMORY_ARENA_SIZE_MB=2048       # Smaller arena
 
 ## 🎯 Performance Targets & Current Status
 
-| Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| TTFA | 800ms | 5.5-6.9ms | ✅ **145x better!** |
-| RTF | <0.6 | 0.000 | ✅ **Perfect!** |
-| Memory (short) | <300MB | 70.9MB | ✅ **Excellent** |
-| Memory (long) | <300MB | 606.9MB | ⚠️ **Needs optimization** |
-| Underruns | <1/10min | 0 | ✅ **Good** |
+| Metric | Target | Current (CPU) | Current (CoreML) | Status |
+|--------|--------|---------------|------------------|--------|
+| TTFA | 800ms | 5.5-6.9ms | 4422ms | ✅ **CPU: 145x better!** ❌ **CoreML: 5.5x worse** |
+| RTF | <0.6 | 0.000 | 0.000 | ✅ **Perfect!** |
+| Memory (short) | <300MB | 70.9MB | 70.9MB | ✅ **Excellent** |
+| Memory (long) | <300MB | 606.9MB | 606.9MB | ⚠️ **Needs optimization** |
+| Underruns | <1/10min | 0 | 0 | ✅ **Good** |
+
+### **🚨 Provider Performance Comparison**
+- **CPU Provider**: 10.6ms TTFA p95 ✅ (98% better than target)
+- **CoreML Provider**: 4422ms TTFA p95 ❌ (5.5x worse than target)
+- **Performance Gap**: 417x difference between providers
+- **Recommendation**: Use CPU provider for production deployment
 
 ## 🚨 Emergency Recovery
 
@@ -127,6 +160,25 @@ curl http://localhost:8000/status | jq '.["performance_stats"]'
 - ✅ Streaming errors resolved
 - ✅ Performance monitoring working
 - ✅ **TTFA optimization complete (145x improvement!)**
+
+### **P1: Provider Performance Investigation (NEW)**
+1. **CoreML cold start penalty**: 4422ms vs 10.6ms CPU baseline
+   - Profile CoreML initialization with Apple Instruments
+   - Test different CoreML compute unit configurations
+   - Investigate unsupported ONNX operations causing CPU fallbacks
+   - Check for CoreML context leaks and memory management overhead
+
+2. **Provider selection optimization**: CPU outperforms CoreML across all text lengths
+   - Test provider selection thresholds (200 vs 500 vs 1000 chars)
+   - Investigate provider switching overhead and cache invalidation
+   - Profile provider selection decision timing
+
+### **P1: Audio Pipeline Optimization (NEW)**
+1. **Chunk timing optimization**: Sub-millisecond generation (0.003-0.005ms median gaps)
+   - Test different chunk sizes (30ms, 50ms, 80ms, 120ms) for optimal buffer growth
+   - Investigate pre-buffer sizing (1-3 chunks) for underrun prevention
+   - Profile chunk delivery timing and jitter patterns
+   - Test sequence-tagged chunk ordering and reordering logic
 
 ### **P1: Memory Optimization (Remaining)**
 1. **Long text memory usage**: 606.9MB vs 300MB target

@@ -266,9 +266,13 @@ def initialize_model_fast():
     from api.config import TTSConfig
     force_cpu = TTSConfig.FORCE_CPU_PROVIDER if hasattr(TTSConfig, 'FORCE_CPU_PROVIDER') else False
     
-    if force_cpu:
+    # Check for CPU-only environment variable (for production optimization)
+    cpu_only_env = os.environ.get('KOKORO_COREML_COMPUTE_UNITS', '').upper() == 'CPUONLY'
+    
+    if force_cpu or cpu_only_env:
         initial_provider = "CPUExecutionProvider"
-        logger.info(f"🔧 Development mode ({TTSConfig.DEV_PERFORMANCE_PROFILE} profile): forcing CPU provider to reduce memory usage")
+        reason = "development mode" if force_cpu else "CPU-only configuration"
+        logger.info(f"🔧 {reason}: forcing CPU provider for consistent performance")
     elif not initial_provider:
         # Safe default
         initial_provider = "CoreMLExecutionProvider" if capabilities.get("is_apple_silicon") else "CPUExecutionProvider"
@@ -326,19 +330,17 @@ def initialize_model_fast():
                     current_provider = "CoreMLExecutionProvider" if "CoreML" in str(model.__class__) else "CPUExecutionProvider"
                     logger.debug(f"Current provider: {current_provider}")
                     
-                    # Pre-warm CPU model (for short text < 200 chars)
-                    if current_provider != "CPUExecutionProvider":
-                        logger.info("🔥 Pre-warming CPU model for short text...")
-                        cpu_model = _get_cached_model("CPUExecutionProvider")
-                        cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
-                        logger.debug("✅ CPU model cache ready")
+                    # ALWAYS pre-warm CPU model (for short text < 200 chars via adaptive provider)
+                    logger.info("🔥 Pre-warming CPU model for short text...")
+                    cpu_model = _get_cached_model("CPUExecutionProvider")
+                    cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
+                    logger.debug("✅ CPU model cache ready")
                     
-                    # Pre-warm CoreML model (for medium/long text > 200 chars)
-                    if current_provider != "CoreMLExecutionProvider":
-                        logger.info("🔥 Pre-warming CoreML model for medium/long text...")
-                        coreml_model = _get_cached_model("CoreMLExecutionProvider")
-                        coreml_model.create("This is a longer test to warm up CoreML", "af_heart", 1.0, "en-us")
-                        logger.debug("✅ CoreML model cache ready")
+                    # ALWAYS pre-warm CoreML model (for medium/long text > 200 chars via adaptive provider)
+                    logger.info("🔥 Pre-warming CoreML model for medium/long text...")
+                    coreml_model = _get_cached_model("CoreMLExecutionProvider")
+                    coreml_model.create("This is a longer test to warm up CoreML", "af_heart", 1.0, "en-us")
+                    logger.debug("✅ CoreML model cache ready")
                     
                     adaptive_time = (time.perf_counter() - adaptive_start) * 1000
                     logger.info(f"✅ Adaptive provider cache pre-warming completed in {adaptive_time:.1f}ms")

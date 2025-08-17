@@ -61,7 +61,7 @@ def get_adaptive_provider(text_length: int = 0) -> str:
     global _active_provider
     
     current = _active_provider
-    compute_units = os.environ.get('KOKORO_COREML_COMPUTE_UNITS', 'CPUAndGPU')
+    compute_units = os.environ.get('KOKORO_COREML_COMPUTE_UNITS', 'CPUOnly')
     
     # Short text optimization (< 200 chars): CPU consistently performs best
     if text_length < 200:

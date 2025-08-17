@@ -1,0 +1,172 @@
+{
+  "config": {
+    "url": "http://localhost:8000/v1/audio/speech",
+    "headers": {},
+    "base_payload": {
+      "voice": "af_heart",
+      "speed": 1.0,
+      "lang": "en-us",
+      "format": "wav"
+    },
+    "trials": 3,
+    "stream": true,
+    "preset": "short",
+    "timeout_s": 120,
+    "concurrency": 1,
+    "soak_iterations": 0
+  },
+  "measurements": {
+    "ttfa_ms": [
+      3807.018875000722,
+      4.301291999581736,
+      4.02691599992977
+    ],
+    "rtf": [
+      0.976293229078274,
+      0.004173225243062003,
+      0.004159696096713356
+    ],
+    "lufs": [],
+    "dbtp": [],
+    "mem_samples": [
+      {
+        "t": 1755420557.075021,
+        "rss_mb": 46.25,
+        "cpu_pct": 95.4
+      },
+      {
+        "t": 1755420557.576163,
+        "rss_mb": 46.46875,
+        "cpu_pct": 0.4
+      },
+      {
+        "t": 1755420558.0772932,
+        "rss_mb": 46.46875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420558.5784562,
+        "rss_mb": 46.46875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420559.079602,
+        "rss_mb": 46.46875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420559.580724,
+        "rss_mb": 46.46875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420560.081865,
+        "rss_mb": 46.46875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420560.582217,
+        "rss_mb": 46.46875,
+        "cpu_pct": 0.0
+      }
+    ],
+    "trial_artifacts": [
+      {
+        "ttfa_ms": 3807.018875000722,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.0033750002330634743,
+          "p95_gap_ms": 2.37491699954262,
+          "max_gap_ms": 2.553667000029236,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      },
+      {
+        "ttfa_ms": 4.301291999581736,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.005750000127591193,
+          "p95_gap_ms": 2.3339999988820637,
+          "max_gap_ms": 2.9970410014357185,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      },
+      {
+        "ttfa_ms": 4.02691599992977,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.003791999915847555,
+          "p95_gap_ms": 2.62779100012267,
+          "max_gap_ms": 2.6690419999795267,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      }
+    ],
+    "cadence": [
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.0033750002330634743,
+        "p95_gap_ms": 2.37491699954262,
+        "max_gap_ms": 2.553667000029236,
+        "underrun_suspected": false
+      },
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.005750000127591193,
+        "p95_gap_ms": 2.3339999988820637,
+        "max_gap_ms": 2.9970410014357185,
+        "underrun_suspected": false
+      },
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.003791999915847555,
+        "p95_gap_ms": 2.62779100012267,
+        "max_gap_ms": 2.6690419999795267,
+        "underrun_suspected": false
+      }
+    ],
+    "soak_metrics": []
+  },
+  "summary": {
+    "ttfa": {
+      "count": 3,
+      "mean": 1271.7823610000778,
+      "p50": 4.301291999581736,
+      "p95": 3807.018875000722,
+      "min": 4.02691599992977,
+      "max": 3807.018875000722
+    },
+    "rtf": {
+      "count": 3,
+      "mean": 0.32820871680601643,
+      "p50": 0.004173225243062003,
+      "p95": 0.976293229078274,
+      "min": 0.004159696096713356,
+      "max": 0.976293229078274
+    },
+    "lufs": {},
+    "dbtp": {},
+    "mem": {
+      "rss_min_mb": 46.25,
+      "rss_max_mb": 46.46875,
+      "rss_range_mb": 0.21875
+    },
+    "stream_max_gap_ms": 2.9970410014357185,
+    "stream_p95_gap_ms": 2.62779100012267
+  },
+  "gates": {
+    "ttfa_p95_ms": {
+      "value": 3807.018875000722,
+      "threshold": 500,
+      "pass": false
+    },
+    "rss_range_mb": {
+      "value": 0.21875,
+      "threshold": 300,
+      "pass": true
+    }
+  }
+}

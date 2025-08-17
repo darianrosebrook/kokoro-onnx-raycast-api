@@ -55,6 +55,8 @@ interface WaveformPoint {
   amplitude: number;
   timestamp: number;
   chunkIndex: number;
+  sampleIndex: number;
+  audioTime: number; // Actual audio timeline position
 }
 
 /**
@@ -78,11 +80,13 @@ export const AudioVisualizer = forwardRef<
     ref
   ) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const animationFrameRef = useRef<number>();
+    const animationFrameRef = useRef<number | undefined>(undefined);
 
-    // Waveform data
+    // Waveform data with temporal ordering
     const waveformPoints = useRef<WaveformPoint[]>([]);
-    const startTime = useRef<number>(0);
+    const audioStartTime = useRef<number>(0);
+    const currentAudioTime = useRef<number>(0);
+    const chunkBuffer = useRef<Map<number, AudioChunk>>(new Map());
     const stats = useRef<VisualizerStats>({
       totalChunks: 0,
       totalSamples: 0,
@@ -102,36 +106,76 @@ export const AudioVisualizer = forwardRef<
     const processAudioChunk = (chunk: AudioChunk) => {
       if (!chunk.data || chunk.data.length === 0) return;
 
-      const now = Date.now();
-      if (startTime.current === 0) {
-        startTime.current = now;
+      // Initialize audio timeline on first chunk
+      if (audioStartTime.current === 0) {
+        audioStartTime.current = performance.now();
       }
 
+      // Store chunk in buffer for ordered processing
+      chunkBuffer.current.set(chunk.index, chunk);
+
+      // Process chunks in order
+      processOrderedChunks();
+    };
+
+    /**
+     * Process chunks in chronological order to ensure smooth visualization
+     */
+    const processOrderedChunks = () => {
+      const sortedChunks = Array.from(chunkBuffer.current.entries()).sort(
+        ([a], [b]) => a - b
+      );
+
+      for (const [chunkIndex, chunk] of sortedChunks) {
+        if (chunk && !isChunkProcessed(chunkIndex)) {
+          addChunkToWaveform(chunk);
+          // Mark as processed by removing from buffer
+          chunkBuffer.current.delete(chunkIndex);
+        }
+      }
+    };
+
+    /**
+     * Check if chunk has already been processed
+     */
+    const isChunkProcessed = (chunkIndex: number): boolean => {
+      return waveformPoints.current.some(
+        (point) => point.chunkIndex === chunkIndex
+      );
+    };
+
+    /**
+     * Add a chunk to the waveform using proper temporal positioning
+     */
+    const addChunkToWaveform = (chunk: AudioChunk) => {
       // Convert PCM data to amplitude values
       const samples = convertPCMToAmplitudes(chunk.data);
-      const timeOffset = now - startTime.current;
 
-      // Calculate spacing between samples for this chunk
+      // Calculate actual audio time for this chunk
       const chunkDurationMs = (samples.length / SAMPLE_RATE) * 1000;
+      const chunkStartTime = currentAudioTime.current;
       const sampleSpacing = chunkDurationMs / samples.length;
 
-      // Add samples to waveform points
+      // Add samples to waveform points with proper temporal positioning
+      const newPoints: WaveformPoint[] = [];
       for (
         let i = 0;
         i < samples.length;
         i += Math.max(1, Math.floor(samples.length / 50))
       ) {
-        const sampleTime = timeOffset + i * sampleSpacing;
-        const x = (sampleTime / 10000) * width; // Scale time to canvas width (10 seconds visible)
+        const audioTime = chunkStartTime + i * sampleSpacing;
+        const x = (audioTime / 10000) * width; // Scale time to canvas width (10 seconds visible)
         const amplitude = samples[i];
         const y = height / 2 + amplitude * height * 0.4; // Scale amplitude to canvas height
 
-        waveformPoints.current.push({
+        newPoints.push({
           x,
           y,
           amplitude: Math.abs(amplitude),
-          timestamp: chunk.timestamp + i * sampleSpacing,
+          timestamp: chunk.timestamp,
           chunkIndex: chunk.index,
+          sampleIndex: i,
+          audioTime,
         });
 
         // Update stats
@@ -142,15 +186,15 @@ export const AudioVisualizer = forwardRef<
         );
       }
 
-      // Limit number of points for performance
-      if (waveformPoints.current.length > maxSamples) {
-        const excess = waveformPoints.current.length - maxSamples;
-        waveformPoints.current.splice(0, excess);
-      }
+      // Insert points in chronological order
+      insertPointsInOrder(newPoints);
+
+      // Update current audio time
+      currentAudioTime.current += chunkDurationMs;
 
       // Update chunk stats
       stats.current.totalChunks++;
-      stats.current.duration = now - startTime.current;
+      stats.current.duration = currentAudioTime.current;
 
       // Calculate average amplitude
       if (stats.current.totalSamples > 0) {
@@ -190,11 +234,30 @@ export const AudioVisualizer = forwardRef<
     };
 
     /**
+     * Insert points in chronological order to maintain temporal continuity
+     */
+    const insertPointsInOrder = (newPoints: WaveformPoint[]) => {
+      // Add new points to the array
+      waveformPoints.current.push(...newPoints);
+
+      // Sort by audio time to maintain temporal order
+      waveformPoints.current.sort((a, b) => a.audioTime - b.audioTime);
+
+      // Limit number of points for performance
+      if (waveformPoints.current.length > maxSamples) {
+        const excess = waveformPoints.current.length - maxSamples;
+        waveformPoints.current.splice(0, excess);
+      }
+    };
+
+    /**
      * Clear the waveform display
      */
     const clearWaveform = () => {
       waveformPoints.current = [];
-      startTime.current = 0;
+      audioStartTime.current = 0;
+      currentAudioTime.current = 0;
+      chunkBuffer.current.clear();
       stats.current = {
         totalChunks: 0,
         totalSamples: 0,
@@ -271,7 +334,7 @@ export const AudioVisualizer = forwardRef<
     };
 
     /**
-     * Draw the waveform
+     * Draw the waveform with smooth interpolation
      */
     const drawWaveform = (ctx: CanvasRenderingContext2D) => {
       // Always draw a baseline at center (y = height/2)
@@ -292,62 +355,99 @@ export const AudioVisualizer = forwardRef<
         return;
       }
 
-      // Draw waveform line
+      // Draw waveform line with smooth curves
       ctx.strokeStyle = waveformColor;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([]);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
 
       ctx.beginPath();
       const firstPoint = waveformPoints.current[0];
       ctx.moveTo(firstPoint.x, firstPoint.y);
 
-      for (let i = 1; i < waveformPoints.current.length; i++) {
-        const point = waveformPoints.current[i];
-        ctx.lineTo(point.x, point.y);
+      // Use quadratic curves for smoother line rendering
+      for (let i = 1; i < waveformPoints.current.length - 1; i++) {
+        const current = waveformPoints.current[i];
+        const next = waveformPoints.current[i + 1];
+
+        // Calculate control point for smooth curve
+        const xMid = (current.x + next.x) / 2;
+        const yMid = (current.y + next.y) / 2;
+
+        ctx.quadraticCurveTo(current.x, current.y, xMid, yMid);
       }
 
-      // If there's a gap at the end, connect back to baseline
-      const lastPoint =
-        waveformPoints.current[waveformPoints.current.length - 1];
-      if (lastPoint.x < width) {
-        ctx.lineTo(width, centerY);
+      // Handle the last point
+      if (waveformPoints.current.length > 1) {
+        const lastPoint =
+          waveformPoints.current[waveformPoints.current.length - 1];
+        ctx.lineTo(lastPoint.x, lastPoint.y);
+
+        // Extend to baseline if there's space
+        if (lastPoint.x < width) {
+          ctx.lineTo(width, centerY);
+        }
       }
 
       ctx.stroke();
 
-      // Draw chunk markers
+      // Draw chunk markers with better visibility
       if (showTimestamp) {
-        ctx.fillStyle = timestampColor;
-        ctx.font = "8px monospace";
-        ctx.textAlign = "center";
-
-        const chunkMarkers = new Map<number, WaveformPoint>();
-        waveformPoints.current.forEach((point) => {
-          if (!chunkMarkers.has(point.chunkIndex)) {
-            chunkMarkers.set(point.chunkIndex, point);
-          }
-        });
-
-        chunkMarkers.forEach((point, chunkIndex) => {
-          // Draw chunk index marker
-          ctx.fillText(`C${chunkIndex}`, point.x, 15);
-
-          // Draw vertical line for chunk boundary
-          ctx.strokeStyle = "#666666";
-          ctx.lineWidth = 1;
-          ctx.setLineDash([1, 1]);
-          ctx.beginPath();
-          ctx.moveTo(point.x, 0);
-          ctx.lineTo(point.x, height);
-          ctx.stroke();
-        });
+        drawChunkMarkers(ctx);
       }
     };
 
     /**
-     * Main render loop
+     * Draw chunk markers with improved visibility
      */
-    const render = () => {
+    const drawChunkMarkers = (ctx: CanvasRenderingContext2D) => {
+      ctx.fillStyle = timestampColor;
+      ctx.font = "8px monospace";
+      ctx.textAlign = "center";
+
+      const chunkMarkers = new Map<number, WaveformPoint>();
+      waveformPoints.current.forEach((point) => {
+        if (!chunkMarkers.has(point.chunkIndex)) {
+          chunkMarkers.set(point.chunkIndex, point);
+        }
+      });
+
+      chunkMarkers.forEach((point, chunkIndex) => {
+        // Draw chunk index marker with background
+        const text = `C${chunkIndex}`;
+        const metrics = ctx.measureText(text);
+        const padding = 2;
+
+        // Background
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(
+          point.x - metrics.width / 2 - padding,
+          2,
+          metrics.width + padding * 2,
+          12
+        );
+
+        // Text
+        ctx.fillStyle = timestampColor;
+        ctx.fillText(text, point.x, 12);
+
+        // Draw subtle vertical line for chunk boundary
+        ctx.strokeStyle = "rgba(102, 102, 102, 0.5)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(point.x, 20);
+        ctx.lineTo(point.x, height - 5);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+    };
+
+    /**
+     * Main render function
+     */
+    const renderFrame = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -381,9 +481,6 @@ export const AudioVisualizer = forwardRef<
           65
         );
       }
-
-      // Continue animation
-      animationFrameRef.current = requestAnimationFrame(render);
     };
 
     /**
@@ -393,12 +490,24 @@ export const AudioVisualizer = forwardRef<
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      // Set canvas size
-      canvas.width = width;
-      canvas.height = height;
+      // Set canvas size with device pixel ratio for crisp rendering
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.scale(dpr, dpr);
+      }
 
       // Start render loop
-      render();
+      const startRenderLoop = () => {
+        renderFrame();
+        animationFrameRef.current = requestAnimationFrame(startRenderLoop);
+      };
+      startRenderLoop();
 
       return () => {
         if (animationFrameRef.current) {

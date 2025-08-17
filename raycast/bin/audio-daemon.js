@@ -330,8 +330,15 @@ class AudioProcessor extends EventEmitter {
     this.isEndingStream = false;
     this.afplayMode = false;
 
-    // Clear ring buffer completely
-    this.ringBuffer.clear();
+    // Clear ring buffer only if we're not already in the middle of processing
+    if (!this.isPlaying) {
+      this.ringBuffer.clear();
+      console.log(`[${this.instanceId}] Cleared ring buffer for new session`);
+    } else {
+      console.log(
+        `[${this.instanceId}] Keeping existing buffer data: ${this.ringBuffer.size} bytes`
+      );
+    }
 
     // Reset audio process
     if (this.audioProcess) {
@@ -1261,6 +1268,12 @@ class AudioProcessor extends EventEmitter {
     // Track timing metrics
     if (this.stats.firstChunkTime === 0) {
       this.stats.firstChunkTime = chunkTime;
+
+      // Auto-start playback when first chunk arrives
+      if (!this.isPlaying) {
+        console.log(`[${this.instanceId}] 🎵 Auto-starting playback on first chunk`);
+        await this.start();
+      }
     }
     this.stats.lastChunkTime = chunkTime;
     this.stats.totalChunksReceived++;
@@ -1488,7 +1501,16 @@ class AudioDaemon extends EventEmitter {
             ? {
                 isPlaying: this.audioProcessor.isPlaying,
                 isPaused: this.audioProcessor.isPaused,
-                bufferUtilization: this.audioProcessor.ringBuffer.utilization,
+                bufferUtilization: this.audioProcessor.ringBuffer?.utilization || 0,
+                ringBuffer: this.audioProcessor.ringBuffer
+                  ? {
+                      size: this.audioProcessor.ringBuffer.size,
+                      capacity: this.audioProcessor.ringBuffer.capacity,
+                      utilization: this.audioProcessor.ringBuffer.utilization,
+                      isFinished: this.audioProcessor.ringBuffer.isFinished,
+                    }
+                  : null,
+                audioContext: this.audioProcessor.audioContext ? true : false,
                 stats: this.audioProcessor.stats,
                 performance: this.audioProcessor.getStatus(),
                 timingAnalysis: this.audioProcessor.getTimingAnalysis(),

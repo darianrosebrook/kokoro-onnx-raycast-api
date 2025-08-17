@@ -1,0 +1,182 @@
+{
+  "config": {
+    "url": "http://localhost:8000/v1/audio/speech",
+    "headers": {},
+    "base_payload": {
+      "voice": "af_heart",
+      "speed": 1.0,
+      "lang": "en-us",
+      "format": "wav"
+    },
+    "trials": 3,
+    "stream": true,
+    "preset": "short",
+    "timeout_s": 120,
+    "concurrency": 1,
+    "soak_iterations": 0
+  },
+  "measurements": {
+    "ttfa_ms": [
+      4422.624708000512,
+      72.61366700004146,
+      16.653125001539593
+    ],
+    "rtf": [
+      1.1528452892449055,
+      0.024551708794986415,
+      0.008442719959136395
+    ],
+    "lufs": [],
+    "dbtp": [],
+    "mem_samples": [
+      {
+        "t": 1755420628.018516,
+        "rss_mb": 46.765625,
+        "cpu_pct": 94.5
+      },
+      {
+        "t": 1755420628.519312,
+        "rss_mb": 47.046875,
+        "cpu_pct": 0.5
+      },
+      {
+        "t": 1755420629.020559,
+        "rss_mb": 47.046875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420629.521724,
+        "rss_mb": 47.046875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420630.0228639,
+        "rss_mb": 47.046875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420630.524013,
+        "rss_mb": 47.046875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420631.025238,
+        "rss_mb": 47.046875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420631.52651,
+        "rss_mb": 47.046875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420632.02767,
+        "rss_mb": 47.046875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755420632.557395,
+        "rss_mb": 49.078125,
+        "cpu_pct": 1.8
+      }
+    ],
+    "trial_artifacts": [
+      {
+        "ttfa_ms": 4422.624708000512,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.0051249990065116435,
+          "p95_gap_ms": 33.970500000577886,
+          "max_gap_ms": 43.95079099958821,
+          "underrun_suspected": true
+        },
+        "audio_duration_s": 3.9113333333333333
+      },
+      {
+        "ttfa_ms": 72.61366700004146,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.005125000825501047,
+          "p95_gap_ms": 5.8252500002708985,
+          "max_gap_ms": 7.012500000200816,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      },
+      {
+        "ttfa_ms": 16.653125001539593,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.005749998308601789,
+          "p95_gap_ms": 3.6070000005565817,
+          "max_gap_ms": 4.488416998356115,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      }
+    ],
+    "cadence": [
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.0051249990065116435,
+        "p95_gap_ms": 33.970500000577886,
+        "max_gap_ms": 43.95079099958821,
+        "underrun_suspected": true
+      },
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.005125000825501047,
+        "p95_gap_ms": 5.8252500002708985,
+        "max_gap_ms": 7.012500000200816,
+        "underrun_suspected": false
+      },
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.005749998308601789,
+        "p95_gap_ms": 3.6070000005565817,
+        "max_gap_ms": 4.488416998356115,
+        "underrun_suspected": false
+      }
+    ],
+    "soak_metrics": []
+  },
+  "summary": {
+    "ttfa": {
+      "count": 3,
+      "mean": 1503.963833334031,
+      "p50": 72.61366700004146,
+      "p95": 4422.624708000512,
+      "min": 16.653125001539593,
+      "max": 4422.624708000512
+    },
+    "rtf": {
+      "count": 3,
+      "mean": 0.3952799059996761,
+      "p50": 0.024551708794986415,
+      "p95": 1.1528452892449055,
+      "min": 0.008442719959136395,
+      "max": 1.1528452892449055
+    },
+    "lufs": {},
+    "dbtp": {},
+    "mem": {
+      "rss_min_mb": 46.765625,
+      "rss_max_mb": 49.078125,
+      "rss_range_mb": 2.3125
+    },
+    "stream_max_gap_ms": 43.95079099958821,
+    "stream_p95_gap_ms": 33.970500000577886
+  },
+  "gates": {
+    "ttfa_p95_ms": {
+      "value": 4422.624708000512,
+      "threshold": 500,
+      "pass": false
+    },
+    "rss_range_mb": {
+      "value": 2.3125,
+      "threshold": 300,
+      "pass": true
+    }
+  }
+}

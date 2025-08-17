@@ -363,6 +363,43 @@ async def get_benchmark_report(filename: str):
         raise HTTPException(status_code=500, detail=f"Report retrieval error: {str(e)}")
 
 
+@router.post("/clear_cache", summary="Clear model and session caches")
+async def clear_cache():
+    """
+    Clear model and session caches to ensure consistent benchmark results.
+    This endpoint is useful for benchmarking to prevent cache pollution between trials.
+    """
+    try:
+        from api.model.sessions.manager import clear_model
+        from api.tts.text_processing import clear_phoneme_cache
+        from api.utils.cache_helpers import clear_inference_cache
+        
+        # Clear model sessions
+        clear_model()
+        
+        # Clear phoneme cache
+        clear_phoneme_cache()
+        
+        # Clear inference cache
+        clear_inference_cache()
+        
+        logger.info("✅ Model and session caches cleared successfully")
+        
+        return {
+            "status": "success",
+            "message": "Model and session caches cleared",
+            "timestamp": datetime.now().isoformat(),
+            "cleared_caches": [
+                "model_sessions",
+                "phoneme_cache", 
+                "inference_cache"
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear caches: {e}")
+        raise HTTPException(status_code=500, detail=f"Cache clearing error: {str(e)}")
+
+
 # Helper functions
 async def _get_system_health() -> Dict[str, Any]:
     """Get current system health metrics"""

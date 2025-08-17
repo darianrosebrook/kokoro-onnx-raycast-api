@@ -246,3 +246,64 @@ def clear_expired_caches(max_age_hours: int = 24) -> int:
     
     return removed
 
+
+def clear_inference_cache() -> Dict[str, Any]:
+    """
+    Clear inference-related caches for consistent benchmark results.
+    
+    This function clears model inference caches, session caches, and other
+    performance-affecting caches to ensure consistent benchmark results.
+    
+    @returns: Dictionary with clearing results
+    """
+    results = {
+        "cleared_files": 0,
+        "cleared_directories": 0,
+        "errors": []
+    }
+    
+    try:
+        # Clear inference cache files
+        cache_patterns = [
+            "*.ort",  # ONNX Runtime cache files
+            "*.cache",  # General cache files
+            "inference_*.json",  # Inference-specific cache files
+            "model_*.json",  # Model cache files
+        ]
+        
+        for pattern in cache_patterns:
+            import glob
+            for file_path in glob.glob(os.path.join(CACHE_DIR, pattern)):
+                try:
+                    os.remove(file_path)
+                    results["cleared_files"] += 1
+                    logger.debug(f"Cleared inference cache: {file_path}")
+                except Exception as e:
+                    results["errors"].append(f"Failed to clear {file_path}: {e}")
+        
+        # Clear temp directories that might contain cached data
+        temp_dirs = [
+            os.path.join(CACHE_DIR, "coreml_temp"),
+            os.path.join(CACHE_DIR, "ort"),
+            "temp",
+        ]
+        
+        for temp_dir in temp_dirs:
+            if os.path.exists(temp_dir):
+                try:
+                    import shutil
+                    shutil.rmtree(temp_dir)
+                    os.makedirs(temp_dir, exist_ok=True)  # Recreate empty directory
+                    results["cleared_directories"] += 1
+                    logger.debug(f"Cleared temp directory: {temp_dir}")
+                except Exception as e:
+                    results["errors"].append(f"Failed to clear {temp_dir}: {e}")
+        
+        logger.info(f"✅ Inference cache cleared: {results['cleared_files']} files, {results['cleared_directories']} directories")
+        
+    except Exception as e:
+        results["errors"].append(f"Cache clearing failed: {e}")
+        logger.error(f"Failed to clear inference cache: {e}")
+    
+    return results
+
