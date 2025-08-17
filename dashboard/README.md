@@ -1,188 +1,199 @@
-# Kokoro TTS Benchmark Dashboard
+# Kokoro TTS Dashboard
 
-A Next.js dashboard for visualizing and analyzing Kokoro TTS performance benchmarks with shadcn/ui components and D3.js charting.
+A comprehensive dashboard for monitoring and testing Kokoro TTS performance with real-time audio streaming visualization.
 
 ## Features
 
-- 📊 **Interactive Charts**: D3.js powered performance visualizations
-- 🎯 **Real-time Metrics**: TTFA, RTF, and memory usage analysis
-- 🔍 **Detailed Views**: Memory timelines and comprehensive benchmark details
-- 🎛️ **Advanced Filtering**: Filter by preset, streaming mode, and voice
-- 📱 **Responsive Design**: Built with shadcn/ui and Tailwind CSS
-- 🚀 **Mock Data**: Development-ready with generated benchmark data
+### 🎵 Live Audio Streaming
+- **Real-time TTS Testing**: Type text and hear it spoken instantly with visual feedback
+- **Audio Waveform Visualization**: See the audio stream in real-time with amplitude visualization
+- **Performance Metrics**: Track TTFA (Time to First Audio), chunk delivery, and streaming efficiency
+- **Multiple Voice Options**: Test different Kokoro voices (AF Heart, AF Sky, AF Bella, etc.)
+- **Speed Control**: Adjust speech speed from 0.5x to 2.0x
+- **WebSocket Integration**: Direct connection to the audio daemon for low-latency streaming
 
-## Tech Stack
+### 📊 Benchmark Analysis
+- **Historical Performance Data**: Analyze past benchmark runs
+- **Interactive Charts**: Visualize TTFA, RTF, and memory usage trends
+- **Filtering & Search**: Filter by preset, streaming mode, and voice
+- **Memory Timeline**: Detailed memory usage analysis per benchmark run
 
-- **Framework**: Next.js 15 with App Router
-- **UI Components**: shadcn/ui with Radix UI primitives
-- **Styling**: Tailwind CSS
-- **Charts**: D3.js for custom data visualizations
-- **TypeScript**: Full type safety throughout
-- **Date Handling**: date-fns for time formatting
+## Architecture
 
-## Getting Started
+The dashboard connects to the Kokoro TTS system through two main interfaces:
 
-### Prerequisites
+1. **HTTP API** (`http://localhost:8000`): For TTS synthesis requests
+2. **WebSocket Connection** (`ws://localhost:8081`): For real-time audio streaming via the audio daemon
 
-- Node.js 18+ 
-- npm or yarn
+### Components
 
-### Installation
+#### Audio Streaming Components
+- **`TTSControlPanel`**: Main control interface for testing TTS
+- **`AudioClient`**: WebSocket client for daemon communication  
+- **`AudioVisualizer`**: Real-time waveform visualization
+- **Connection management**: Automatic reconnection and error handling
 
-```bash
-# Navigate to dashboard directory
-cd dashboard
+#### Benchmark Analysis Components
+- **`BenchmarkSummary`**: Overview of performance metrics
+- **`PerformanceChart`**: Interactive charts for various metrics
+- **`MemoryTimeline`**: Detailed memory usage visualization
 
-# Install dependencies
-npm install
+## Usage
 
-# Start development server
-npm run dev
+### Starting the Audio Streaming Interface
+
+1. **Start the TTS Server**:
+   ```bash
+   cd kokoro-onnx
+   python -m api.main
+   ```
+
+2. **Start the Audio Daemon**:
+   ```bash
+   cd raycast/bin
+   node audio-daemon.js
+   ```
+
+3. **Start the Dashboard**:
+   ```bash
+   cd dashboard
+   npm run dev
+   ```
+
+4. **Open in Browser**: Navigate to `http://localhost:3000`
+
+### Using Live Audio Streaming
+
+1. Click the **"Live Audio Streaming"** tab
+2. Wait for the audio daemon connection (green "Connected" badge)
+3. Enter text in the text area
+4. Select voice and speed preferences
+5. Click **"▶ Speak"** to start streaming
+6. Watch the real-time waveform visualization
+7. Monitor performance metrics in the side panels
+
+### Key Features
+
+- **Real-time Visualization**: See audio amplitude as it streams
+- **Performance Monitoring**: Track TTFA, chunks received, buffer health
+- **Connection Status**: Visual indicators for daemon connectivity
+- **Playback Controls**: Play, pause, stop, and resume functionality
+- **Voice Selection**: Choose from available Kokoro voices
+- **Speed Adjustment**: Control speech rate for testing
+
+## Technical Implementation
+
+### Audio Streaming Flow
+
+```
+User Input → TTS Server → PCM Chunks → Audio Daemon → Speakers
+     ↓                                        ↓
+Dashboard ←--- WebSocket Monitoring ←--------┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
+1. **Text Processing**: User enters text in the dashboard
+2. **TTS Request**: Dashboard sends streaming request to TTS server
+3. **Chunk Streaming**: Server streams PCM audio chunks
+4. **Daemon Processing**: Audio daemon receives chunks via WebSocket
+5. **Playback**: Native audio playback (sox/ffplay/afplay)
+6. **Visualization**: Real-time waveform updates in dashboard
 
-## Project Structure
+### Performance Metrics
 
-```
-dashboard/
-├── src/
-│   ├── app/                    # Next.js app router pages
-│   │   ├── page.tsx           # Main dashboard
-│   │   ├── benchmarks/        # Detailed benchmark views
-│   │   └── layout.tsx         # Root layout with navigation
-│   ├── components/            # Reusable components
-│   │   ├── ui/               # shadcn/ui components
-│   │   ├── charts/           # D3.js chart components
-│   │   ├── benchmark-summary.tsx
-│   │   └── navigation.tsx
-│   ├── lib/                  # Utilities and helpers
-│   │   ├── benchmark-parser.ts  # Data processing utilities
-│   │   ├── mock-data.ts        # Development mock data
-│   │   └── utils.ts           # shadcn/ui utilities
-│   └── types/                # TypeScript type definitions
-│       └── benchmark.ts      # Benchmark data types
-```
+The dashboard tracks several key metrics:
 
-## Data Structure
+- **TTFA (Time to First Audio)**: Latency from request to first audio chunk
+- **Chunk Delivery Rate**: Number of audio chunks received per second
+- **Buffer Utilization**: Audio buffer health and underrun detection
+- **Streaming Efficiency**: Ratio of expected vs actual streaming time
+- **Connection Health**: WebSocket connection status and stability
 
-The dashboard expects benchmark data in the following format:
+### WebSocket Protocol
+
+The dashboard communicates with the audio daemon using these message types:
 
 ```typescript
-interface BenchmarkResult {
-  config: {
-    preset: 'short' | 'long';
-    stream: boolean;
-    base_payload: {
-      voice: string;
-      speed: number;
-      lang: string;
-      format: string;
-    };
-    trials: number;
-    // ... other config
-  };
-  measurements: {
-    ttfa_ms: number[];     // Time to First Audio values
-    rtf: number[];         // Real-Time Factor values
-    mem_samples: Array<{   // Memory usage over time
-      t: number;           // Timestamp
-      rss_mb: number;      // Resident Set Size in MB
-      cpu_pct: number;     // CPU percentage
-    }>;
-    // ... other measurements
-  };
-}
+// Control messages
+{ type: 'control', data: { action: 'play' | 'pause' | 'stop' | 'end_stream' } }
+
+// Audio data
+{ type: 'audio_chunk', data: { chunk: number[] } }
+
+// Status updates
+{ type: 'status', timestamp: number, data: AudioStatus }
+
+// Completion events
+{ type: 'completed', timestamp: number, data: CompletionData }
 ```
 
-## Key Components
+## Development
 
-### Performance Charts (`PerformanceChart`)
-- Line charts for TTFA, RTF, and memory metrics over time
-- P95 and mean value visualization
-- Interactive tooltips and legends
-- Support for multiple benchmark configurations
+### File Structure
 
-### Memory Timeline (`MemoryTimeline`)
-- Detailed memory usage for individual benchmark runs
-- CPU activity correlation
-- Highlighted significant events (high CPU usage)
-- Area charts with dual Y-axes
-
-### Benchmark Summary (`BenchmarkSummary`)
-- Key performance indicators (KPIs)
-- Trend analysis (improving/degrading/stable)
-- Recent benchmark history
-- Filter and sorting capabilities
-
-## Mock Data
-
-For development, the dashboard generates realistic mock data including:
-- Multiple benchmark configurations (short/long, streaming/non-streaming)
-- Various voice models (af_heart, af_bella, af_sarah)
-- 7 days of sample data with realistic performance metrics
-- Memory usage patterns with CPU activity spikes
-
-## Customization
-
-### Adding New Chart Types
-1. Create new chart component in `src/components/charts/`
-2. Use D3.js for custom visualizations
-3. Follow existing patterns for props and TypeScript types
-
-### Extending Data Processing
-1. Add new utilities to `src/lib/benchmark-parser.ts`
-2. Update types in `src/types/benchmark.ts`
-3. Ensure compatibility with existing components
-
-### UI Customization
-1. Modify shadcn/ui components in `src/components/ui/`
-2. Update Tailwind configuration as needed
-3. Add new color schemes or themes
-
-## Performance Considerations
-
-- Virtual scrolling for large datasets
-- Memoized chart components
-- Efficient D3.js rendering patterns
-- Responsive design with mobile optimization
-
-## Future Enhancements
-
-- [ ] Real-time data updates via WebSocket
-- [ ] Export functionality for charts and data
-- [ ] Advanced statistical analysis
-- [ ] Benchmark comparison tools
-- [ ] Custom alert thresholds
-- [ ] Data persistence and backend integration
-
-## Development Scripts
-
-```bash
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
-
-# Lint code
-npm run lint
-
-# Type checking
-npm run type-check
+```
+dashboard/src/
+├── components/
+│   ├── charts/
+│   │   ├── audio-visualizer.tsx     # Real-time waveform visualization
+│   │   ├── performance-chart.tsx    # Benchmark performance charts
+│   │   └── memory-timeline.tsx      # Memory usage timeline
+│   ├── tts-control-panel.tsx        # Main TTS testing interface
+│   └── ui/                          # Base UI components
+├── lib/
+│   ├── audio-client.ts              # WebSocket client for audio daemon
+│   ├── benchmark-parser.ts          # Benchmark data processing
+│   └── real-data-loader.ts          # Data loading utilities
+└── app/
+    └── page.tsx                     # Main dashboard page with tabs
 ```
 
-## Contributing
+### Adding New Features
 
-1. Follow the existing code structure and patterns
-2. Use TypeScript for all new code
-3. Add JSDoc comments for complex functions
-4. Test new components with mock data
-5. Ensure responsive design compliance
+1. **Audio Processing**: Extend `AudioClient` for new daemon functionality
+2. **Visualization**: Add new chart types in `components/charts/`
+3. **Metrics**: Enhance performance tracking in `TTSControlPanel`
+4. **UI Components**: Follow the existing design system in `components/ui/`
 
-## Author
+### Configuration
 
-@darianrosebrook
+The dashboard automatically detects and connects to:
+- TTS Server: `http://localhost:8000`
+- Audio Daemon: `ws://localhost:8081`
+
+These can be configured in the respective client components.
+
+## Troubleshooting
+
+### Audio Daemon Connection Issues
+
+- **Check daemon is running**: `ps aux | grep audio-daemon`
+- **Verify WebSocket port**: Default is 8081
+- **Check browser console**: Look for connection errors
+- **Restart daemon**: Kill and restart if connection is stuck
+
+### TTS Server Issues
+
+- **Verify server is running**: `curl http://localhost:8000/health`
+- **Check logs**: Look for server errors in terminal
+- **Model loading**: Ensure ONNX models are properly loaded
+
+### Performance Issues
+
+- **Browser DevTools**: Check for JavaScript errors
+- **Network tab**: Monitor WebSocket traffic
+- **Memory usage**: Large visualizations may impact performance
+- **Audio quality**: Ensure proper audio format support
+
+## Browser Compatibility
+
+- **Chrome/Edge**: Full support including WebSocket audio streaming
+- **Firefox**: Full support with WebSocket audio streaming  
+- **Safari**: WebSocket support, audio may require user interaction
+- **Mobile**: Limited audio daemon connectivity
+
+## Related Documentation
+
+- [Kokoro TTS Optimization Blueprint](../docs/optimization/kokoro-tts-optimization-blueprint.md)
+- [Audio Daemon Architecture](../raycast/README.md)
+- [Performance Benchmarking](../docs/implementation/)
+- [API Documentation](../api/)

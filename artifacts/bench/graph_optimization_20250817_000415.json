@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "optimization_level": "all",
+  "optimization_time_seconds": 0.5363240242004395,
+  "input_size_mb": 88.0825719833374,
+  "output_size_mb": 87.91812801361084,
+  "size_reduction_percent": 0.18669297004368857,
+  "test_inference_success": false,
+  "test_inference_time_ms": 0,
+  "providers_used": [
+    "CPUExecutionProvider"
+  ]
+}
