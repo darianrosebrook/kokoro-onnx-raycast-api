@@ -720,12 +720,26 @@ export class AudioPlaybackDaemon extends EventEmitter {
       console.warn("  - Daemon script:", this.config.daemonScriptPath);
       console.warn("  - Port:", this.config.port);
 
+      // Determine the working directory for the daemon
+      // The daemon needs access to node_modules, so we need to run it from the project root
+      const projectRoot = findKokoroProjectRoot(process.cwd()) ?? process.env.KOKORO_PROJECT_ROOT;
+      const workingDir = projectRoot || process.cwd();
+      
+      console.log("Daemon working directory", {
+        component: this.name,
+        method: "startDaemon",
+        workingDir,
+        projectRoot,
+        cwd: process.cwd(),
+      });
+
       const daemonProcess = spawn(
         this.config.nodeExecutable,
         [this.config.daemonScriptPath, "--port", this.config.port.toString()],
         {
           stdio: ["ignore", "pipe", "pipe"],
           detached: false,
+          cwd: workingDir, // Set working directory to project root
           env: {
             ...process.env,
             NODE_ENV: this.config.developmentMode ? "development" : "production",

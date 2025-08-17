@@ -1,0 +1,177 @@
+{
+  "config": {
+    "url": "http://localhost:8000/v1/audio/speech",
+    "headers": {},
+    "base_payload": {
+      "voice": "af_heart",
+      "speed": 1.0,
+      "lang": "en-us",
+      "format": "wav"
+    },
+    "trials": 3,
+    "stream": true,
+    "preset": "short",
+    "timeout_s": 120,
+    "concurrency": 1,
+    "soak_iterations": 0
+  },
+  "measurements": {
+    "ttfa_ms": [
+      4178.87100000371,
+      4.157000003033318,
+      7.041499993647449
+    ],
+    "rtf": [
+      1.0722641469236893,
+      0.004120376769369989,
+      0.006458006731097142
+    ],
+    "lufs": [],
+    "dbtp": [],
+    "mem_samples": [
+      {
+        "t": 1755447114.472203,
+        "rss_mb": 47.59375,
+        "cpu_pct": 95.7
+      },
+      {
+        "t": 1755447114.973469,
+        "rss_mb": 47.875,
+        "cpu_pct": 0.4
+      },
+      {
+        "t": 1755447115.474377,
+        "rss_mb": 47.875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755447115.975501,
+        "rss_mb": 47.875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755447116.476717,
+        "rss_mb": 47.875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755447116.9779541,
+        "rss_mb": 47.875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755447117.4874601,
+        "rss_mb": 47.875,
+        "cpu_pct": 0.1
+      },
+      {
+        "t": 1755447117.988616,
+        "rss_mb": 47.875,
+        "cpu_pct": 0.0
+      },
+      {
+        "t": 1755447118.489742,
+        "rss_mb": 47.875,
+        "cpu_pct": 0.0
+      }
+    ],
+    "trial_artifacts": [
+      {
+        "ttfa_ms": 4178.87100000371,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.005125002644490451,
+          "p95_gap_ms": 3.500500002701301,
+          "max_gap_ms": 3.8111250032670796,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      },
+      {
+        "ttfa_ms": 4.157000003033318,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.00404199818149209,
+          "p95_gap_ms": 2.4327080027433112,
+          "max_gap_ms": 2.5858330045593902,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      },
+      {
+        "ttfa_ms": 7.041499993647449,
+        "cadence": {
+          "num_chunks": 26,
+          "median_gap_ms": 0.004540997906588018,
+          "p95_gap_ms": 2.736166999966372,
+          "max_gap_ms": 7.787499998812564,
+          "underrun_suspected": false
+        },
+        "audio_duration_s": 3.9113333333333333
+      }
+    ],
+    "cadence": [
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.005125002644490451,
+        "p95_gap_ms": 3.500500002701301,
+        "max_gap_ms": 3.8111250032670796,
+        "underrun_suspected": false
+      },
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.00404199818149209,
+        "p95_gap_ms": 2.4327080027433112,
+        "max_gap_ms": 2.5858330045593902,
+        "underrun_suspected": false
+      },
+      {
+        "num_chunks": 26,
+        "median_gap_ms": 0.004540997906588018,
+        "p95_gap_ms": 2.736166999966372,
+        "max_gap_ms": 7.787499998812564,
+        "underrun_suspected": false
+      }
+    ],
+    "soak_metrics": []
+  },
+  "summary": {
+    "ttfa": {
+      "count": 3,
+      "mean": 1396.6898333334636,
+      "p50": 7.041499993647449,
+      "p95": 4178.87100000371,
+      "min": 4.157000003033318,
+      "max": 4178.87100000371
+    },
+    "rtf": {
+      "count": 3,
+      "mean": 0.3609475101413855,
+      "p50": 0.006458006731097142,
+      "p95": 1.0722641469236893,
+      "min": 0.004120376769369989,
+      "max": 1.0722641469236893
+    },
+    "lufs": {},
+    "dbtp": {},
+    "mem": {
+      "rss_min_mb": 47.59375,
+      "rss_max_mb": 47.875,
+      "rss_range_mb": 0.28125
+    },
+    "stream_max_gap_ms": 7.787499998812564,
+    "stream_p95_gap_ms": 3.500500002701301
+  },
+  "gates": {
+    "ttfa_p95_ms": {
+      "value": 4178.87100000371,
+      "threshold": 500,
+      "pass": false
+    },
+    "rss_range_mb": {
+      "value": 0.28125,
+      "threshold": 300,
+      "pass": true
+    }
+  }
+}
