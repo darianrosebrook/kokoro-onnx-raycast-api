@@ -372,7 +372,7 @@ class AudioProcessor extends EventEmitter {
     this.stats.averageChunkSize = 0;
     this.stats.processingOverhead = 0;
     this.stats.timingAccuracy = 0;
-    
+
     // Reset audio byte tracking
     this.totalAudioBytes = 0;
     this.audioDurationMs = 0;
@@ -1489,7 +1489,8 @@ class AudioDaemon extends EventEmitter {
                 isPlaying: this.audioProcessor.isPlaying,
                 isPaused: this.audioProcessor.isPaused,
                 bufferUtilization: this.audioProcessor.ringBuffer.utilization,
-                stats: this.audioProcessor.getStatus(),
+                stats: this.audioProcessor.stats,
+                performance: this.audioProcessor.getStatus(),
                 timingAnalysis: this.audioProcessor.getTimingAnalysis(),
               }
             : null,
