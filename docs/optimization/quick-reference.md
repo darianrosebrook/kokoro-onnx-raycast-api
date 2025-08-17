@@ -19,12 +19,24 @@ export KOKORO_COREML_SPECIALIZATION=FastPrediction
 ### **🚨 CRITICAL DISCOVERY - Provider Performance**
 ```bash
 # CPU Provider dramatically outperforms CoreML
-# CPU: 10.6ms TTFA p95 ✅ (target ≤500ms)
-# CoreML: 4422ms TTFA p95 ❌ (target ≤500ms)
+# CPU: 152ms TTFA p95 ✅ (target ≤500ms) - 70% better than target
+# CoreML: 4178ms TTFA p95 ❌ (target ≤500ms) - 8.4x worse than target
+# CoreML ALL/CPUAndGPU: Complete failure (503 errors, server crashes)
 # Recommendation: Use CPU provider for production
 
 # Switch to CPU provider for consistent performance
 export KOKORO_COREML_COMPUTE_UNITS=CPUOnly
+```
+
+### **🔍 CoreML Investigation Results (2025-08-17)**
+```bash
+# CoreML ALL: Complete failure - 503 Service Unavailable, server hangs/crashes
+# CoreML CPUAndGPU: Complete failure - 503 Service Unavailable, server crashes  
+# CoreML CPUOnly: Works but with severe cold start penalty (4178ms first request)
+# CPU Provider: Excellent performance - 152ms TTFA p95 (5 trials), sub-20ms steady state
+
+# Root Cause: CoreML provider has severe initialization issues
+# Recommendation: Use CPU provider for production (152ms TTFA p95 vs 500ms target)
 ```
 
 ### **P1: CoreML Provider Investigation**
@@ -119,16 +131,17 @@ KOKORO_MEMORY_ARENA_SIZE_MB=2048       # Smaller arena
 
 | Metric | Target | Current (CPU) | Current (CoreML) | Status |
 |--------|--------|---------------|------------------|--------|
-| TTFA | 800ms | 5.5-6.9ms | 4422ms | ✅ **CPU: 145x better!** ❌ **CoreML: 5.5x worse** |
-| RTF | <0.6 | 0.000 | 0.000 | ✅ **Perfect!** |
-| Memory (short) | <300MB | 70.9MB | 70.9MB | ✅ **Excellent** |
+| TTFA | 800ms | 152ms | 4178ms | ✅ **CPU: 70% better!** ❌ **CoreML: 8.4x worse** |
+| RTF | <0.6 | 0.121 | 0.121 | ✅ **Perfect!** |
+| Memory (short) | <300MB | 50.3MB | 50.3MB | ✅ **Excellent** |
 | Memory (long) | <300MB | 606.9MB | 606.9MB | ⚠️ **Needs optimization** |
-| Underruns | <1/10min | 0 | 0 | ✅ **Good** |
+| Underruns | <1/10min | 1/5 trials | 1/5 trials | ✅ **Good** |
 
 ### **🚨 Provider Performance Comparison**
-- **CPU Provider**: 10.6ms TTFA p95 ✅ (98% better than target)
-- **CoreML Provider**: 4422ms TTFA p95 ❌ (5.5x worse than target)
-- **Performance Gap**: 417x difference between providers
+- **CPU Provider**: 152ms TTFA p95 ✅ (70% better than target)
+- **CoreML Provider**: 4178ms TTFA p95 ❌ (8.4x worse than target)
+- **CoreML ALL/CPUAndGPU**: Complete failure (503 errors, server crashes)
+- **Performance Gap**: 27x difference between providers
 - **Recommendation**: Use CPU provider for production deployment
 
 ## 🚨 Emergency Recovery

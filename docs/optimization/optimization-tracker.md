@@ -223,6 +223,14 @@ Based on current implementation status analysis:
   KOKORO_COREML_COMPUTE_UNITS=CPUOnly python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
   ```
 
+  **🔍 INVESTIGATION RESULTS (2025-08-17):**
+  - **CoreML ALL**: Complete failure - 503 Service Unavailable, server hangs/crashes
+  - **CoreML CPUAndGPU**: Complete failure - 503 Service Unavailable, server crashes
+  - **CoreML CPUOnly**: Works but with severe cold start penalty (4178ms first request)
+  - **CPU Provider**: Excellent performance - 152ms TTFA p95 (5 trials), sub-20ms steady state
+  - **Root Cause**: CoreML provider has severe initialization issues and hangs on ALL/CPUAndGPU configurations
+  - **Recommendation**: Use CPU provider for production (152ms TTFA p95 vs 500ms target)
+
 - [ ] **Audio Chunk Timing Optimization:** Investigate chunk generation vs playback timing
   **Status:** P1 - Excellent performance but room for optimization
   **Evidence:** Sub-millisecond chunk generation (0.003-0.005ms median gaps)
