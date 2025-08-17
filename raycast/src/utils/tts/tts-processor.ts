@@ -663,9 +663,9 @@ export class TTSSpeechProcessor {
           averageChunkTime:
             totalChunksReceived > 0 ? (totalTime / totalChunksReceived).toFixed(2) + "ms" : "N/A",
         });
-        console.log(
-          ` [${this.instanceId}] PHASE 1 OPTIMIZATION: All ${totalChunksReceived} chunks processed in ${totalTime}ms`
-        );
+            console.log(
+      ` [${this.instanceId}] All ${totalChunksReceived} chunks processed in ${totalTime}ms`
+    );
         this.onStatusUpdate({
           message: "Speech completed",
           style: Toast.Style.Success,

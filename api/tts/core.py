@@ -117,12 +117,15 @@ def _get_cached_model(provider: str) -> Kokoro:
     """Thread-safe retrieval/creation of a Kokoro model bound to a provider."""
     with _model_cache_lock:
         if provider not in _model_cache:
-            logger.info(f"Creating Kokoro model for provider: {provider}")
+            logger.warning(f"🔄 PERFORMANCE ISSUE: Creating new Kokoro model for provider: {provider} (cache miss)")
+            logger.warning(f"🔄 Current cache contents: {list(_model_cache.keys())}")
             _model_cache[provider] = Kokoro(
                 model_path=TTSConfig.MODEL_PATH,
                 voices_path=TTSConfig.VOICES_PATH,
                 providers=[provider],
             )
+        else:
+            logger.debug(f"✅ Using cached Kokoro model for provider: {provider}")
         return _model_cache[provider]
 
 
@@ -354,11 +357,24 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
                 logger.warning(f"[{idx}] Dual session failed: {e}; falling back to single model")
 
         # Fallback path: Single model with corruption detection
-        provider = get_active_provider()
+        from api.model.sessions.manager import get_adaptive_provider
+        provider = get_adaptive_provider(len(processed_text))
         model = _get_cached_model(provider)
         
         start = time.perf_counter()
-        result = model.create(processed_text, voice, speed, lang)
+        
+        # Apply CoreML memory management for single model inference
+        try:
+            from api.model.memory.coreml_leak_mitigation import get_memory_manager
+            manager = get_memory_manager()
+            
+            with manager.managed_operation(f"single_inference_{processed_text[:20]}"):
+                result = model.create(processed_text, voice, speed, lang)
+                
+        except ImportError:
+            # Fallback without memory management if not available
+            result = model.create(processed_text, voice, speed, lang)
+        
         samples = result[0] if isinstance(result, tuple) else result
         
         # CRITICAL: Validate single model output too
@@ -428,12 +444,25 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
             except Exception as e:
                 logger.warning(f"[{idx}] Fast dual session failed: {e}")
 
-        # Fast single model fallback
-        provider = get_active_provider()
+        # Fast single model fallback  
+        from api.model.sessions.manager import get_adaptive_provider
+        provider = get_adaptive_provider(len(processed_text))
         model = _get_cached_model(provider)
         
         start = time.perf_counter()
-        result = model.create(processed_text, voice, speed, lang)
+        
+        # Apply CoreML memory management for fast path inference
+        try:
+            from api.model.memory.coreml_leak_mitigation import get_memory_manager
+            manager = get_memory_manager()
+            
+            with manager.managed_operation(f"fast_inference_{processed_text[:20]}"):
+                result = model.create(processed_text, voice, speed, lang)
+                
+        except ImportError:
+            # Fallback without memory management if not available
+            result = model.create(processed_text, voice, speed, lang)
+        
         samples = result[0] if isinstance(result, tuple) else result
         
         # CRITICAL: Validate single model output

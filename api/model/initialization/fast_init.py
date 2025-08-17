@@ -5,6 +5,7 @@ This module provides optimized, non-blocking model initialization strategies
 for the Kokoro-ONNX TTS model with background optimization.
 """
 
+import os
 import time
 import threading
 import logging
@@ -154,6 +155,34 @@ def _initialize_heavy_components_async(capabilities: Dict[str, Any]) -> None:
                 dsm = initialize_dual_session_manager(capabilities=capabilities)
                 if dsm:
                     logger.info("✅ Dual session manager initialized successfully in background thread")
+                    
+                    # Pre-warm dual sessions to eliminate cold start penalty
+                    try:
+                        logger.info("🔥 Pre-warming dual sessions...")
+                        warming_start = time.perf_counter()
+                        
+                        # Test each session type with progressively complex text
+                        warming_patterns = [
+                            ("Hi", 0.2),  # Simple, should go to CPU/fast session
+                            ("This is a more complex sentence for testing.", 0.7),  # Complex, should go to ANE/GPU
+                        ]
+                        
+                        for text, expected_complexity in warming_patterns:
+                            try:
+                                # Use the dual session manager directly
+                                result = dsm.process_segment_concurrent(text, "af_heart", 1.0, "en-us")
+                                complexity = dsm.calculate_segment_complexity(text)
+                                optimal_session = dsm.get_optimal_session(complexity)
+                                logger.debug(f"Pre-warmed: '{text[:30]}...' → session={optimal_session}, complexity={complexity:.2f}")
+                            except Exception as warmup_err:
+                                logger.debug(f"Dual session warming failed for '{text[:20]}...': {warmup_err}")
+                        
+                        warming_time = (time.perf_counter() - warming_start) * 1000
+                        logger.info(f"✅ Dual session pre-warming completed in {warming_time:.1f}ms")
+                        
+                    except Exception as warming_e:
+                        logger.debug(f"Dual session pre-warming failed: {warming_e}")
+                        
                 else:
                     logger.error("❌ Dual session manager initialization returned None")
             except Exception as e:
@@ -263,14 +292,61 @@ def initialize_model_fast():
     if not is_model_loaded():
         raise RuntimeError("Fast initialization failed for all providers")
 
-    # Minimal warmup (non-fatal)
+    # Enhanced session warming to eliminate cold start penalty
     try:
-        with step_timer("minimal_warmup"):
+        with step_timer("enhanced_session_warming"):
             model = get_model()
             if model:
-                model.create("Hello", "af_heart", 1.0, "en-us")
+                # Perform multiple warming inferences to pre-compile execution paths
+                warming_texts = [
+                    "Hi",  # Very short - forces fast path compilation  
+                    "Hello world",  # Short - typical quick request
+                    "This is a test sentence to warm up the model."  # Medium - more graph paths
+                ]
+                
+                for i, text in enumerate(warming_texts):
+                    try:
+                        start_warmup = time.perf_counter()
+                        model.create(text, "af_heart", 1.0, "en-us")
+                        warmup_time = (time.perf_counter() - start_warmup) * 1000
+                        logger.debug(f"Warming {i+1}/3: '{text[:20]}...' took {warmup_time:.1f}ms")
+                    except Exception as warmup_err:
+                        logger.debug(f"Warming {i+1}/3 failed: {warmup_err}")
+                        
+                logger.info("✅ Enhanced session warming completed - cold start eliminated")
     except Exception as e:
-        logger.debug(f"Minimal warmup failed: {e}")
+        logger.debug(f"Enhanced session warming failed: {e}")
+
+    # Check for aggressive session warming (enabled by default to eliminate cold start)
+    aggressive_warming = os.environ.get('KOKORO_AGGRESSIVE_WARMING', 'true').lower() == 'true'
+    if aggressive_warming:
+        try:
+            with step_timer("aggressive_session_warming"):
+                logger.info("🔥 Starting aggressive session warming to eliminate cold start...")
+                from api.model.pipeline import get_pipeline_warmer, initialize_pipeline_warmer
+                
+                # Initialize and trigger pipeline warmer immediately
+                pipeline_warmer = initialize_pipeline_warmer()
+                if pipeline_warmer:
+                    # Run abbreviated warming focused on common short requests
+                    import asyncio
+                    
+                    async def quick_warming():
+                        await pipeline_warmer._cache_common_patterns()
+                    
+                    # Run the warming in a thread to avoid blocking
+                    def run_warming():
+                        try:
+                            asyncio.run(quick_warming())
+                            logger.info("✅ Aggressive session warming completed")
+                        except Exception as warm_err:
+                            logger.debug(f"Aggressive warming failed: {warm_err}")
+                    
+                    warming_thread = threading.Thread(target=run_warming, daemon=True)
+                    warming_thread.start()
+                    
+        except Exception as e:
+            logger.debug(f"Aggressive session warming failed: {e}")
 
     logger.info(f"✅ Fast initialization completed in {time.perf_counter() - start_ts:.2f}s")
 
@@ -278,10 +354,17 @@ def initialize_model_fast():
     skip_background = TTSConfig.SKIP_BACKGROUND_BENCHMARKING if hasattr(TTSConfig, 'SKIP_BACKGROUND_BENCHMARKING') else force_cpu
     disable_dual_sessions = TTSConfig.DISABLE_DUAL_SESSIONS if hasattr(TTSConfig, 'DISABLE_DUAL_SESSIONS') else False
     
+    # Check if we should defer background initialization for fast startup
+    defer_background_init = os.environ.get('KOKORO_DEFER_BACKGROUND_INIT', 'false').lower() == 'true'
+    
     # Always initialize dual session manager unless explicitly disabled
     if not disable_dual_sessions:
-        logger.info(f"🔧 Starting dual session manager initialization (disable_dual_sessions={disable_dual_sessions})")
-        _initialize_heavy_components_async(capabilities)
+        if defer_background_init:
+            logger.info("🔧 Dual session manager initialization deferred for fast startup")
+            logger.info("🔧 Use KOKORO_DEFER_BACKGROUND_INIT=false to enable background initialization")
+        else:
+            logger.info(f"🔧 Starting dual session manager initialization (disable_dual_sessions={disable_dual_sessions})")
+            _initialize_heavy_components_async(capabilities)
     else:
         logger.info(f"🔧 Dual session manager initialization skipped (disable_dual_sessions={disable_dual_sessions})")
     

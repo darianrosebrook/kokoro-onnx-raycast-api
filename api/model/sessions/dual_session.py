@@ -180,9 +180,20 @@ class DualSessionManager:
                 if session is None:
                     raise RuntimeError("No available sessions for processing")
                 
-                # Use the session to generate audio
+                # Use the session to generate audio with memory management
                 with self.session_locks[session_type]:
-                    result = session.create(text, voice, speed, lang)
+                    # Apply CoreML memory management for inference operations
+                    try:
+                        from api.model.memory.coreml_leak_mitigation import get_memory_manager
+                        manager = get_memory_manager()
+                        
+                        with manager.managed_operation(f"inference_{session_type}_{text[:20]}"):
+                            result = session.create(text, voice, speed, lang)
+                            
+                    except ImportError:
+                        # Fallback without memory management if not available
+                        result = session.create(text, voice, speed, lang)
+                    
                     # Kokoro.create() returns (samples, model_metadata)
                     if isinstance(result, tuple) and len(result) >= 2:
                         samples, model_metadata = result[0], result[1]

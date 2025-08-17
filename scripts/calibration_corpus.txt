@@ -1,0 +1,106 @@
+# Kokoro TTS Calibration Corpus
+# This file contains diverse text samples for model quantization calibration
+# Each line represents a single calibration sample
+
+# Short prompts (≤120 chars)
+Hello world.
+Testing the system.
+Quick test.
+Hello, how are you?
+This is a test.
+Good morning!
+Thank you.
+Please wait.
+Loading...
+Success!
+
+# Medium prompts (120-300 chars)
+The quick brown fox jumps over the lazy dog. This pangram contains every letter of the alphabet at least once.
+Artificial intelligence is transforming our world in remarkable ways. Machine learning models are becoming more sophisticated.
+Text to speech synthesis has many practical applications. It enables accessibility features and enhances user experiences.
+Natural language processing enables human-computer interaction through understanding and generation of text.
+Deep learning has revolutionized speech recognition and synthesis. Neural networks can generate high-quality audio.
+Performance optimization is crucial for real-time applications. Low latency and high throughput are essential.
+Apple Silicon provides excellent machine learning performance. The Neural Engine accelerates inference significantly.
+CoreML enables efficient inference on iOS devices. It optimizes models for Apple hardware automatically.
+ONNX Runtime optimizes model execution across platforms. It provides consistent performance and compatibility.
+Streaming audio requires low-latency processing. Real-time synthesis demands efficient algorithms.
+
+# Long prompts (300+ chars)
+Machine learning models require careful optimization to achieve the best performance. Quantization techniques can reduce model size while maintaining quality. This is especially important for deployment on resource-constrained devices. The trade-off between speed and accuracy must be carefully balanced.
+Real-time text-to-speech synthesis presents unique challenges. The system must process text quickly while generating natural-sounding audio. Memory management is critical for large models, and hardware acceleration can significantly improve performance. Parallel processing enables concurrent requests.
+The field of natural language processing has advanced rapidly in recent years. Modern models can understand context, generate coherent text, and even create human-like speech. These capabilities have applications in accessibility, entertainment, and productivity tools.
+Optimization strategies must balance speed and quality. Different quantization approaches offer various trade-offs. Per-channel quantization provides better precision than per-tensor methods. Dynamic quantization can reduce memory usage at runtime.
+Hardware acceleration improves inference speed dramatically. Apple's Neural Engine provides dedicated machine learning hardware. CoreML optimizes models specifically for Apple Silicon. These optimizations enable real-time performance on mobile devices.
+
+# Edge cases with punctuation, numerals, abbreviations
+Dr. Smith's appointment is at 2:30 PM on March 15th, 2024.
+The temperature is -5°C (23°F) with 80% humidity.
+Call 1-800-555-0123 for customer support.
+Visit https://example.com for more information.
+The price is $19.99 + tax (approximately 8.5%).
+Meeting ID: 123-456-789, Password: 987654
+File size: 2.5 MB, Download time: ~30 seconds
+CPU usage: 75%, Memory: 4.2 GB / 8 GB
+Error code: 0x80070005, Status: FAILED
+Version 2.1.3-beta (build #2024.08.16)
+
+# Phonetically challenging text
+She sells seashells by the seashore. The shells she sells are surely seashells.
+Peter Piper picked a peck of pickled peppers. A peck of pickled peppers Peter Piper picked.
+How much wood would a woodchuck chuck if a woodchuck could chuck wood?
+The sixth sick sheik's sixth sheep's sick.
+Unique New York, unique New York, unique New York.
+Red lorry, yellow lorry, red lorry, yellow lorry.
+The thirty-three thieves thought that they thrilled the throne throughout Thursday.
+Betty Botter bought some butter, but she said the butter's bitter.
+Fuzzy Wuzzy was a bear. Fuzzy Wuzzy had no hair. Fuzzy Wuzzy wasn't very fuzzy, was he?
+I scream, you scream, we all scream for ice cream!
+
+# Technical and domain-specific text
+The neural network architecture consists of multiple transformer layers with self-attention mechanisms.
+Quantization reduces model parameters from 32-bit floating point to 8-bit integer representations.
+The CoreML framework provides optimized inference on Apple's Neural Engine and GPU.
+ONNX Runtime enables cross-platform model deployment with hardware-specific optimizations.
+Streaming audio synthesis requires efficient buffer management and low-latency processing.
+Memory bandwidth optimization is critical for real-time inference on mobile devices.
+The attention mechanism allows the model to focus on relevant parts of the input sequence.
+Backpropagation through time enables training of recurrent neural networks.
+Convolutional layers extract hierarchical features from input data.
+The softmax function normalizes output probabilities across all possible classes.
+
+# Conversational and natural language
+I'm really excited about the new features in this release. The performance improvements are quite impressive.
+Could you please help me understand how this optimization works? I'm trying to learn more about it.
+That's an interesting point you've raised. Let me think about it for a moment.
+I appreciate your patience while we work through this issue together.
+The weather today is absolutely beautiful, isn't it? Perfect for a walk in the park.
+I've been working on this project for several months now, and it's finally coming together.
+Thank you so much for your help with this. I couldn't have done it without you.
+I'm looking forward to seeing the results of our collaboration on this project.
+The meeting went really well today. Everyone seemed to be on the same page.
+I think we should take a different approach to solving this problem.
+
+# Questions and commands
+What time is the meeting scheduled for tomorrow?
+Please send me the updated documentation as soon as possible.
+Could you explain how this algorithm works in simple terms?
+Where should I save the configuration files for this application?
+How do I enable the advanced features in the settings menu?
+Can you help me troubleshoot this error message?
+What are the system requirements for running this software?
+Please provide a detailed breakdown of the performance metrics.
+How long will it take to process this large dataset?
+What are the best practices for optimizing model inference?
+
+# Numbers and mathematical expressions
+The calculation results in 42.7% improvement over the baseline.
+The model achieved 95.3% accuracy on the test dataset.
+The temperature increased by 3.2 degrees Celsius over the past hour.
+The project budget is $125,000 with a contingency of 15%.
+The algorithm processes 1,000 samples per second on average.
+The confidence interval is 95% with a margin of error of ±2.5%.
+The system response time decreased from 150ms to 67ms.
+The memory usage peaked at 2.8 GB during the stress test.
+The throughput increased by 3.7x after the optimization.
+The error rate dropped from 12.3% to 4.1% with the new approach.

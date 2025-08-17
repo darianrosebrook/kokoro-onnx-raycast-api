@@ -41,6 +41,55 @@ def get_active_provider() -> str:
     return _active_provider
 
 
+def get_adaptive_provider(text_length: int = 0) -> str:
+    """
+    Get the optimal provider based on text length and performance characteristics.
+    
+    Based on benchmark results:
+    - CPU provider: 8.8ms TTFA p95 for short text (optimal)
+    - CoreML ALL: 4827ms TTFA p95 for short text (severe degradation)
+    - CPUAndGPU: 9.7ms TTFA p95 for short text (similar to CPU)
+    - Long text: degraded on all providers (~2400ms TTFA p95)
+    
+    @param text_length: Length of text to be processed
+    @returns: Optimal provider name for the given text length
+    """
+    import logging
+    import os
+    
+    logger = logging.getLogger(__name__)
+    global _active_provider
+    
+    current = _active_provider
+    compute_units = os.environ.get('KOKORO_COREML_COMPUTE_UNITS', 'CPUAndGPU')
+    
+    # Short text optimization (< 200 chars): CPU consistently performs best
+    if text_length < 200:
+        # Force CPU for short text to avoid CoreML context leak issues
+        selected = "CPUExecutionProvider"
+        logger.info(f"🎯 Adaptive provider: text_len={text_length} → {selected} (short text optimization)")
+        return selected
+    
+    # Medium text (200-1000 chars): Use current provider but avoid CoreML ALL
+    elif text_length < 1000:
+        # If current provider is CoreML with ALL setting, switch to CPU
+        # This prevents context leaks while maintaining reasonable performance
+        if current == "CoreMLExecutionProvider" and compute_units == 'ALL':
+            selected = "CPUExecutionProvider"
+            logger.info(f"🎯 Adaptive provider: text_len={text_length} → {selected} (avoiding CoreML ALL)")
+        else:
+            selected = current if current else "CPUExecutionProvider"
+            logger.info(f"🎯 Adaptive provider: text_len={text_length} → {selected} (medium text)")
+        return selected
+    
+    # Long text (>1000 chars): All providers show degradation, use current
+    # TODO: Investigate long text performance issues across all providers
+    else:
+        selected = current if current else "CPUExecutionProvider"
+        logger.info(f"🎯 Adaptive provider: text_len={text_length} → {selected} (long text - degraded performance expected)")
+        return selected
+
+
 def set_model(model: Kokoro, provider: str) -> None:
     """
     Set the global model instance and provider.

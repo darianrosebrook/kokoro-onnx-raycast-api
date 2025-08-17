@@ -259,7 +259,6 @@ export default function Home() {
                 title="Time to First Audio (TTFA)"
                 description="Time from request to first audio chunk delivery"
                 height={400}
-                width={600}
               />
 
               <PerformanceChart
@@ -268,7 +267,6 @@ export default function Home() {
                 title="Real-Time Factor (RTF)"
                 description="Processing time relative to audio duration"
                 height={400}
-                width={600}
               />
             </div>
 
@@ -278,7 +276,6 @@ export default function Home() {
               title="Memory Usage"
               description="RSS memory consumption during benchmark runs"
               height={400}
-              width={1200}
             />
 
             {/* Memory Timeline for Selected Benchmark */}
@@ -310,11 +307,7 @@ export default function Home() {
                   </Select>
                 </div>
 
-                <MemoryTimeline
-                  benchmark={selectedBenchmark}
-                  height={300}
-                  width={1200}
-                />
+                <MemoryTimeline benchmark={selectedBenchmark} height={300} />
               </div>
             )}
           </div>

@@ -5,7 +5,7 @@
 
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { ProcessedBenchmark, MemorySample } from "@/types/benchmark";
 import {
@@ -31,9 +31,31 @@ interface MemoryTimelineProps {
 export function MemoryTimeline({
   benchmark,
   height = 300,
-  width = 800,
+  width,
 }: MemoryTimelineProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height });
+
+  // Handle responsive sizing
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const container = entries[0];
+      if (container) {
+        const containerWidth = container.contentRect.width;
+        const effectiveWidth = width || Math.max(containerWidth - 32, 400);
+        setDimensions({ width: effectiveWidth, height });
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [width, height]);
 
   useEffect(() => {
     if (!svgRef.current || !benchmark.raw.measurements.mem_samples?.length)
@@ -43,9 +65,14 @@ export function MemoryTimeline({
     d3.select(svgRef.current).selectAll("*").remove();
 
     const svg = d3.select(svgRef.current);
-    const margin = { top: 20, right: 60, bottom: 40, left: 60 };
-    const chartWidth = width - margin.left - margin.right;
-    const chartHeight = height - margin.top - margin.bottom;
+    const margin = {
+      top: 20,
+      right: dimensions.width < 600 ? 40 : 60,
+      bottom: 40,
+      left: dimensions.width < 600 ? 50 : 60,
+    };
+    const chartWidth = dimensions.width - margin.left - margin.right;
+    const chartHeight = dimensions.height - margin.top - margin.bottom;
 
     // Create chart group
     const g = svg
@@ -264,7 +291,7 @@ export function MemoryTimeline({
         .style("fill", "#374151")
         .text(stat);
     });
-  }, [benchmark, height, width]);
+  }, [benchmark, dimensions]);
 
   if (!benchmark.raw.measurements.mem_samples?.length) {
     return (
@@ -288,11 +315,11 @@ export function MemoryTimeline({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="w-full overflow-x-auto">
+        <div ref={containerRef} className="w-full overflow-x-auto">
           <svg
             ref={svgRef}
-            width={width}
-            height={height}
+            width={dimensions.width}
+            height={dimensions.height}
             className="border rounded"
           />
         </div>

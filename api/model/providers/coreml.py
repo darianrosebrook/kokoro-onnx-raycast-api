@@ -219,16 +219,19 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
     @param capabilities: Hardware capabilities from detect_apple_silicon_capabilities()
     @returns Dict[str, Any]: CoreML provider options dictionary
     """
-    # Initialize memory management for CoreML operations
-    try:
-        from api.model.memory.coreml_leak_mitigation import (
-            initialize_coreml_memory_management,
-            configure_coreml_memory_management
-        )
-        
-        # Initialize memory management system
-        if initialize_coreml_memory_management():
-            logger.debug("🧠 CoreML memory management initialized for provider options")
+    # Initialize memory management for CoreML operations (unless disabled)
+    memory_mgmt_disabled = os.environ.get('KOKORO_DISABLE_MEMORY_MGMT', 'false').lower() == 'true'
+    
+    if not memory_mgmt_disabled:
+        try:
+            from api.model.memory.coreml_leak_mitigation import (
+                initialize_coreml_memory_management,
+                configure_coreml_memory_management
+            )
+            
+            # Initialize memory management system
+            if initialize_coreml_memory_management():
+                logger.debug("🧠 CoreML memory management initialized for provider options")
             
             # Configure based on system capabilities
             memory_gb = capabilities.get('memory_gb', 8)
@@ -243,8 +246,10 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
             
             logger.debug(f"✅ Memory management configured: aggressive={aggressive_mode}, threshold={memory_threshold}MB")
         
-    except Exception as e:
-        logger.debug(f"⚠️ Could not initialize CoreML memory management: {e}")
+        except Exception as e:
+            logger.debug(f"⚠️ Could not initialize CoreML memory management: {e}")
+    else:
+        logger.info("🔧 CoreML memory management disabled via KOKORO_DISABLE_MEMORY_MGMT")
     
     # Check cache first to avoid duplicate creation and logging
     cache_key = _get_capability_cache_key(capabilities)
@@ -365,6 +370,13 @@ def coreml_memory_managed_session_creation(session_creation_func, *args, **kwarg
     @param kwargs: Keyword arguments to pass to session creation function
     @returns: Result of session creation with memory management applied
     """
+    # Check if memory management is disabled
+    memory_mgmt_disabled = os.environ.get('KOKORO_DISABLE_MEMORY_MGMT', 'false').lower() == 'true'
+    
+    if memory_mgmt_disabled:
+        logger.debug("🔧 Memory management disabled, using standard session creation")
+        return session_creation_func(*args, **kwargs)
+    
     try:
         from api.model.memory.coreml_leak_mitigation import get_memory_manager
         

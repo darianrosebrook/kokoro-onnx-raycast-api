@@ -37,10 +37,15 @@ export async function loadRealBenchmarkData(): Promise<ProcessedBenchmark[]> {
     for (const dateDir of dateDirs) {
       const datePath = path.join(artifactsPath, dateDir);
 
-      // Get all JSON benchmark files
+      // Get all JSON benchmark files (exclude config/metadata files)
       const files = fs
         .readdirSync(datePath)
-        .filter((file) => file.endsWith(".json") && file.startsWith("bench_"))
+        .filter(
+          (file) =>
+            file.endsWith(".json") &&
+            file.startsWith("bench_") &&
+            file.includes("stream") // Only actual benchmark results, not config files
+        )
         .sort((a, b) => b.localeCompare(a)); // Latest files first
 
       for (const file of files) {
@@ -89,7 +94,10 @@ export async function loadRealBenchmarkData(): Promise<ProcessedBenchmark[]> {
           const processed = processBenchmark(rawData, file);
           benchmarks.push(processed);
         } catch (error) {
-          console.error(`Failed to process benchmark file ${file}:`, error);
+          console.warn(
+            `Skipping benchmark file ${file}:`,
+            error instanceof Error ? error.message : error
+          );
         }
       }
     }
@@ -133,10 +141,15 @@ export function loadRealBenchmarkDataSync(): ProcessedBenchmark[] {
     for (const dateDir of dateDirs) {
       const datePath = path.join(artifactsPath, dateDir);
 
-      // Get all JSON benchmark files
+      // Get all JSON benchmark files (exclude config/metadata files)
       const files = fs
         .readdirSync(datePath)
-        .filter((file) => file.endsWith(".json") && file.startsWith("bench_"))
+        .filter(
+          (file) =>
+            file.endsWith(".json") &&
+            file.startsWith("bench_") &&
+            file.includes("stream") // Only actual benchmark results, not config files
+        )
         .sort((a, b) => b.localeCompare(a)); // Latest files first
 
       for (const file of files) {
@@ -185,7 +198,10 @@ export function loadRealBenchmarkDataSync(): ProcessedBenchmark[] {
           const processed = processBenchmark(rawData, file);
           benchmarks.push(processed);
         } catch (error) {
-          console.error(`Failed to process benchmark file ${file}:`, error);
+          console.warn(
+            `Skipping benchmark file ${file}:`,
+            error instanceof Error ? error.message : error
+          );
         }
       }
     }

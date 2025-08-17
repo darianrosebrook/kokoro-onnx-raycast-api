@@ -461,7 +461,7 @@ export class AudioStreamer implements IAudioStreamer {
             elapsedTime: elapsedTimeMs + "ms",
           });
 
-          console.warn("PHASE 1 OPTIMIZATION: PCM chunk progress", {
+          console.warn("PCM chunk progress", {
             component: this.name,
             method: "streamFromServerWithImmediatePlayback",
             requestId: context.requestId,

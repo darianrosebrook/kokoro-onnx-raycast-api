@@ -1,0 +1,46 @@
+{
+  "baseline_measurements": {
+    "ttfa_ms_p95": {
+      "short_text": 500,
+      "medium_text": 800,
+      "long_text": 1200,
+      "last_updated": "2025-08-14",
+      "measurement_conditions": "M1 Max, 36GB RAM, Core ML EP"
+    },
+    "rtf_p95": {
+      "short_text": 0.30,
+      "medium_text": 0.45,
+      "long_text": 0.60,
+      "last_updated": "2025-08-14",
+      "measurement_conditions": "M1 Max, 36GB RAM, Core ML EP"
+    },
+    "lufs_target": {
+      "target": -16,
+      "tolerance": 1,
+      "last_updated": "2025-08-14"
+    },
+    "dbtp_ceiling": {
+      "max_peak": -1.0,
+      "last_updated": "2025-08-14"
+    },
+    "memory_baseline": {
+      "rss_steady_state_mb": 2700,
+      "envelope_tolerance_mb": 300,
+      "last_updated": "2025-08-14"
+    }
+  },
+  "test_configuration": {
+    "hardware": "Apple M1 Max",
+    "memory": "36GB",
+    "os": "macOS Sequoia",
+    "provider": "CoreMLExecutionProvider",
+    "model_version": "kokoro-v0_19.onnx",
+    "voice": "af_heart"
+  },
+  "historical_improvements": {
+    "ttfa_reduction_percent": 76.9,
+    "baseline_before_optimization_ms": 8371,
+    "current_optimized_ms": 2188,
+    "target_ms": 800
+  }
+}

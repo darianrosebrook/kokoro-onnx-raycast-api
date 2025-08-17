@@ -132,6 +132,8 @@ if [[ "$(uname -m)" == "arm64" ]]; then
     export KOKORO_COREML_MODEL_FORMAT=${KOKORO_COREML_MODEL_FORMAT:-"MLProgram"}
     export KOKORO_COREML_COMPUTE_UNITS=${KOKORO_COREML_COMPUTE_UNITS:-"CPUAndGPU"}
     export KOKORO_COREML_SPECIALIZATION=${KOKORO_COREML_SPECIALIZATION:-"FastPrediction"}
+    # Optimized memory arena for 64GB M1 Max
+    export KOKORO_MEMORY_ARENA_SIZE_MB=${KOKORO_MEMORY_ARENA_SIZE_MB:-"3072"}
 fi
 
 echo "Production optimizations enabled:"

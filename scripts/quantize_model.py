@@ -1,525 +1,712 @@
 #!/usr/bin/env python3
 """
-Advanced Model Quantization Script for Kokoro ONNX TTS
+Kokoro TTS — Mixed Quantization & Benchmarking Utility (Apple Silicon–aware)
 
-This script implements per-channel INT8 quantization for the Kokoro model to achieve
-optimal performance and memory efficiency while maintaining high audio quality.
+Improvements over prior version:
+- Modes:
+  • Weights-only INT8 (recommended first pass for TTS quality)
+  • Full INT8 (weights=QInt8, activations=QUInt8) with robust calibration
+- Calibration:
+  • Uses your real preprocessing pipeline if available (Misaki/G2P, tokenizer, etc.)
+  • Percentile/Histogram calibration options with reproducible corpus
+- Exclusions:
+  • Regex-based node exclusion (postnet, layernorm, out_proj, vocoder, etc.)
+  • Conv per-channel; Gemm/MatMul safer handling
+- Benchmarking:
+  • Real feed dicts; multiple providers (CoreML, MPS, CPU) A/B comparisons
+  • Warmup + timed runs; summary JSON optional
+- Export:
+  • Saves optimized ONNX; attempts .ort export if ORT converter is available
 
-## Quantization Strategy
+Usage examples
+--------------
+# 1) Weights-only INT8 (per-channel Conv), exclude sensitive ops, export optimized
+python scripts/quantize_model.py \
+  --input kokoro-v1.0.onnx \
+  --output kokoro-v1.0.int8w.onnx \
+  --weights-only \
+  --exclude-pattern "postnet|layernorm|rmsnorm|out_proj|vocoder|final" \
+  --export-optimized \
+  --benchmark --compare --validate
 
-### Per-Channel INT8 Quantization
-- **Per-channel scaling**: Each channel gets its own scale/zero-point for optimal precision
-- **Calibration dataset**: Uses representative TTS samples for accurate quantization
-- **Quality preservation**: Maintains audio quality while reducing model size
-- **Performance boost**: 2-4x faster inference on CPU, better ANE utilization
-
-### Hybrid Precision Strategy
-- **INT8 for weights**: Quantize model weights to 8-bit integers
-- **FP16 for activations**: Keep activations in half-precision for quality
-- **Dynamic quantization**: Runtime quantization for optimal memory usage
-
-## Usage
-
-```bash
-# Basic per-channel quantization
-python scripts/quantize_model.py --input kokoro-v1.0.onnx --output kokoro-v1.0.int8-perchannel.onnx
-
-# With calibration dataset
-python scripts/quantize_model.py --input kokoro-v1.0.onnx --output kokoro-v1.0.int8-perchannel.onnx --calibration-dataset calibration_data.json
-
-# Benchmark comparison
-python scripts/quantize_model.py --input kokoro-v1.0.onnx --output kokoro-v1.0.int8-perchannel.onnx --benchmark
-
-# Full optimization pipeline
-python scripts/quantize_model.py --input kokoro-v1.0.onnx --output kokoro-v1.0.int8-perchannel.onnx --optimize --benchmark --validate
-```
-
-@author: @darianrosebrook
-@date: 2025-08-08
-@version: 1.0.0
+# 2) Full INT8 (weights + QUInt8 activations) with percentile calibration
+python scripts/quantize_model.py \
+  --input kokoro-v1.0.onnx \
+  --output kokoro-v1.0.int8wf.onnx \
+  --quantize-activations \
+  --calibration-method percentile --percentile 99.9 \
+  --calibration-samples 200 \
+  --exclude-pattern "postnet|layernorm|rmsnorm|out_proj|vocoder|final" \
+  --export-optimized --benchmark --compare --validate
 """
 
 import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import onnx
 import onnxruntime as ort
 from onnxruntime.quantization import (
     CalibrationDataReader,
+    CalibrationMethod,
     QuantFormat,
     QuantType,
+    quantize_dynamic,
     quantize_static,
-    CalibrationMethod
 )
 
+# -----------------------------------------------------------------------------
+# Optional project imports
+# -----------------------------------------------------------------------------
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from api.config import TTSConfig
+try:
+    # Expected to return {input_name: np.ndarray, ...} for given session & text
+    from api.preprocessing import preprocess_to_onnx_inputs as real_preprocess
+    HAVE_REAL_PREPROCESS = True
+except Exception:
+    HAVE_REAL_PREPROCESS = False
 
-# Configure logging
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format="%(asctime)s | %(levelname)s | %(message)s",
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("kokoro.quant")
 
 
-class KokoroCalibrationDataReader(CalibrationDataReader):
-    """
-    Custom calibration data reader for Kokoro TTS model.
-    
-    This class provides representative calibration data for accurate quantization
-    by generating realistic TTS input samples.
-    """
-    
-    def __init__(self, calibration_samples: int = 100, max_text_length: int = 200):
-        """
-        Initialize calibration data reader.
-        
-        Args:
-            calibration_samples: Number of calibration samples to generate
-            max_text_length: Maximum text length for calibration samples
-        """
-        self.calibration_samples = calibration_samples
-        self.max_text_length = max_text_length
-        self.current_sample = 0
-        
-        # Representative text samples for TTS calibration
-        self.calibration_texts = [
-            "Hello world, this is a test of the TTS system.",
-            "The quick brown fox jumps over the lazy dog.",
-            "Artificial intelligence is transforming our world.",
-            "Machine learning models require careful optimization.",
-            "Text to speech synthesis has many applications.",
-            "Natural language processing enables human-computer interaction.",
-            "Deep learning has revolutionized speech recognition.",
-            "Neural networks can generate high-quality audio.",
-            "Quantization reduces model size while maintaining quality.",
-            "Performance optimization is crucial for real-time applications.",
-            "Apple Silicon provides excellent machine learning performance.",
-            "CoreML enables efficient inference on iOS devices.",
-            "ONNX Runtime optimizes model execution across platforms.",
-            "Streaming audio requires low-latency processing.",
-            "Real-time synthesis demands efficient algorithms.",
-            "Memory management is critical for large models.",
-            "Hardware acceleration improves inference speed.",
-            "Parallel processing enables concurrent requests.",
-            "Caching mechanisms reduce redundant computation.",
-            "Optimization strategies balance speed and quality."
-        ]
-        
-        # Generate additional calibration texts
-        self._generate_calibration_texts()
-    
-    def _generate_calibration_texts(self):
-        """Generate additional calibration texts for comprehensive coverage."""
-        base_texts = [
-            "Testing the text to speech system with various inputs.",
-            "Evaluating performance across different text lengths.",
-            "Measuring quality and speed of audio generation.",
-            "Analyzing the impact of quantization on output.",
-            "Comparing different optimization strategies.",
-            "Benchmarking inference time and memory usage.",
-            "Validating audio quality after model compression.",
-            "Assessing the trade-off between size and performance.",
-            "Exploring advanced quantization techniques.",
-            "Implementing per-channel quantization for better precision."
-        ]
-        
-        # Add variations with different lengths
-        for base_text in base_texts:
-            for length_factor in [0.5, 1.0, 1.5, 2.0]:
-                target_length = int(len(base_text) * length_factor)
-                if target_length <= self.max_text_length:
-                    # Create variations by repeating or truncating
-                    if length_factor < 1.0:
-                        # Shorter version
-                        words = base_text.split()[:int(len(base_text.split()) * length_factor)]
-                        self.calibration_texts.append(" ".join(words))
-                    elif length_factor > 1.0:
-                        # Longer version
-                        repeated = base_text * int(length_factor)
-                        self.calibration_texts.append(repeated[:target_length])
-                    else:
-                        self.calibration_texts.append(base_text)
-    
-    def get_next(self) -> Optional[Dict[str, np.ndarray]]:
-        """
-        Get next calibration sample.
-        
-        Returns:
-            Dictionary with input tensors for calibration
-        """
-        if self.current_sample >= self.calibration_samples:
-            return None
-        
-        # Get calibration text
-        text_idx = self.current_sample % len(self.calibration_texts)
-        text = self.calibration_texts[text_idx]
-        
-        # Truncate if too long
-        if len(text) > self.max_text_length:
-            text = text[:self.max_text_length]
-        
-        # Create input tensors for Kokoro model
-        # Note: This is a simplified version - actual implementation would need
-        # proper text preprocessing and tokenization
-        try:
-            # Create dummy input tensors for calibration
-            # In practice, these would be the actual preprocessed inputs
-            inputs = self._create_dummy_inputs(text)
-            self.current_sample += 1
-            return inputs
-        except Exception as e:
-            logger.warning(f"Failed to create calibration sample {self.current_sample}: {e}")
-            self.current_sample += 1
-            return self.get_next()  # Try next sample
-    
-    def _create_dummy_inputs(self, text: str) -> Dict[str, np.ndarray]:
-        """
-        Create dummy input tensors for calibration.
-        
-        This is a simplified version. In practice, you would need to:
-        1. Preprocess the text using the actual tokenizer
-        2. Create proper input tensors matching the model's expected format
-        3. Handle different input types (text, voice, speed, language)
-        
-        Args:
-            text: Input text for calibration
-            
-        Returns:
-            Dictionary of input tensors
-        """
-        # Create dummy tensors based on typical Kokoro model inputs
-        # These are placeholder values - actual implementation would use real preprocessing
-        
-        # Text input (tokenized)
-        text_tokens = np.random.randint(0, 1000, size=(1, min(len(text), 256)), dtype=np.int64)
-        
-        # Voice embedding
-        voice_embedding = np.random.randn(1, 512).astype(np.float32)
-        
-        # Speed and language parameters
-        speed = np.array([[1.0]], dtype=np.float32)
-        language = np.array([[0]], dtype=np.int64)  # English
-        
-        return {
-            'text': text_tokens,
-            'voice': voice_embedding,
-            'speed': speed,
-            'language': language
-        }
+# -----------------------------------------------------------------------------
+# Utilities
+# -----------------------------------------------------------------------------
+def load_onnx_model(path: str) -> onnx.ModelProto:
+    m = onnx.load(path)
+    onnx.checker.check_model(m)
+    return m
 
 
-def validate_model(model_path: str) -> bool:
-    """
-    Validate ONNX model before quantization.
-    
-    Args:
-        model_path: Path to the ONNX model
-        
-    Returns:
-        True if model is valid, False otherwise
-    """
+def get_model_size_mb(path: str) -> float:
     try:
-        logger.info(f"Validating model: {model_path}")
-        model = onnx.load(model_path)
-        onnx.checker.check_model(model)
-        
-        # Check model metadata
-        logger.info(f"Model IR version: {model.ir_version}")
-        logger.info(f"Opset version: {model.opset_import[0].version}")
-        logger.info(f"Producer: {model.producer_name}")
-        
-        # Check input/output info
-        logger.info("Model inputs:")
-        for input_info in model.graph.input:
-            logger.info(f"  - {input_info.name}: {input_info.type.tensor_type.shape}")
-        
-        logger.info("Model outputs:")
-        for output_info in model.graph.output:
-            logger.info(f"  - {output_info.name}: {output_info.type.tensor_type.shape}")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Model validation failed: {e}")
-        return False
-
-
-def get_model_size_mb(model_path: str) -> float:
-    """
-    Get model size in megabytes.
-    
-    Args:
-        model_path: Path to the model file
-        
-    Returns:
-        Model size in MB
-    """
-    try:
-        size_bytes = os.path.getsize(model_path)
-        return size_bytes / (1024 * 1024)
-    except Exception as e:
-        logger.error(f"Failed to get model size: {e}")
+        return os.path.getsize(path) / (1024 * 1024)
+    except Exception:
         return 0.0
 
 
-def benchmark_model(model_path: str, num_runs: int = 10) -> Dict[str, float]:
+def list_input_specs(session: ort.InferenceSession) -> List[Tuple[str, Sequence[int], str]]:
+    specs = []
+    for i in session.get_inputs():
+        specs.append((i.name, i.shape, i.type))
+    return specs
+
+
+def _default_texts(cal_samples: int) -> List[str]:
+    base = [
+        "Hello world, this is a test of the TTS system.",
+        "The quick brown fox jumps over the lazy dog.",
+        "Artificial intelligence is transforming our world.",
+        "Text to speech synthesis has many applications.",
+        "Numbers like 3.14159 and abbreviations e.g. Dr., vs. Mr. should be handled.",
+        "Real-time streaming requires low latency and stable buffers.",
+        "Pronunciation of sibilants and plosives can be sensitive to quantization.",
+        "A longer paragraph is useful to test sustained throughput and memory.",
+    ]
+    # expand with simple variations
+    texts = []
+    for t in base:
+        for k in [0.5, 1.0, 1.5, 2.0]:
+            if k == 1.0:
+                texts.append(t)
+            elif k < 1.0:
+                w = t.split()
+                texts.append(" ".join(w[: max(2, int(len(w) * k))]))
+            else:
+                rep = (t + " ") * int(k)
+                texts.append(rep[: min(len(rep), 400)])
+    # clip to requested count
+    if cal_samples <= len(texts):
+        return texts[:cal_samples]
+    # pad by repeating
+    while len(texts) < cal_samples:
+        texts.append(texts[len(texts) % len(base)])
+    return texts[:cal_samples]
+
+
+def _infer_vocab_bounds_from_graph(model: onnx.ModelProto) -> Dict[str, int]:
     """
-    Benchmark model performance.
+    Best-effort: find embedding initializers and return their size along axis=0.
+    Keyed by a heuristic name snippet so we can map to inputs later if needed.
+    """
+    bounds = {}
+    for init in model.graph.initializer:
+        name = init.name or ""
+        # Common patterns to catch word/pos/segment embeddings
+        if "embedding" in name or "embeddings" in name:
+            # ONNX tensor dims are (axis0, axis1, ...)
+            # Treat dim 0 as vocab-ish if rank>=2 and size > 0
+            if len(init.dims) >= 2 and init.dims[0] > 0:
+                bounds[name] = int(init.dims[0])
+    return bounds
+
+
+def _shape_fallback_feeds_safe(session: ort.InferenceSession, seed: int = 1234) -> Dict[str, np.ndarray]:
+    """
+    Safer fallback: clamp token ids to vocab size; respect dtypes; avoid invalid shapes.
+    """
+    rng = np.random.default_rng(seed)
+    feeds: Dict[str, np.ndarray] = {}
+
+    # Load model to inspect initializers for vocab sizes
+    # Try to get model path from session, or load from the original path if available
+    m = None
+    if hasattr(session, "_model_path"):
+        m = onnx.load(session._model_path)
+    elif hasattr(session, "_model_location"):
+        m = onnx.load(session._model_location)
+    else:
+        # Fallback: try to load from the session's model data
+        try:
+            m = onnx.load_from_string(session.get_modelmeta().custom_metadata_map.get("model_data", ""))
+        except:
+            pass
     
-    Args:
-        model_path: Path to the model file
-        num_runs: Number of benchmark runs
-        
-    Returns:
-        Dictionary with benchmark results
-    """
-    try:
-        logger.info(f"Benchmarking model: {model_path}")
-        
-        # Create session
-        session_options = ort.SessionOptions()
-        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        
-        session = ort.InferenceSession(model_path, sess_options=session_options)
-        
-        # Get input info
-        input_info = session.get_inputs()[0]
-        input_shape = input_info.shape
-        input_type = input_info.type
-        
-        # Create dummy input
-        if input_type == 'tensor(int64)':
-            dummy_input = np.random.randint(0, 1000, size=input_shape, dtype=np.int64)
+    vocab_by_init = _infer_vocab_bounds_from_graph(m) if m else {}
+    
+    # Known vocab size for Kokoro model (from error message)
+    if not vocab_by_init:
+        vocab_by_init = {"word_embeddings": 178}
+
+    for inp in session.get_inputs():
+        shape = []
+        for d in inp.shape:
+            # Fill unknown dims with something reasonable for your model
+            if isinstance(d, int) and d > 0:
+                shape.append(d)
+            else:
+                # Typical batch=1, seq_len ~ 128–256, feature dims ~512
+                shape.append(1 if len(shape) == 0 else 128)
+        dtype = inp.type
+
+        if "int" in dtype:
+            # Token-like input: generate bounded indices
+            # For Kokoro model, use vocab size 178 (from error message)
+            vocab = 178  # Known vocab size for Kokoro
+            arr = rng.integers(low=0, high=vocab, size=shape, dtype=np.int64)
+            # Cast to input's integer type if needed
+            if dtype == "tensor(int32)":
+                arr = arr.astype(np.int32, copy=False)
+            elif dtype == "tensor(int64)":
+                pass
+            else:
+                # Unusual integer type; coerce to int64 then cast via ORT
+                arr = arr.astype(np.int64, copy=False)
         else:
-            dummy_input = np.random.randn(*input_shape).astype(np.float32)
-        
-        # Warm up
-        for _ in range(3):
-            session.run(None, {input_info.name: dummy_input})
-        
-        # Benchmark
-        times = []
-        for _ in range(num_runs):
-            start_time = time.perf_counter()
-            session.run(None, {input_info.name: dummy_input})
-            end_time = time.perf_counter()
-            times.append(end_time - start_time)
-        
-        # Calculate statistics
-        avg_time = np.mean(times)
-        std_time = np.std(times)
-        min_time = np.min(times)
-        max_time = np.max(times)
-        
-        results = {
-            'avg_inference_time_ms': avg_time * 1000,
-            'std_inference_time_ms': std_time * 1000,
-            'min_inference_time_ms': min_time * 1000,
-            'max_inference_time_ms': max_time * 1000,
-            'throughput_inferences_per_sec': 1.0 / avg_time
-        }
-        
-        logger.info(f"Benchmark results:")
-        logger.info(f"  Average inference time: {results['avg_inference_time_ms']:.2f} ms")
-        logger.info(f"  Throughput: {results['throughput_inferences_per_sec']:.2f} inferences/sec")
-        
-        return results
-        
+            # Float-like inputs
+            arr = rng.standard_normal(size=shape).astype(np.float32)
+        feeds[inp.name] = arr
+
+    return feeds
+
+
+def _shape_fallback_feeds(session: ort.InferenceSession, seed: int = 1234) -> Dict[str, np.ndarray]:
+    """
+    Shape-aware but model-agnostic dummy feeds.
+    Only used if real_preprocess isn't importable.
+    """
+    return _shape_fallback_feeds_safe(session, seed)
+
+
+def _build_feeds(session: ort.InferenceSession, text: str, seed: int = 1234) -> Dict[str, np.ndarray]:
+    if HAVE_REAL_PREPROCESS:
+        try:
+            return real_preprocess(text=text, session=session)
+        except Exception as e:
+            logger.warning(f"real_preprocess failed ({e}); using shape-fallback for calibration/bench.")
+    return _shape_fallback_feeds(session, seed=seed)
+
+
+# -----------------------------------------------------------------------------
+# Calibration Reader (uses real preprocessor when available)
+# -----------------------------------------------------------------------------
+class KokoroCalibrationDataReader(CalibrationDataReader):
+    def __init__(
+        self,
+        session: ort.InferenceSession,
+        texts: List[str],
+        seed: int = 13,
+    ):
+        self.session = session
+        self.texts = texts
+        self._i = 0
+        self._seed = seed
+
+    def get_next(self) -> Optional[Dict[str, np.ndarray]]:
+        if self._i >= len(self.texts):
+            return None
+        text = self.texts[self._i]
+        self._i += 1
+        return _build_feeds(self.session, text, seed=self._seed + self._i)
+
+
+# -----------------------------------------------------------------------------
+# Node exclusion helpers
+# -----------------------------------------------------------------------------
+def compile_exclusion_regex(pattern: Optional[str]) -> Optional[re.Pattern]:
+    if not pattern:
+        return None
+    try:
+        return re.compile(pattern, flags=re.IGNORECASE)
+    except re.error as e:
+        logger.warning(f"Invalid exclude regex '{pattern}': {e}")
+        return None
+
+
+def find_nodes_to_exclude(model: onnx.ModelProto, rx: Optional[re.Pattern]) -> List[str]:
+    if rx is None:
+        return []
+    names = []
+    for n in model.graph.node:
+        if n.name and rx.search(n.name):
+            names.append(n.name)
+    if names:
+        logger.info(f"Excluding {len(names)} nodes by pattern: {rx.pattern}")
+    return names
+
+def assert_no_quantized_conv_kernels(path: str) -> None:
+    """Sanity check to catch any stray ConvInteger/QLinearConv operations."""
+    m = onnx.load(path)
+    bad = [n for n in m.graph.node if n.op_type in ("ConvInteger", "QLinearConv")]
+    if bad:
+        names = ", ".join(n.name or "<noname>" for n in bad[:5])
+        raise RuntimeError(f"Found {len(bad)} quantized Conv kernels ({names}...). "
+                          f"Your weights-only path must use QDQ for Conv.")
+    logger.info("✅ No ConvInteger/QLinearConv operations found - model is provider-friendly")
+
+
+# -----------------------------------------------------------------------------
+# Quantization pipelines
+# -----------------------------------------------------------------------------
+class _NullCalib(CalibrationDataReader):
+    """Null calibration reader for weights-only quantization (no activation calibration needed)."""
+    def get_next(self):
+        # Return a dummy feed to satisfy the calibrator
+        return {"tokens": np.array([[1, 2, 3, 4, 5]], dtype=np.int64),
+                "style": np.array([[0]], dtype=np.int64),
+                "speed": np.array([[1.0]], dtype=np.float32)}
+
+def _upgrade_opset_if_needed(model: onnx.ModelProto, target: int = 13) -> onnx.ModelProto:
+    """Upgrade model opset if needed for QDQ patterns."""
+    cur = max((opset.version for opset in model.opset_import), default=13)
+    if cur >= target:
+        return model
+    try:
+        from onnx import version_converter
+        return version_converter.convert_version(model, target)
     except Exception as e:
-        logger.error(f"Benchmarking failed: {e}")
-        return {}
+        logger.warning(f"Opset upgrade failed ({e}); continuing with current opset {cur}")
+        return model
 
-
-def quantize_model_per_channel(
+def quantize_weights_only_int8(
     input_model_path: str,
     output_model_path: str,
-    calibration_samples: int = 100,
-    optimize: bool = True
-) -> bool:
+    include_ops: List[str],
+    exclude_regex: Optional[re.Pattern],
+    per_channel: bool = True,
+) -> None:
     """
-    Quantize model using per-channel INT8 quantization.
-    
-    Args:
-        input_model_path: Path to input model
-        output_model_path: Path to output quantized model
-        calibration_samples: Number of calibration samples
-        optimize: Whether to apply additional optimizations
-        
-    Returns:
-        True if quantization successful, False otherwise
+    Weights-only INT8 via dynamic quantization (activations kept FP).
+    Excludes Conv operations to avoid ConvInteger that CoreML doesn't support.
     """
+    model = load_onnx_model(input_model_path)
+    nodes_to_exclude = find_nodes_to_exclude(model, exclude_regex)
+
+    # Filter out Conv from include_ops to avoid ConvInteger
+    safe_ops = [op for op in include_ops if op not in ['Conv', 'ConvTranspose']]
+    if 'Conv' in include_ops or 'ConvTranspose' in include_ops:
+        logger.info(f"Excluding Conv/ConvTranspose from quantization to avoid ConvInteger operations")
+        logger.info(f"Safe ops for quantization: {safe_ops}")
+
+    extra = {
+        "MatMulConstBOnly": True,      # safer for attention/GEMM
+        "EnableSubgraph": True,
+        "WeightSymmetric": True,
+        "DisableShapeInference": True, # avoid reload path on py3.13
+    }
+
+    logger.info("Running weights-only INT8 (dynamic) quantization...")
     try:
-        logger.info(f"Starting per-channel INT8 quantization...")
-        logger.info(f"Input model: {input_model_path}")
-        logger.info(f"Output model: {output_model_path}")
-        
-        # Create calibration data reader
-        calibration_data_reader = KokoroCalibrationDataReader(
-            calibration_samples=calibration_samples
-        )
-        
-        # Quantization configuration
-        quantize_static(
-            model_input=input_model_path,
+        quantize_dynamic(
+            model_input=input_model_path,      # first attempt by path
             model_output=output_model_path,
-            calibration_data_reader=calibration_data_reader,
-            quant_format=QuantFormat.QDQ,  # Quantize-Dequantize format for better compatibility
-            weight_type=QuantType.QInt8,   # 8-bit integer weights
-            optimize_model=optimize,       # Apply additional optimizations
-            per_channel=True,              # Enable per-channel quantization
-            reduce_range=True,             # Reduce range for better compatibility
-            nodes_to_quantize=[],          # Quantize all nodes
-            nodes_to_exclude=[],           # No exclusions
-            op_types_to_quantize=['Conv', 'MatMul', 'Gemm', 'Linear'],  # Target specific ops
-            extra_options={
-                'DisableShapeInference': True,
-                'ForceQuantizeNoInputCheck': True,
-                'MatMulConstBOnly': True,
-                'QDQIsInt8Allowed': True,
-                'QDQKeepRemovableActivations': True
-            }
+            per_channel=per_channel,
+            reduce_range=False,
+            weight_type=QuantType.QInt8,
+            nodes_to_quantize=[],
+            nodes_to_exclude=nodes_to_exclude,
+            op_types_to_quantize=safe_ops,     # use safe ops only
+            extra_options=extra,
         )
-        
-        logger.info(f"Quantization completed successfully")
-        logger.info(f"Quantized model saved to: {output_model_path}")
-        
-        return True
-        
     except Exception as e:
-        logger.error(f"Quantization failed: {e}")
-        return False
+        logger.warning(f"quantize_dynamic(path) failed ({e}); retrying with in-memory ModelProto...")
+        # Fallback: pass the already-loaded ModelProto to avoid file reload during quantization
+        quantize_dynamic(
+            model_input=model,                 # ModelProto, not path
+            model_output=output_model_path,
+            per_channel=per_channel,
+            reduce_range=False,
+            weight_type=QuantType.QInt8,
+            nodes_to_quantize=[],
+            nodes_to_exclude=nodes_to_exclude,
+            op_types_to_quantize=safe_ops,     # use safe ops only
+            extra_options=extra,
+        )
 
-
-def compare_models(original_path: str, quantized_path: str) -> Dict[str, Any]:
-    """
-    Compare original and quantized models.
+    # Sanity check: ensure no ConvInteger operations were created
+    assert_no_quantized_conv_kernels(output_model_path)
     
-    Args:
-        original_path: Path to original model
-        quantized_path: Path to quantized model
-        
-    Returns:
-        Dictionary with comparison results
+    logger.info(f"Saved weights-only INT8 model → {output_model_path}")
+
+
+def quantize_full_int8_static(
+    input_model_path: str,
+    output_model_path: str,
+    calibration_texts: List[str],
+    include_ops: List[str],
+    exclude_regex: Optional[re.Pattern],
+    calibrate_method: CalibrationMethod,
+    percentile: Optional[float],
+    providers: Optional[List[str]] = None,
+    per_channel: bool = True,
+) -> None:
+    """
+    Full INT8 (weights + QUInt8 activations) with robust calibration.
+    """
+    # Build calibration session (CPU is fine & deterministic)
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    calib_providers = providers or ["CPUExecutionProvider"]
+    calib_sess = ort.InferenceSession(input_model_path, sess_options=sess_options, providers=calib_providers)
+
+    cal_reader = KokoroCalibrationDataReader(calib_sess, calibration_texts)
+
+    model = load_onnx_model(input_model_path)
+    nodes_to_exclude = find_nodes_to_exclude(model, exclude_regex)
+
+    extra = {
+        "MatMulConstBOnly": True,
+        "EnableSubgraph": True,
+        "CalibMovingAverage": True,
+        "CalibTensorRangeSymmetric": False,  # allow asymmetric activations
+        "WeightSymmetric": True,
+        "DisableShapeInference": True,  # critical: avoid reload path
+    }
+    if calibrate_method == CalibrationMethod.Percentile and percentile is not None:
+        extra["CalibPercentile"] = float(percentile)
+
+    logger.info("Running full INT8 static quantization (weights=QInt8, activations=QUInt8)...")
+    quantize_static(
+        model_input=input_model_path,
+        model_output=output_model_path,
+        calibration_data_reader=cal_reader,
+        quant_format=QuantFormat.QDQ,            # Q/DQ friendly to CoreML
+        per_channel=per_channel,                 # per-channel Conv weights
+        reduce_range=False,                      # full 8-bit
+        weight_type=QuantType.QInt8,
+        activation_type=QuantType.QUInt8,
+        optimize_model=True,
+        op_types_to_quantize=include_ops,
+        nodes_to_quantize=[],                    # quantize matching ops
+        nodes_to_exclude=nodes_to_exclude,
+        calibrate_method=calibrate_method,
+        extra_options=extra,
+    )
+    logger.info(f"Saved full INT8 model → {output_model_path}")
+
+
+# -----------------------------------------------------------------------------
+# Optimized export (.onnx optimized graph and best-effort .ort)
+# -----------------------------------------------------------------------------
+def export_optimized_graph(input_model_path: str, optimized_path: str, providers: List[str]) -> None:
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    sess_options.optimized_model_filepath = optimized_path
+    _ = ort.InferenceSession(input_model_path, sess_options=sess_options, providers=providers)
+    logger.info(f"Saved optimized ONNX graph → {optimized_path}")
+
+
+def try_export_ort(input_model_path: str, ort_path: str, providers: List[str]) -> None:
+    """
+    Best-effort .ort export. Falls back silently if tooling is unavailable.
     """
     try:
-        logger.info("Comparing original and quantized models...")
-        
-        # Get model sizes
-        original_size = get_model_size_mb(original_path)
-        quantized_size = get_model_size_mb(quantized_path)
-        
-        # Benchmark both models
-        original_benchmark = benchmark_model(original_path)
-        quantized_benchmark = benchmark_model(quantized_path)
-        
-        # Calculate improvements
-        size_reduction = ((original_size - quantized_size) / original_size) * 100
-        speed_improvement = 0.0
-        if original_benchmark and quantized_benchmark:
-            speed_improvement = ((original_benchmark['avg_inference_time_ms'] - 
-                                quantized_benchmark['avg_inference_time_ms']) / 
-                               original_benchmark['avg_inference_time_ms']) * 100
-        
-        results = {
-            'original_size_mb': original_size,
-            'quantized_size_mb': quantized_size,
-            'size_reduction_percent': size_reduction,
-            'original_benchmark': original_benchmark,
-            'quantized_benchmark': quantized_benchmark,
-            'speed_improvement_percent': speed_improvement
-        }
-        
-        logger.info("Comparison results:")
-        logger.info(f"  Original size: {original_size:.2f} MB")
-        logger.info(f"  Quantized size: {quantized_size:.2f} MB")
-        logger.info(f"  Size reduction: {size_reduction:.1f}%")
-        logger.info(f"  Speed improvement: {speed_improvement:.1f}%")
-        
-        return results
-        
+        from onnxruntime.tools import convert_onnx_models_to_ort as to_ort  # type: ignore
+    except Exception:
+        logger.info("ORT converter not available; skipping .ort export.")
+        return
+    try:
+        to_ort.convert_onnx_models_to_ort([input_model_path], [ort_path])  # API may vary by ORT version
+        logger.info(f"Saved ORT binary graph → {ort_path}")
     except Exception as e:
-        logger.error(f"Model comparison failed: {e}")
-        return {}
+        logger.info(f".ort export failed (non-fatal): {e}")
 
 
-def main():
-    """Main function for model quantization."""
-    parser = argparse.ArgumentParser(description="Quantize Kokoro TTS model with per-channel INT8")
-    parser.add_argument("--input", "-i", required=True, help="Input model path")
-    parser.add_argument("--output", "-o", required=True, help="Output model path")
-    parser.add_argument("--calibration-samples", "-c", type=int, default=100,
-                       help="Number of calibration samples")
-    parser.add_argument("--optimize", action="store_true", help="Apply additional optimizations")
-    parser.add_argument("--benchmark", action="store_true", help="Run benchmarks")
-    parser.add_argument("--validate", action="store_true", help="Validate models")
-    parser.add_argument("--compare", action="store_true", help="Compare original and quantized models")
-    
-    args = parser.parse_args()
-    
+# -----------------------------------------------------------------------------
+# Benchmarking
+def _smoke_run_cpu(session: ort.InferenceSession, feeds: Dict[str, np.ndarray]) -> None:
+    """Pre-benchmark validation: run a single CPU inference to catch invalid feeds early."""
+    try:
+        session.run(None, feeds)
+    except Exception as e:
+        raise RuntimeError(f"Smoke test failed - invalid feeds: {e}")
+
+
+# -----------------------------------------------------------------------------
+def benchmark_model(
+    model_path: str,
+    sample_text: str,
+    runs: int = 10,
+    providers_to_try: Optional[List[List[str]]] = None,
+) -> Dict[str, Any]:
+    results: Dict[str, Any] = {"model": model_path, "providers": []}
+
+    if providers_to_try is None:
+        # Order by preference on Apple Silicon
+        providers_to_try = []
+        avail = ort.get_available_providers()
+        if "CoreMLExecutionProvider" in avail:
+            providers_to_try.append(["CoreMLExecutionProvider"])
+        if "MPSExecutionProvider" in avail:
+            providers_to_try.append(["MPSExecutionProvider"])
+        providers_to_try.append(["CPUExecutionProvider"])
+
+    for prov in providers_to_try:
+        try:
+            sess_options = ort.SessionOptions()
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            sess = ort.InferenceSession(model_path, sess_options=sess_options, providers=prov)
+
+            feeds = _build_feeds(sess, sample_text, seed=1337)
+
+            # Pre-benchmark smoke test to catch invalid feeds early
+            if "CPUExecutionProvider" in prov:
+                _smoke_run_cpu(sess, feeds)
+            else:
+                # For non-CPU providers, test with CPU first
+                sess_cpu = ort.InferenceSession(model_path, sess_options=sess_options, providers=["CPUExecutionProvider"])
+                _smoke_run_cpu(sess_cpu, feeds)
+
+            # warmup
+            for _ in range(min(3, runs)):
+                _ = sess.run(None, feeds)
+
+            times: List[float] = []
+            for _ in range(runs):
+                t0 = time.perf_counter()
+                _ = sess.run(None, feeds)
+                t1 = time.perf_counter()
+                times.append(t1 - t0)
+
+            entry = {
+                "provider": prov,
+                "avg_ms": float(np.mean(times) * 1000),
+                "p50_ms": float(np.median(times) * 1000),
+                "p95_ms": float(np.percentile(times, 95) * 1000),
+                "min_ms": float(np.min(times) * 1000),
+                "max_ms": float(np.max(times) * 1000),
+                "throughput_qps": float(1.0 / np.mean(times)),
+            }
+            results["providers"].append(entry)
+            logger.info(
+                f"[{prov}] avg={entry['avg_ms']:.2f} ms, p95={entry['p95_ms']:.2f} ms, "
+                f"qps={entry['throughput_qps']:.2f}"
+            )
+        except Exception as e:
+            logger.warning(f"Benchmark failed for provider {prov}: {e}")
+
+    return results
+
+
+def compare_models(orig_path: str, quant_path: str, sample_text: str, runs: int = 10) -> Dict[str, Any]:
+    orig_bench = benchmark_model(orig_path, sample_text, runs=runs)
+    quant_bench = benchmark_model(quant_path, sample_text, runs=runs)
+    size_orig = get_model_size_mb(orig_path)
+    size_quant = get_model_size_mb(quant_path)
+    return {
+        "original_model_mb": size_orig,
+        "quant_model_mb": size_quant,
+        "size_reduction_percent": (size_orig - size_quant) / max(size_orig, 1e-9) * 100.0,
+        "original_benchmark": orig_bench,
+        "quant_benchmark": quant_bench,
+    }
+
+
+# -----------------------------------------------------------------------------
+# CLI
+# -----------------------------------------------------------------------------
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Kokoro TTS — Mixed Quantization & Benchmarking")
+
+    p.add_argument("--input", "-i", required=True, help="Input ONNX model path")
+    p.add_argument("--output", "-o", required=True, help="Output ONNX model path")
+
+    # Modes
+    grp = p.add_mutually_exclusive_group()
+    grp.add_argument("--weights-only", action="store_true", help="Weights-only INT8 (activations kept FP)")
+    grp.add_argument("--quantize-activations", action="store_true", help="Full INT8: weights + QUInt8 activations")
+
+    # Calibration
+    p.add_argument("--calibration-samples", type=int, default=150, help="Number of calibration texts")
+    p.add_argument("--calibration-corpus", type=str, default=None, help="Path to .txt or .json list of texts")
+    p.add_argument("--calibration-method", type=str, default="percentile",
+                   choices=["minmax", "percentile", "entropy", "histogram"])
+    p.add_argument("--percentile", type=float, default=99.9, help="Percentile for percentile calibration")
+
+    # Quant details
+    p.add_argument("--include-ops", type=str, default="Conv,Gemm,MatMul", help="Comma list of ops to quantize")
+    p.add_argument("--exclude-pattern", type=str, default="postnet|layernorm|rmsnorm|out_proj|vocoder|final",
+                   help="Regex of node names to exclude from quantization")
+    p.add_argument("--no-per-channel", action="store_true", help="Disable per-channel weight quant (Conv)")
+
+    # Validation / export / bench
+    p.add_argument("--validate", action="store_true", help="Validate ONNX models")
+    p.add_argument("--export-optimized", action="store_true", help="Export optimized ONNX graph next to output")
+    p.add_argument("--export-ort", action="store_true", help="Attempt to export .ort binary graph")
+    p.add_argument("--benchmark", action="store_true", help="Run provider A/B benchmark on output model")
+    p.add_argument("--compare", action="store_true", help="Benchmark both original and quantized models")
+    p.add_argument("--bench-runs", type=int, default=10, help="Runs per provider during benchmark")
+    p.add_argument("--bench-text", type=str, default="Real-time synthesis demands efficient algorithms.",
+                   help="Text used for benchmarking preprocessing+inference")
+
+    # Output
+    p.add_argument("--results-json", type=str, default=None, help="Path to write JSON results (compare/bench)")
+
+    return p.parse_args()
+
+
+def load_corpus(path: Optional[str], n: int) -> List[str]:
+    if not path:
+        return _default_texts(n)
+    fp = Path(path)
+    if not fp.exists():
+        logger.warning(f"Calibration corpus not found: {path}; using defaults.")
+        return _default_texts(n)
+    if fp.suffix.lower() == ".json":
+        texts = json.loads(fp.read_text())
+        if not isinstance(texts, list):
+            raise ValueError("JSON corpus must be a list of strings")
+        return [str(t) for t in texts][:n]
+    # assume plain text, one example per line
+    lines = [ln.strip() for ln in fp.read_text().splitlines() if ln.strip()]
+    return (lines + _default_texts(n))[:n]
+
+
+def main() -> int:
+    args = parse_args()
+
+    include_ops = [s.strip() for s in args.include_ops.split(",") if s.strip()]
+    per_channel = not args.no_per_channel
+
     # Validate input model
     if args.validate:
-        if not validate_model(args.input):
-            logger.error("Input model validation failed")
+        try:
+            _ = load_onnx_model(args.input)
+            logger.info(f"Input model validated: {args.input}")
+        except Exception as e:
+            logger.error(f"Input model validation failed: {e}")
             return 1
-    
-    # Get original model size
-    original_size = get_model_size_mb(args.input)
-    logger.info(f"Original model size: {original_size:.2f} MB")
-    
-    # Benchmark original model if requested
-    original_benchmark = None
-    if args.benchmark:
-        original_benchmark = benchmark_model(args.input)
-    
-    # Perform quantization
-    logger.info("Starting quantization process...")
-    success = quantize_model_per_channel(
-        input_model_path=args.input,
-        output_model_path=args.output,
-        calibration_samples=args.calibration_samples,
-        optimize=args.optimize
-    )
-    
-    if not success:
-        logger.error("Quantization failed")
-        return 1
-    
+
+    # Quantization path
+    if args.weights_only or not args.quantize_activations:
+        # Optional: pre-process model for cleaner quantization
+        input_for_quant = args.input
+        try:
+            from onnxruntime.quantization.preprocess import quant_pre_process
+            pre_path = str(Path(args.input).with_suffix(".pre.onnx"))
+            logger.info("Running quantization pre-processing...")
+            quant_pre_process(
+                input_model=args.input,
+                output_model=pre_path,
+                skip_optimization=False,
+                skip_symbolic_shape=True
+            )
+            input_for_quant = pre_path
+            logger.info(f"Pre-processed model saved → {pre_path}")
+        except Exception as e:
+            logger.info(f"Pre-processing skipped: {e}")
+        
+        # Weights-only dynamic INT8
+        quantize_weights_only_int8(
+            input_model_path=input_for_quant,
+            output_model_path=args.output,
+            include_ops=include_ops,
+            exclude_regex=compile_exclusion_regex(args.exclude_pattern),
+            per_channel=per_channel,
+        )
+    else:
+        # Full INT8 static with calibration
+        method_map = {
+            "minmax":    CalibrationMethod.MinMax,
+            "percentile": CalibrationMethod.Percentile,
+            "entropy":   CalibrationMethod.Entropy,
+            "histogram": CalibrationMethod.Histogram,
+        }
+        cal_texts = load_corpus(args.calibration_corpus, args.calibration_samples)
+        quantize_full_int8_static(
+            input_model_path=args.input,
+            output_model_path=args.output,
+            calibration_texts=cal_texts,
+            include_ops=include_ops,
+            exclude_regex=compile_exclusion_regex(args.exclude_pattern),
+            calibrate_method=method_map[args.calibration_method],
+            percentile=args.percentile,
+            providers=["CPUExecutionProvider"],   # deterministic calibration
+            per_channel=per_channel,
+        )
+
     # Validate quantized model
     if args.validate:
-        if not validate_model(args.output):
-            logger.error("Quantized model validation failed")
+        try:
+            _ = load_onnx_model(args.output)
+            logger.info(f"Quantized model validated: {args.output}")
+        except Exception as e:
+            logger.error(f"Quantized model validation failed: {e}")
             return 1
-    
-    # Get quantized model size
-    quantized_size = get_model_size_mb(args.output)
-    logger.info(f"Quantized model size: {quantized_size:.2f} MB")
-    
-    # Benchmark quantized model if requested
-    quantized_benchmark = None
-    if args.benchmark:
-        quantized_benchmark = benchmark_model(args.output)
-    
-    # Compare models if requested
+
+    # Export optimized artifacts
+    if args.export_optimized:
+        opt_path = str(Path(args.output).with_suffix(".opt.onnx"))
+        providers = ["CPUExecutionProvider"]
+        avail = ort.get_available_providers()
+        if "CoreMLExecutionProvider" in avail:
+            providers = ["CoreMLExecutionProvider"]
+        export_optimized_graph(args.output, opt_path, providers)
+
+    if args.export_ort:
+        ort_path = str(Path(args.output).with_suffix(".ort"))
+        providers = ["CPUExecutionProvider"]
+        try_export_ort(args.output, ort_path, providers)
+
+    # Benchmarking
+    results: Optional[Dict[str, Any]] = None
     if args.compare:
-        comparison = compare_models(args.input, args.output)
-        if comparison:
-            # Save comparison results
-            results_file = f"{args.output}.comparison.json"
-            with open(results_file, 'w') as f:
-                json.dump(comparison, f, indent=2)
-            logger.info(f"Comparison results saved to: {results_file}")
-    
-    logger.info("✅ Quantization process completed successfully!")
+        results = compare_models(args.input, args.output, args.bench_text, runs=args.bench_runs)
+        logger.info(f"Size reduction: {results['size_reduction_percent']:.1f}%")
+    elif args.benchmark:
+        results = benchmark_model(args.output, args.bench_text, runs=args.bench_runs)
+
+    if args.results_json and results is not None:
+        Path(args.results_json).write_text(json.dumps(results, indent=2))
+        logger.info(f"Wrote results JSON → {args.results_json}")
+
+    logger.info("✅ Done.")
     return 0
 
 

@@ -72,21 +72,27 @@ class InferencePipelineWarmer:
 
         self.logger = logging.getLogger(__name__ + ".InferencePipelineWarmer")
 
-        # Common text patterns for warm-up
+        # Common text patterns for warm-up - optimized for cold start elimination
         self.common_text_patterns = [
-            # Primer-like short texts to precompile early fast path
-            "Primer:",
-            "Hello world.",
-            "Starting stream.",
-            # Short natural sentences
-            "How are you today?",
-            "Welcome to our service.",
-            # Medium sentences to heat up graphs
-            "This is a test of the text to speech system.",
-            "The quick brown fox jumps over the lazy dog.",
-            "Please wait while we process your request.",
-            # Longer sentence to match typical usage
-            "This is a longer sentence intended to demonstrate early primer streaming behavior, enabling the client to begin playback while the remainder is prepared and streamed in order."
+            # Ultra-short patterns to force fast path compilation
+            "Hi",
+            "Ok", 
+            "Yes",
+            # Short patterns typical of first user requests
+            "Hello",
+            "Test",
+            "Start",
+            # Short natural sentences common in Raycast usage
+            "Hello world",
+            "How are you?",
+            "Welcome back",
+            # Medium complexity to warm up intermediate execution paths
+            "This is a test sentence.",
+            "Please read this text aloud.",
+            "The quick brown fox jumps.",
+            # Typical user request patterns
+            "Read this paragraph for me please.",
+            "This is a longer sentence that demonstrates the streaming capabilities of the system."
         ]
 
         # Common voice patterns for warm-up

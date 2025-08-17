@@ -69,6 +69,12 @@ def initialize_model_fast():
     return _initialize_fast()
 
 
+def initialize_model():
+    """Standard model initialization. Legacy compatibility wrapper."""
+    from api.model.initialization.fast_init import initialize_model_fast as _initialize_fast
+    return _initialize_fast()
+
+
 def get_dual_session_manager():
     """Get dual session manager. Legacy compatibility wrapper."""
     from api.model.sessions import get_dual_session_manager as _get_dual_session_manager

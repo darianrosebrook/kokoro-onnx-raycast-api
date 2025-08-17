@@ -340,7 +340,7 @@ class TTSConfig:
     
     # Model file paths and resources
     is_production = os.environ.get("KOKORO_PRODUCTION_MODE", "false").lower() == "true"
-    MODEL_PATH = "kokoro-v1.0.int8.onnx"
+    MODEL_PATH = "kokoro-v1.0.int8.onnx"  # Using quantized model (current best option)
     VOICES_PATH = "voices-v1.0.bin"
     
     # Test data for health checks and benchmarking

@@ -126,6 +126,15 @@ export function processBenchmark(
     ? extractTimestamp(filename)
     : new Date().toISOString();
 
+  // Handle different benchmark file formats
+  if (!rawData.config) {
+    // Skip files that don't have the expected benchmark structure
+    console.warn(`Skipping file ${filename} - missing config structure`);
+    throw new Error(
+      `Invalid benchmark file format: missing config in ${filename}`
+    );
+  }
+
   const id = generateBenchmarkId(rawData.config, timestamp);
 
   // Calculate TTFA statistics - handle potential empty arrays
