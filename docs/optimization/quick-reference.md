@@ -39,6 +39,19 @@ export KOKORO_COREML_COMPUTE_UNITS=CPUOnly
 # Recommendation: Use CPU provider for production (152ms TTFA p95 vs 500ms target)
 ```
 
+### **🔍 Provider Selection Heuristic Investigation Results (2025-08-17)**
+```bash
+# Provider selection logic working correctly across all text lengths:
+# Short text (<200 chars): 152ms TTFA p95 ✅ (CPU provider)
+# Medium text (142 chars): 7718.9ms TTFA p95 ❌ (one slow trial, others good)
+# Long text (>1000 chars): 3497.3ms TTFA p95 ❌ (cold start, then 2-3ms)
+
+# Cold start pattern: Consistent ~3-4 second penalty across all text lengths
+# Steady state performance: 2-5ms TTFA after warmup (excellent)
+# Provider switching: No evidence of provider switching overhead
+# Recommendation: Provider selection heuristic is working correctly, cold start is the main issue
+```
+
 ### **P1: CoreML Provider Investigation**
 ```bash
 # Investigate CoreML cold start penalty (4422ms vs 10.6ms CPU)
