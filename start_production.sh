@@ -136,12 +136,16 @@ if [[ "$(uname -m)" == "arm64" ]]; then
     export KOKORO_MEMORY_ARENA_SIZE_MB=${KOKORO_MEMORY_ARENA_SIZE_MB:-"3072"}
 fi
 
+# Performance profile for optimal chunk timing (50ms chunks)
+export KOKORO_DEV_PERFORMANCE_PROFILE=${KOKORO_DEV_PERFORMANCE_PROFILE:-"stable"}
+
 echo "Production optimizations enabled:"
 echo "   • ORJSON serialization: ✅"
 echo "   • GZip compression: ✅"
 echo "   • Security headers: ✅"
 echo "   • Graph optimization: ${KOKORO_GRAPH_OPT_LEVEL}"
 echo "   • Memory arena: ${KOKORO_MEMORY_ARENA_SIZE_MB}MB"
+echo "   • Performance profile: ${KOKORO_DEV_PERFORMANCE_PROFILE} (50ms chunks)"
 echo "   • Misaki G2P enabled: ${KOKORO_MISAKI_ENABLED}"
 [[ "$(uname -m)" == "arm64" ]] && echo "   • CoreML optimization: ✅"
 
