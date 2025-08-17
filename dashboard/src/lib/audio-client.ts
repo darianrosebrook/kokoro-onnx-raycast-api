@@ -20,12 +20,12 @@ class BrowserEventEmitter {
 
   off(event: string, listener: Function): void {
     if (!this.events[event]) return;
-    this.events[event] = this.events[event].filter(l => l !== listener);
+    this.events[event] = this.events[event].filter((l) => l !== listener);
   }
 
   emit(event: string, ...args: any[]): void {
     if (!this.events[event]) return;
-    this.events[event].forEach(listener => listener(...args));
+    this.events[event].forEach((listener) => listener(...args));
   }
 }
 
@@ -90,7 +90,7 @@ export interface StreamingStats {
  * Audio Client for dashboard communication with audio daemon
  * Mirrors the functionality from raycast/src/utils/tts/streaming/audio-playback-daemon.ts
  */
-export class AudioClient extends EventEmitter {
+export class AudioClient extends BrowserEventEmitter {
   private ws: WebSocket | null = null;
   private url: string;
   private connected: boolean = false;
@@ -127,10 +127,11 @@ export class AudioClient extends EventEmitter {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        console.log("[AudioClient] Attempting connection to:", this.url);
         this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
-          console.log("[AudioClient] Connected to audio daemon");
+          console.log("[AudioClient] ✅ Connected to audio daemon");
           this.connected = true;
           this.reconnectAttempts = 0;
           this.startHeartbeat();
@@ -166,7 +167,13 @@ export class AudioClient extends EventEmitter {
         };
 
         this.ws.onerror = (error) => {
-          console.error("[AudioClient] WebSocket error:", error);
+          console.error("[AudioClient] ❌ WebSocket error:", error);
+          console.error("[AudioClient] Connection URL was:", this.url);
+          console.error("[AudioClient] Error details:", {
+            type: error.type,
+            target: error.target,
+            readyState: this.ws?.readyState,
+          });
           this.emit("error", {
             data: { message: "WebSocket connection error" },
           });

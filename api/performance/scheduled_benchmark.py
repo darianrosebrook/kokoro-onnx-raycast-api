@@ -120,8 +120,9 @@ async def run_scheduled_benchmark() -> Dict[str, Any]:
         # Run benchmark with minimal output for scheduled execution
         result = subprocess.run([
             sys.executable, str(script_path),
-            "--quick",  # Quick benchmark with minimal testing
-            "--consistency-runs", "1"  # Single run for speed
+            "--preset", "short",  # Quick benchmark with short text
+            "--trials", "3",      # Minimal trials for speed
+            "--stream"            # Test streaming mode for TTFA
         ], capture_output=True, text=True, timeout=300)  # 5 minute timeout
         
         if result.returncode != 0:

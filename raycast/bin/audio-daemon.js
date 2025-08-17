@@ -356,7 +356,12 @@ class AudioProcessor extends EventEmitter {
     // Cleanup afplay mode
     this.cleanupAfplayMode();
 
-    // Reset timing stats for new playback session
+    // Reset ALL stats for new playback session
+    this.stats.chunksReceived = 0;
+    this.stats.bytesProcessed = 0;
+    this.stats.audioPosition = 0;
+    this.stats.underruns = 0;
+    this.stats.bufferUtilization = 0;
     this.stats.playbackStartTime = 0;
     this.stats.playbackEndTime = 0;
     this.stats.actualDuration = 0;
@@ -367,6 +372,10 @@ class AudioProcessor extends EventEmitter {
     this.stats.averageChunkSize = 0;
     this.stats.processingOverhead = 0;
     this.stats.timingAccuracy = 0;
+    
+    // Reset audio byte tracking
+    this.totalAudioBytes = 0;
+    this.audioDurationMs = 0;
 
     debugLog(`Starting audio playback with format:`, this.format);
 

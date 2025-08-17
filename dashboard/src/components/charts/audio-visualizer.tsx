@@ -203,13 +203,14 @@ export const AudioVisualizer = forwardRef<
         duration: 0,
       };
 
-      // Clear canvas
+      // Clear canvas and redraw with baseline
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.clearRect(0, 0, width, height);
           drawBackground(ctx);
+          drawWaveform(ctx); // This will now draw just the baseline
         }
       }
     };
@@ -273,7 +274,23 @@ export const AudioVisualizer = forwardRef<
      * Draw the waveform
      */
     const drawWaveform = (ctx: CanvasRenderingContext2D) => {
-      if (waveformPoints.current.length < 2) return;
+      // Always draw a baseline at center (y = height/2)
+      const centerY = height / 2;
+
+      // Draw baseline when no data or between chunks
+      ctx.strokeStyle = "#555555"; // Slightly brighter than grid for baseline
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(width, centerY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (waveformPoints.current.length < 2) {
+        // No waveform data - just show the baseline
+        return;
+      }
 
       // Draw waveform line
       ctx.strokeStyle = waveformColor;
@@ -287,6 +304,13 @@ export const AudioVisualizer = forwardRef<
       for (let i = 1; i < waveformPoints.current.length; i++) {
         const point = waveformPoints.current[i];
         ctx.lineTo(point.x, point.y);
+      }
+
+      // If there's a gap at the end, connect back to baseline
+      const lastPoint =
+        waveformPoints.current[waveformPoints.current.length - 1];
+      if (lastPoint.x < width) {
+        ctx.lineTo(width, centerY);
       }
 
       ctx.stroke();
@@ -401,7 +425,12 @@ export const AudioVisualizer = forwardRef<
         />
         {waveformPoints.current.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-            <span className="text-sm">Waiting for audio stream...</span>
+            <div className="text-center">
+              <div className="text-sm mb-1">Waiting for audio stream...</div>
+              <div className="text-xs opacity-70">
+                Baseline at 0.0 amplitude
+              </div>
+            </div>
           </div>
         )}
       </div>

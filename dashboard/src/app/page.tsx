@@ -128,7 +128,7 @@ export default function Home() {
           <p className="text-muted-foreground mt-2">
             Real-time audio streaming and performance monitoring for Kokoro TTS
           </p>
-          
+
           {/* Tab Navigation */}
           <div className="mt-6 flex space-x-1 bg-muted p-1 rounded-lg w-fit">
             <button
@@ -233,7 +233,11 @@ export default function Home() {
                     <Button
                       variant="outline"
                       onClick={() =>
-                        setFilter({ preset: "all", stream: "all", voice: "all" })
+                        setFilter({
+                          preset: "all",
+                          stream: "all",
+                          voice: "all",
+                        })
                       }
                     >
                       Clear Filters
@@ -330,15 +334,20 @@ export default function Home() {
                           {filteredBenchmarks.map((benchmark) => (
                             <SelectItem key={benchmark.id} value={benchmark.id}>
                               {benchmark.config.preset} -{" "}
-                              {benchmark.config.stream ? "stream" : "non-stream"} -{" "}
-                              {benchmark.config.base_payload.voice}
+                              {benchmark.config.stream
+                                ? "stream"
+                                : "non-stream"}{" "}
+                              - {benchmark.config.base_payload.voice}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
 
-                    <MemoryTimeline benchmark={selectedBenchmark} height={300} />
+                    <MemoryTimeline
+                      benchmark={selectedBenchmark}
+                      height={300}
+                    />
                   </div>
                 )}
               </div>

@@ -312,8 +312,27 @@ def initialize_model_fast():
                         logger.debug(f"Warming {i+1}/3: '{text[:20]}...' took {warmup_time:.1f}ms")
                     except Exception as warmup_err:
                         logger.debug(f"Warming {i+1}/3 failed: {warmup_err}")
-                        
+
                 logger.info("✅ Enhanced session warming completed - cold start eliminated")
+                
+                # CRITICAL: Pre-warm CPU model cache for adaptive provider
+                # This prevents 2+ second cache misses when streaming uses CPU for short text
+                try:
+                    from api.tts.core import _get_cached_model
+                    logger.info("🔥 Pre-warming CPU model cache for adaptive provider...")
+                    cpu_start = time.perf_counter()
+                    
+                    # Create and cache CPU model 
+                    cpu_model = _get_cached_model("CPUExecutionProvider")
+                    
+                    # Warm it up with a short text (typical adaptive provider scenario)
+                    cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
+                    
+                    cpu_time = (time.perf_counter() - cpu_start) * 1000
+                    logger.info(f"✅ CPU model cache pre-warming completed in {cpu_time:.1f}ms")
+                    
+                except Exception as cpu_err:
+                    logger.debug(f"CPU model pre-warming failed: {cpu_err}")
     except Exception as e:
         logger.debug(f"Enhanced session warming failed: {e}")
 
