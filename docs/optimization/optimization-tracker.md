@@ -142,6 +142,12 @@ Based on current implementation status analysis:
   - Graph-optimized: 1.7ms average TTFA
   - Model path: `optimized_models/kokoro-v1.0.int8-graph-opt.onnx` (production deployed)
   
+- [ ] **Fix medium/long text performance:** Resolve 8.1s/2.5s TTFA issues for complex text
+  **Root Cause:** Adaptive provider likely causing cache misses for medium/long text (>200 chars)
+  **Current Impact:** Short text: 8.7ms ✅, Medium: 8134ms ❌, Long: 2507ms ❌
+  **Evidence:** Official benchmark results from `scripts/run_bench.py --preset medium/long --stream`
+  **Priority:** P1 - Critical for production use with longer content
+  
 - [ ] **Investigate provider selection:** Check why CPU provider selected over CoreML
   **Evidence:** Review `/status` endpoint CoreML availability and benchmark results
   
@@ -173,18 +179,27 @@ Based on current implementation status analysis:
   **Implementation:** `api/model/initialization/fast_init.py` lines 318-335
 
 ## 12) Implementation Status
-- **Current TTFA:** 1.7ms HTTP, 72ms streaming average (🎉 **TARGET EXCEEDED** - was 2188ms)
-- **Performance improvement:** **3,036x faster** than original streaming baseline (2188ms → 72ms)
-- **Target achievement:** ✅ **COMPLETE** - Both HTTP and streaming << 800ms target
+
+### **🎯 Official Benchmark Results (`run_bench.py`)**
+- **Short text streaming**: 8.7ms TTFA p95 ✅ (target ≤500ms)
+- **Short text HTTP**: RTF p95 1.136 ✅ (excellent performance)
+- **Medium text streaming**: 8134ms TTFA p95 ❌ (target ≤500ms) 
+- **Long text streaming**: 2507ms TTFA p95 ❌ (target ≤500ms)
+- **Memory efficiency**: 3-5MB range ✅ (target ≤300MB)
+
+### **📊 Performance Summary**
+- **Short text achievement:** ✅ **TARGET EXCEEDED** - 8.7ms << 500ms (98% better)
+- **Medium/Long text issues:** ❌ Adaptive provider cache misses for complex text
+- **Total improvement:** Short text 250x faster than original (2188ms → 8.7ms)
 - **Model optimization:** ✅ **COMPLETE** - INT8 quantization + graph optimization deployed
   - INT8 quantization: 71.6% size reduction, 15% speed improvement
   - Graph optimization: 71% additional TTFA improvement, 99.8% cold start improvement
-- **Pipeline optimization:** ✅ **COMPLETE** - Streaming performance restored
-  - CPU model cache pre-warming: 97% streaming improvement (2529ms → 72ms)
-  - Adaptive provider cache misses eliminated
-- **Core systems:** ✅ HTTP API, streaming, monitoring, session management, warming all working
-- **Production ready:** ✅ Background interference eliminated, fully optimized model + streaming pipeline
-- **Next milestone:** Provider selection optimization for remaining edge cases
+- **Pipeline optimization:** ✅ **COMPLETE** for short text, ⚠️ needs work for medium/long
+  - CPU model cache pre-warming: eliminates cache misses for short text
+  - Medium/long text still experiencing adaptive provider issues
+- **Core systems:** ✅ HTTP API, streaming (short), monitoring, session management, warming
+- **Production ready:** ✅ For short text use cases, ⚠️ needs optimization for longer content
+- **Next milestone:** Fix adaptive provider selection for medium/long text scenarios
 
 ---
 
