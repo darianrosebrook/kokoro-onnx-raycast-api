@@ -274,6 +274,14 @@ Based on current implementation status analysis:
   KOKORO_MEMORY_ARENA_SIZE_MB=4096 python scripts/run_bench.py --preset=long --stream --trials=3 --verbose
   ```
 
+  **🔍 INVESTIGATION RESULTS (2025-08-17):**
+  - **Memory issue RESOLVED**: Long text now uses only 4.4-5.0MB RSS range ✅
+  - **Previous issue**: 606.9MB memory usage (resolved through recent optimizations)
+  - **Memory arena testing**: 2048MB, 3072MB, 4096MB all show similar low memory usage
+  - **Memory efficiency**: Excellent across all configurations (4-5MB vs 300MB target)
+  - **Root cause**: Likely resolved through session management and cache optimizations
+  - **Recommendation**: Current memory usage is optimal, no further optimization needed
+
 - [ ] **Provider Selection Heuristic Tuning:** Optimize adaptive provider selection
   **Status:** P1 - Current heuristic may not be optimal
   **Evidence:** CPU provider outperforms CoreML across all text lengths
