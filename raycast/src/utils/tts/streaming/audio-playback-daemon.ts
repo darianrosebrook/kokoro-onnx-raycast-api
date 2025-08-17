@@ -204,7 +204,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       daemonPath: environment.assetsPath,
       daemonScriptPath: localDaemonPath,
       nodeExecutable: "", // Will be set after detection
-      port: config.daemonPort ?? 8080,
+      port: config.daemonPort ?? 8081, // Default to persistent daemon port from start scripts
       bufferSize: config.bufferSize ?? 1024 * 512, // 512 KB buffer
       heartbeatInterval: 3000,
       healthCheckTimeout: 10000,

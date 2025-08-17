@@ -149,6 +149,101 @@ echo "   • Performance profile: ${KOKORO_DEV_PERFORMANCE_PROFILE} (50ms chunks
 echo "   • Misaki G2P enabled: ${KOKORO_MISAKI_ENABLED}"
 [[ "$(uname -m)" == "arm64" ]] && echo "   • CoreML optimization: ✅"
 
+# --- Audio Daemon Configuration ---
+AUDIO_DAEMON_PORT=${AUDIO_DAEMON_PORT:-8081}
+AUDIO_DAEMON_PATH="raycast/bin/audio-daemon.js"
+
+# Check if Node.js is available for the audio daemon
+if ! command -v node &> /dev/null; then
+    echo "WARNING: Node.js not found. Audio daemon will not be available."
+    echo "Install Node.js to enable audio streaming capabilities."
+    AUDIO_DAEMON_DISABLED=true
+else
+    AUDIO_DAEMON_DISABLED=false
+fi
+
+# Function to kill processes on a port
+kill_port_process() {
+    local port=$1
+    local service_name=$2
+    
+    if lsof -i:${port} >/dev/null 2>&1; then
+        echo "Port ${port} is in use by ${service_name}. Attempting to kill the process..."
+        kill -9 $(lsof -t -i:${port}) 2>/dev/null || true
+        sleep 2 # Give time for the port to be released
+    fi
+}
+
+# Check and kill existing processes on both ports
+kill_port_process ${PORT} "TTS API"
+if [ "$AUDIO_DAEMON_DISABLED" != "true" ]; then
+    kill_port_process ${AUDIO_DAEMON_PORT} "Audio Daemon"
+fi
+
+# Function to start persistent audio daemon
+start_persistent_audio_daemon() {
+    if [ "$AUDIO_DAEMON_DISABLED" = "true" ]; then
+        echo "⚠️  Audio daemon disabled (Node.js not available)"
+        return
+    fi
+
+    echo "🎵 Starting Persistent Audio Daemon on port ${AUDIO_DAEMON_PORT}..."
+    echo "   This daemon will stay running for the entire production session."
+    echo "   Raycast extension will connect to this daemon instead of spawning its own."
+    
+    # Start audio daemon in background
+    node "$AUDIO_DAEMON_PATH" --port "$AUDIO_DAEMON_PORT" > logs/audio-daemon.log 2>&1 &
+    AUDIO_DAEMON_PID=$!
+    
+    # Wait for startup
+    sleep 3
+    
+    # Check if daemon started successfully
+    if kill -0 $AUDIO_DAEMON_PID 2>/dev/null; then
+        echo "✅ Audio daemon started successfully (PID: $AUDIO_DAEMON_PID)"
+        echo "   Health endpoint: http://localhost:${AUDIO_DAEMON_PORT}/health"
+        echo "   WebSocket endpoint: ws://localhost:${AUDIO_DAEMON_PORT}"
+        
+        # Store PID for cleanup
+        echo $AUDIO_DAEMON_PID > .audio-daemon.pid
+        
+        # Test health endpoint
+        if curl -s http://localhost:${AUDIO_DAEMON_PORT}/health >/dev/null 2>&1; then
+            echo "✅ Health endpoint responding"
+        else
+            echo "⚠️  Health endpoint not responding yet (may take a moment)"
+        fi
+    else
+        echo "❌ Audio daemon failed to start"
+        echo "   Check logs/audio-daemon.log for details"
+    fi
+}
+
+# Function to cleanup on exit
+cleanup() {
+    echo ""
+    echo "🛑 Shutting down services..."
+    
+    # Kill audio daemon
+    if [ -f ".audio-daemon.pid" ]; then
+        DAEMON_PID=$(cat .audio-daemon.pid)
+        echo "   Stopping Audio Daemon..."
+        kill $DAEMON_PID 2>/dev/null || true
+        rm -f .audio-daemon.pid
+    fi
+    
+    exit 0
+}
+
+# Set up signal handlers for graceful shutdown
+trap cleanup SIGINT SIGTERM
+
+# Create logs directory if it doesn't exist
+mkdir -p logs
+
+# Start persistent audio daemon first
+start_persistent_audio_daemon
+
 # --- Server Execution ---
 echo "Starting production server on http://${HOST}:${PORT} with ${WORKERS} worker(s)..."
 
