@@ -74,7 +74,7 @@ import type { StatusUpdate } from "../../types.js";
 import { TextProcessor } from "./text-processor.js";
 import { AudioStreamer } from "./streaming/audio-streamer.js";
 import { PlaybackManager } from "./playback-manager.js";
-import { PerformanceMonitor } from "../performance/performance-monitor.js";
+import { PerformanceTracker } from "../core/performance-tracker.js";
 import { RetryManager } from "../api/retry-manager.js";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager.js";
 import { StreamingContext, TextSegment, TTS_CONSTANTS } from "../validation/tts-types.js";
@@ -115,7 +115,7 @@ interface ProcessorDependencies {
   textProcessor?: TextProcessor;
   audioStreamer?: AudioStreamer;
   playbackManager?: PlaybackManager;
-  performanceMonitor?: PerformanceMonitor;
+  performanceTracker?: PerformanceTracker;
   retryManager?: RetryManager;
   adaptiveBufferManager?: AdaptiveBufferManager;
 }
@@ -165,7 +165,7 @@ export class TTSSpeechProcessor {
   private textProcessor: TextProcessor;
   private audioStreamer: AudioStreamer;
   private playbackManager: PlaybackManager;
-  private performanceMonitor: PerformanceMonitor;
+  private performanceTracker: PerformanceTracker;
   private retryManager: RetryManager;
   private adaptiveBufferManager: AdaptiveBufferManager;
 
@@ -266,8 +266,8 @@ export class TTSSpeechProcessor {
     this.textProcessor = dependencies.textProcessor ?? new TextProcessor(processorConfig);
     this.audioStreamer = dependencies.audioStreamer ?? new AudioStreamer(processorConfig);
     this.playbackManager = dependencies.playbackManager ?? new PlaybackManager(processorConfig);
-    this.performanceMonitor =
-      dependencies.performanceMonitor ?? new PerformanceMonitor(processorConfig);
+    this.performanceTracker =
+      dependencies.performanceTracker ?? PerformanceTracker.getInstance();
     this.retryManager = dependencies.retryManager ?? new RetryManager(processorConfig);
     this.adaptiveBufferManager =
       dependencies.adaptiveBufferManager ??
@@ -313,7 +313,7 @@ export class TTSSpeechProcessor {
         this.textProcessor.initialize(processorConfig),
         this.audioStreamer.initialize(processorConfig),
         this.playbackManager.initialize(processorConfig),
-        this.performanceMonitor.initialize(processorConfig),
+        // Performance tracker is already initialized as singleton
         this.retryManager.initialize(processorConfig),
         this.adaptiveBufferManager.initialize({
           targetBufferMs: 400,
@@ -439,7 +439,7 @@ export class TTSSpeechProcessor {
 
     const requestId = `tts-${Date.now()}`;
     console.log(`[${this.instanceId}] Starting performance tracking for request:`, requestId);
-    this.performanceMonitor.startTracking(requestId);
+    this.performanceTracker.startRequest(requestId, text, this.config.voice, this.config.speed);
 
     // PHASE 1 OPTIMIZATION: Start streaming playback immediately
     let streamingPlayback: {
@@ -715,8 +715,7 @@ export class TTSSpeechProcessor {
       const finalTime = performance.now() - startTime;
       console.log(` [${this.instanceId}]  Final session duration:`, finalTime.toFixed(2) + "ms");
 
-      this.performanceMonitor.endTracking(requestId);
-      this.performanceMonitor.logPerformanceReport();
+          this.performanceTracker.completeRequest(requestId);
       await this.cleanup();
       this.abortController = null;
 

@@ -21,6 +21,7 @@ import { ChildProcess } from "child_process";
 // import { ValidationUtils } from "../../validation/validation.js";
 import { cacheManager } from "../../core/cache.js";
 import { AdaptiveBufferManager } from "./adaptive-buffer-manager.js";
+import { PerformanceTracker } from "../../core/performance-tracker.js";
 import type {
   IAudioStreamer,
   TTSRequestParams,
@@ -76,6 +77,7 @@ export class AudioStreamer implements IAudioStreamer {
   private bufferConfig: BufferConfig;
   private audioFormat: AudioFormat;
   private adaptiveBufferManager: AdaptiveBufferManager;
+  private performanceTracker: PerformanceTracker;
   private stats: StreamingStats = {
     chunksReceived: 0,
     bytesReceived: 0,
@@ -94,6 +96,9 @@ export class AudioStreamer implements IAudioStreamer {
       developmentMode: config.developmentMode ?? false,
       adaptiveBuffering: true,
     };
+
+    // Initialize performance tracker
+    this.performanceTracker = PerformanceTracker.getInstance();
 
     // Initialize audio format for Kokoro ONNX
     this.audioFormat = {
@@ -262,9 +267,13 @@ export class AudioStreamer implements IAudioStreamer {
     context: StreamingContext,
     onChunk: (chunk: AudioChunk) => void
   ): Promise<void> {
-    console.log(`[${this.instanceID}] streamFromServerWithImmediatePlayback() called`);
-    console.log(` [${this.instanceID}] === SERVER STREAMING START ===`);
-    console.log(` [${this.instanceID}]  DEBUGGING: Starting streamFromServerWithImmediatePlayback`);
+    // Log request start with performance tracker
+    this.performanceTracker.logEvent(context.requestId, "REQUEST_SENT", {
+      serverUrl: this.config.serverUrl,
+      textLength: request.text.length,
+      voice: request.voice,
+      speed: request.speed
+    });
 
     // PHASE 1 OPTIMIZATION: Use PCM format for streaming to avoid WAV header + raw audio mixing
     const streamingRequest = {
@@ -273,31 +282,8 @@ export class AudioStreamer implements IAudioStreamer {
       format: "pcm", // Use PCM for streaming, WAV for caching
     };
 
-    console.log(` [${this.instanceID}]  Preparing server request:`, {
-      url: `${this.config.serverUrl}/v1/audio/speech`,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "audio/pcm",
-      },
-      body: {
-        ...streamingRequest,
-        text:
-          streamingRequest.text.substring(0, 100) +
-          (streamingRequest.text.length > 100 ? "..." : ""),
-      },
-    });
-
-    console.log(
-      ` [${this.instanceID}]  DEBUGGING: Request:`,
-      JSON.stringify(streamingRequest, null, 2)
-    );
-
     const url = `${this.config.serverUrl}/v1/audio/speech`;
     const requestStartTime = performance.now();
-
-    console.log(` [${this.instanceID}]  Sending request to server...`);
-    console.log(` [${this.instanceID}]  Request start time:`, requestStartTime);
 
     const response = await fetch(url, {
       method: "POST",
@@ -307,32 +293,28 @@ export class AudioStreamer implements IAudioStreamer {
     });
 
     const responseTime = performance.now() - requestStartTime;
-    console.log(` [${this.instanceID}]  Server response received:`, {
-      responseTime: responseTime.toFixed(2) + "ms",
+    
+    // Log first byte received with performance tracker
+    this.performanceTracker.logEvent(context.requestId, "FIRST_BYTE_RECEIVED", {
+      responseTimeMs: responseTime,
       status: response.status,
       statusText: response.statusText,
-      ok: response.ok,
+      headers: Object.fromEntries([...response.headers.entries()])
     });
-
-    console.log(` [${this.instanceID}]  DEBUGGING: Response status:`, response.status);
-    if (response.headers) {
-      const headers = [...response.headers.entries()];
-      console.log(` [${this.instanceID}]  DEBUGGING: Response headers:`, headers);
-      console.log(` [${this.instanceID}]  Response headers:`, Object.fromEntries(headers));
-    } else {
-      console.log(` [${this.instanceID}]  DEBUGGING: Response headers: undefined`);
-    }
 
     if (!response || !response.ok) {
       const status = response?.status || 500;
       const statusText = response?.statusText || "Unknown error";
-      console.error(` [${this.instanceID}]  DEBUGGING: Response failed:`, status, statusText);
-      console.error(` [${this.instanceID}]  Server request failed:`, {
+      
+      // Log error with performance tracker
+      this.performanceTracker.logEvent(context.requestId, "ERROR", {
+        error: `TTS request failed: ${status} ${statusText}`,
         status,
         statusText,
         url,
-        requestTime: responseTime.toFixed(2) + "ms",
+        requestTimeMs: responseTime
       });
+      
       throw new Error(`TTS request failed: ${status} ${statusText}`);
     }
 
@@ -434,38 +416,36 @@ export class AudioStreamer implements IAudioStreamer {
           duration: chunkDuration,
         });
 
-        // Log TTFA for first chunk
+        // Log first audio chunk with performance tracker
         if (firstChunk) {
-          console.log(` [${this.instanceID}]  Time to First Audio (TTFA):`, elapsedTimeMs + "ms");
-          console.log("PHASE 1 OPTIMIZATION: First PCM chunk sent to afplay", {
-            component: this.name,
-            method: "streamFromServerWithImmediatePlayback",
-            requestId: context.requestId,
-            ttfa: `${elapsedTimeMs}ms`,
+          this.performanceTracker.logEvent(context.requestId, "FIRST_AUDIO_CHUNK", {
+            ttfaMs: elapsedTimeMs,
             chunkSize: value.length,
-            targetTTFA: "800ms",
+            targetTTFA: 800
           });
           firstChunk = false;
         }
+
+        // Log chunk received with performance tracker
+        this.performanceTracker.logEvent(context.requestId, "AUDIO_CHUNK_RECEIVED", {
+          chunkIndex,
+          chunkSize: value.length,
+          totalBytesReceived,
+          elapsedTimeMs
+        });
 
         // Log progress every 5th chunk
         if (chunkIndex % 5 === 0) {
           const avgChunkSize = totalBytesReceived / chunkIndex;
           const avgChunkTime = elapsedTimeMs / chunkIndex;
 
-          console.log(` [${this.instanceID}]  Progress report:`, {
+          this.performanceTracker.logEvent(context.requestId, "STREAMING_PROGRESS", {
             chunkIndex,
-            avgChunkSize: avgChunkSize.toFixed(0) + " bytes",
-            avgChunkTime: avgChunkTime.toFixed(2) + "ms",
-            totalBytes: totalBytesReceived,
-            elapsedTime: elapsedTimeMs + "ms",
+            avgChunkSize,
+            avgChunkTime,
+            totalBytesReceived,
+            elapsedTimeMs
           });
-
-          console.warn("PCM chunk progress", {
-            component: this.name,
-            method: "streamFromServerWithImmediatePlayback",
-            requestId: context.requestId,
-            chunkIndex,
             chunkSize: value.length,
             elapsedTime: `${elapsedTimeMs}ms`,
           });
@@ -513,26 +493,27 @@ export class AudioStreamer implements IAudioStreamer {
     this.stats.streamingDuration = totalProcessingTime;
     this.stats.efficiency = this.calculateStreamingEfficiency(this.stats.streamingDuration);
 
-    console.log(` [${this.instanceID}]  Final streaming statistics:`, {
-      chunksReceived: this.stats.chunksReceived,
-      bytesReceived: this.stats.bytesReceived,
-      averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
-      streamingDuration: this.stats.streamingDuration + "ms",
-      efficiency: (this.stats.efficiency * 100).toFixed(1) + "%",
-    });
-
-    console.log("PHASE 1 OPTIMIZATION: PCM streaming completed", {
-      component: this.name,
-      method: "streamFromServerWithImmediatePlayback",
-      requestId: context.requestId,
+    // Log final streaming statistics with performance tracker
+    this.performanceTracker.logEvent(context.requestId, "LAST_AUDIO_CHUNK", {
       totalChunks: chunkIndex,
-      totalSize: combinedAudio.length,
-      streamingDuration: `${this.stats.streamingDuration}ms`,
-      efficiency: `${(this.stats.efficiency * 100).toFixed(1)}%`,
+      totalBytesReceived,
+      streamingDurationMs: this.stats.streamingDuration,
+      efficiency: this.stats.efficiency,
+      audioDurationMs: this.stats.totalAudioDuration * 1000
     });
 
-    console.log(` [${this.instanceID}] === SERVER STREAMING END ===`);
-    console.log(`[${this.instanceID}] streamFromServerWithImmediatePlayback() finished`);
+    // Complete the request and get final metrics
+    const finalMetrics = this.performanceTracker.completeRequest(context.requestId);
+    
+    if (finalMetrics) {
+      // Log final summary
+      this.performanceTracker.logEvent(context.requestId, "REQUEST_COMPLETE", {
+        totalTimeToFirstAudio: finalMetrics.totalTimeToFirstAudio,
+        streamingEfficiency: finalMetrics.streamingEfficiency,
+        totalChunks: finalMetrics.chunkCount,
+        audioDuration: finalMetrics.audioDuration
+      });
+    }
   }
 
   /**

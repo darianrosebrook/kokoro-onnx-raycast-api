@@ -41,6 +41,7 @@ from api.performance.stats import (
     update_endpoint_performance_stats,
     update_inference_stats,
 )
+from api.performance.request_tracker import server_tracker
 from api.tts.text_processing import (
     get_phoneme_cache_stats,
     preprocess_text_for_inference,
@@ -500,6 +501,17 @@ async def stream_tts_audio(
     corruption detection for robust streaming.
     """
     request_id = request.headers.get("x-request-id", "no-id")
+    
+    # Start server-side performance tracking
+    server_tracker.start_request(request_id, text, voice, speed)
+    server_tracker.log_event(request_id, "PROCESSING_START", {
+        "text_length": len(text),
+        "voice": voice,
+        "speed": speed,
+        "format": format,
+        "no_cache": no_cache
+    })
+    
     logger.info(
         f"[{request_id}] Stream start: voice='{voice}', speed={speed}, format='{format}', "
         f"no_cache={no_cache}, text='{text[:30]}…'"
@@ -523,6 +535,12 @@ async def stream_tts_audio(
         raise HTTPException(status_code=400, detail="No valid text segments found")
 
     logger.info(f"[{request_id}] Text segmented into {len(segments)} parts")
+    
+    # Log text processing completion
+    server_tracker.log_event(request_id, "TEXT_PROCESSING_COMPLETE", {
+        "segment_count": len(segments),
+        "total_text_length": len(text)
+    })
 
     # Streaming state tracking
     chunk_state = {
@@ -695,6 +713,12 @@ async def stream_tts_audio(
                         chunk_state["first_chunk_time"] = current_time
                         ttfa_ms = (current_time - chunk_state["stream_start_time"]) * 1000.0
                         logger.info(f"[{request_id}] First chunk in {ttfa_ms:.2f} ms")
+                        
+                        # Log first chunk generation with performance tracker
+                        server_tracker.log_event(request_id, "FIRST_CHUNK_GENERATED", {
+                            "ttfa_ms": ttfa_ms,
+                            "chunk_size": len(chunk)
+                        })
 
                     # Track audio duration
                     chunk_state["total_audio_duration_ms"] += (
@@ -771,6 +795,17 @@ async def stream_tts_audio(
             chunk_count=chunk_state["chunk_count"]
         )
 
+        # Log audio generation completion with performance tracker
+        server_tracker.log_event(request_id, "AUDIO_GENERATION_COMPLETE", {
+            "processing_time_ms": total_time * 1000,
+            "total_chunks": chunk_state["chunk_count"],
+            "audio_duration_ms": chunk_state["total_audio_duration_ms"],
+            "streaming_efficiency": efficiency
+        })
+        
+        # Complete server-side performance tracking
+        server_tracker.complete_request(request_id)
+        
         # Final logging
         logger.info(f"[{request_id}] Streaming completed successfully")
         logger.info(f"[{request_id}] Stats: segments={processed_count}/{len(segments_to_process)}, "
