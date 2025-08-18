@@ -83,7 +83,7 @@ export class PerformanceMonitor implements IPerformanceMonitor {
       developmentMode: config.developmentMode ?? false,
       enableRealTimeMonitoring: true,
       enableAdaptiveOptimization: true,
-      reportingInterval: 5000, // 5 seconds
+      reportingInterval: 30000, // 30 seconds (increased from 5 seconds to reduce log noise)
     };
 
     // Initialize global metrics

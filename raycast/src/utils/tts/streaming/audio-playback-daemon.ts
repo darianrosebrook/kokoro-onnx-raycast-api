@@ -941,7 +941,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
       this.ws.on("message", (data: Buffer) => {
         try {
           const message = JSON.parse(data.toString());
-          console.log(`[${this.instanceId}] Received message from daemon:`, message.type);
+          // Only log non-heartbeat messages to reduce noise
+          if (message.type !== "heartbeat") {
+            console.log(`[${this.instanceId}] Received message from daemon:`, message.type);
+          }
           this.handleIncomingMessage(message);
         } catch (error) {
           console.log(

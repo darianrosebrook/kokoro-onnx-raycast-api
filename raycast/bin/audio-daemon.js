@@ -1590,18 +1590,25 @@ class AudioDaemon extends EventEmitter {
       });
     });
 
-    // Set up audio processor event handlers
+    // Set up audio processor event handlers with throttled status updates
+    let lastStatusUpdate = 0;
+    const STATUS_UPDATE_INTERVAL = 2000; // Only send status updates every 2 seconds
+    
     this.audioProcessor.on("chunkReceived", (data) => {
-      this.broadcast({
-        type: "status",
-        timestamp: Date.now(),
-        data: {
-          state: this.audioProcessor.isPlaying ? "playing" : "idle",
-          bufferUtilization: data.bufferUtilization,
-          audioPosition: this.audioProcessor.stats.audioPosition,
-          performance: this.audioProcessor.getStatus(),
-        },
-      });
+      const now = Date.now();
+      if (now - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {
+        this.broadcast({
+          type: "status",
+          timestamp: now,
+          data: {
+            state: this.audioProcessor.isPlaying ? "playing" : "idle",
+            bufferUtilization: data.bufferUtilization,
+            audioPosition: this.audioProcessor.stats.audioPosition,
+            performance: this.audioProcessor.getStatus(),
+          },
+        });
+        lastStatusUpdate = now;
+      }
     });
 
     this.audioProcessor.on("error", (error) => {
@@ -1898,7 +1905,7 @@ class AudioDaemon extends EventEmitter {
         timestamp: Date.now(),
         data: { status: "ok" },
       });
-    }, 1000);
+    }, 10000); // Reduced from 1000ms to 10000ms (10 seconds) to reduce log noise
   }
 
   /**
