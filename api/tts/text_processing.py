@@ -434,12 +434,10 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
         phonemes = _fast_path_text_to_phonemes(text)
         processing_method = "fast_path"
         
-        # Update fast-path statistics
+        # Update phonemizer statistics (TTFA will be measured at streaming level)
         try:
-            from api.performance.stats import update_phonemizer_stats, update_fast_path_performance_stats
+            from api.performance.stats import update_phonemizer_stats
             update_phonemizer_stats(fallback_used=False, quality_mode=True)
-            # Note: TTFA timing will be updated at the streaming level
-            update_fast_path_performance_stats("fast_path", 0, success=True)
         except ImportError:
             pass
         
@@ -464,11 +462,10 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
                     phonemes = text_to_phonemes_misaki(text, lang)
                     processing_method = "misaki"
                     
-                    # Update statistics for misaki success
+                    # Update phonemizer statistics (TTFA will be measured at streaming level)
                     try:
-                        from api.performance.stats import update_phonemizer_stats, update_fast_path_performance_stats
+                        from api.performance.stats import update_phonemizer_stats
                         update_phonemizer_stats(fallback_used=False, quality_mode=True)
-                        update_fast_path_performance_stats("misaki", 0, success=True)
                     except ImportError:
                         pass
                     
@@ -530,11 +527,10 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
             
             processing_method = "phonemizer"
             
-            # Update phonemizer success statistics
+            # Update phonemizer success statistics (TTFA will be measured at streaming level)
             try:
-                from api.performance.stats import update_phonemizer_stats, update_fast_path_performance_stats
+                from api.performance.stats import update_phonemizer_stats
                 update_phonemizer_stats(fallback_used=True, quality_mode=True)
-                update_fast_path_performance_stats("phonemizer", 0, success=True)
             except ImportError:
                 pass
             
@@ -550,11 +546,10 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
         phonemes = list(text.strip())
         processing_method = "character"
         
-        # Update fallback statistics
+        # Update fallback statistics (TTFA will be measured at streaming level)
         try:
-            from api.performance.stats import update_phonemizer_stats, update_fast_path_performance_stats
+            from api.performance.stats import update_phonemizer_stats
             update_phonemizer_stats(fallback_used=True, quality_mode=True)
-            update_fast_path_performance_stats("character", 0, success=True)
         except ImportError:
             pass
     
