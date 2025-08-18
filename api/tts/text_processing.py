@@ -336,7 +336,7 @@ def _get_phonemizer_backend():
     return _phonemizer_backend
 
 
-def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
+def text_to_phonemes(text: str, lang: str = 'en') -> tuple[List[str], str]:
     """
     Convert text to phoneme sequence using enhanced Misaki G2P or phonemizer fallback.
     
@@ -422,8 +422,14 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
     
     if cache_key in _phoneme_cache:
         _cache_hits += 1
+        cached_result = _phoneme_cache[cache_key]
         logger.debug(f"Cache hit for phoneme conversion: '{text[:30]}...'")
-        return _phoneme_cache[cache_key]
+        # Handle both old format (just phonemes) and new format (phonemes, method)
+        if isinstance(cached_result, tuple):
+            return cached_result
+        else:
+            # Legacy cache entry - return with unknown method
+            return cached_result, "unknown"
     
     phonemes = []
     processing_method = "unknown"
@@ -447,8 +453,8 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
         if len(_phoneme_cache) >= PHONEME_CACHE_SIZE:
             oldest_key = next(iter(_phoneme_cache))
             del _phoneme_cache[oldest_key]
-        _phoneme_cache[cache_key] = phonemes
-        return phonemes
+        _phoneme_cache[cache_key] = (phonemes, processing_method)
+        return phonemes, processing_method
     
     # MISAKI INTEGRATION: Try Misaki G2P for complex text
     try:
@@ -475,8 +481,8 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
                     if len(_phoneme_cache) >= PHONEME_CACHE_SIZE:
                         oldest_key = next(iter(_phoneme_cache))
                         del _phoneme_cache[oldest_key]
-                    _phoneme_cache[cache_key] = phonemes
-                    return phonemes
+                    _phoneme_cache[cache_key] = (phonemes, processing_method)
+                    return phonemes, processing_method
                 
             except Exception as e:
                 logger.warning(f"⚠️ Misaki phonemization failed for '{text[:30]}...': {e}")
@@ -559,9 +565,9 @@ def text_to_phonemes(text: str, lang: str = 'en') -> List[str]:
         oldest_key = next(iter(_phoneme_cache))
         del _phoneme_cache[oldest_key]
     
-    _phoneme_cache[cache_key] = phonemes
+    _phoneme_cache[cache_key] = (phonemes, processing_method)
     logger.debug(f"Phoneme conversion completed via {processing_method}: {len(phonemes)} tokens")
-    return phonemes
+    return phonemes, processing_method
 
 
 def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME_LENGTH) -> List[str]:
@@ -749,7 +755,7 @@ def preprocess_text_for_inference(text: str, max_phoneme_length: int = DEFAULT_M
     cache_hit = cache_key in _phoneme_cache
     
     # MISAKI INTEGRATION: Pass language parameter for multi-language support
-    phonemes = text_to_phonemes(cleaned_text, lang='en')
+    phonemes, processing_method = text_to_phonemes(cleaned_text, lang='en')
     original_length = len(phonemes)
     
     # Stage 3: Sequence padding for consistent tensor shapes
@@ -763,7 +769,8 @@ def preprocess_text_for_inference(text: str, max_phoneme_length: int = DEFAULT_M
         'original_length': original_length,
         'padded_length': len(padded_phonemes),
         'truncated': truncated,
-        'cache_hit': cache_hit
+        'cache_hit': cache_hit,
+        'processing_method': processing_method
     }
     
     logger.debug(f"Preprocessing complete: {original_length} → {len(padded_phonemes)} phonemes (cache_hit: {cache_hit})")

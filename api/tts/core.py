@@ -299,10 +299,12 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
         preprocessing_info = ""
 
         # Phoneme preprocessing for complex text
+        processing_method = "unknown"
         if should_use_phoneme_preprocessing() and not _is_simple_segment(text):
             try:
                 prep = preprocess_text_for_inference(text)
                 processed_text = prep["normalized_text"]
+                processing_method = prep.get("processing_method", "unknown")
                 preprocessing_info = f"phonemes:{prep.get('original_length')}→{prep.get('padded_length')}"
                 if prep.get("cache_hit"):
                     preprocessing_info += " (cached)"
@@ -313,6 +315,7 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
                 logger.warning(f"[{idx}] Phoneme preprocessing failed: {e}; fallback to raw text")
                 processed_text = text
                 preprocessing_info = "fallback"
+                processing_method = "fallback"
 
         # Check cache (unless bypassed)
         cache_key = _create_inference_cache_key(processed_text, voice, speed, lang)
@@ -391,7 +394,7 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
             _cache_inference_result(cache_key, validated_samples, provider)
         
         info = provider + (f" [{preprocessing_info}]" if preprocessing_info else "")
-        return idx, validated_samples, info
+        return idx, validated_samples, info, processing_method
 
     except Exception as e:
         logger.error(f"[{idx}] TTS generation failed: {e}", exc_info=True)
@@ -480,7 +483,7 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
             _cache_inference_result(cache_key, validated_samples, fast_provider)
         
         logger.info(f"[{idx}] Fast segment in {dur:.4f}s via {fast_provider}")
-        return idx, validated_samples, fast_provider
+        return idx, validated_samples, fast_provider, "fast_path"
 
     except Exception as e:
         logger.error(f"[{idx}] Fast TTS generation failed: {e}", exc_info=True)
@@ -822,6 +825,13 @@ def _validate_segment_mapping(text: str, segments: List[str], request_id: str) -
 
 
 # Compatibility aliases for existing imports
-def _generate_audio_segment(idx: int, text: str, voice: str, speed: float, lang: str) -> Tuple[int, Optional[np.ndarray], str]:
+def _generate_audio_segment(idx: int, text: str, voice: str, speed: float, lang: str) -> Tuple[int, Optional[np.ndarray], str, str]:
     """Compatibility wrapper for the legacy function name."""
-    return _generate_audio_with_fallback(idx, text, voice, speed, lang, f"legacy-{idx}", no_cache=False)
+    result = _generate_audio_with_fallback(idx, text, voice, speed, lang, f"legacy-{idx}", no_cache=False)
+    # Extract processing method from the result
+    if len(result) >= 4:
+        return result
+    else:
+        # Handle legacy return format
+        idx, audio_np, info = result
+        return idx, audio_np, info, "unknown"

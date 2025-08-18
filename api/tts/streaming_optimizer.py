@@ -46,6 +46,7 @@ class IncrementalAudioGenerator:
     def __init__(self, config: StreamingConfig):
         self.config = config
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="audio_gen")
+        self.last_processing_method = "unknown"  # Track the processing method used
         
     async def generate_streaming_audio(
         self, 
@@ -200,7 +201,8 @@ class IncrementalAudioGenerator:
                 0, text, voice, speed, lang
             )
             
-            idx, audio_np, provider_info = result
+            idx, audio_np, provider_info, processing_method = result
+            self.last_processing_method = processing_method
             
             if audio_np is None:
                 logger.warning(f"[{request_id}] Fast first chunk generation failed")
@@ -265,7 +267,8 @@ class IncrementalAudioGenerator:
                 segment_index, text, voice, speed, lang
             )
             
-            idx, audio_np, provider_info = result
+            idx, audio_np, provider_info, processing_method = result
+            self.last_processing_method = processing_method
             
             if audio_np is None:
                 logger.warning(f"[{request_id}] Segment {segment_index} generation failed")
@@ -391,13 +394,20 @@ class StreamingOptimizer:
             # Update performance stats with actual processing method
             from api.performance.stats import update_fast_path_performance_stats
             
-            # Determine the actual processing method used
-            # For now, we'll use 'fast_path' as the default since that's what we're optimizing for
-            # In the future, we could track this more precisely from the text processing stage
-            processing_method = 'fast_path'  # Most requests use fast-path processing
+            # Get the actual processing method from the generator
+            # This should reflect what actually happened in text processing
+            actual_processing_method = getattr(self.generator, 'last_processing_method', 'unknown')
+            
+            # If we don't have the processing method from the generator, use a heuristic
+            if actual_processing_method == 'unknown':
+                # Simple heuristic: short, simple text likely used fast-path
+                if len(text) <= 100 and text.isascii() and not any(c in text for c in '{}[]()@#$%^&*+=<>'):
+                    actual_processing_method = 'fast_path'
+                else:
+                    actual_processing_method = 'phonemizer'  # Default to phonemizer for complex text
             
             update_fast_path_performance_stats(
-                processing_method=processing_method,
+                processing_method=actual_processing_method,
                 ttfa_ms=first_chunk_time or 0,
                 success=first_chunk_time is not None and first_chunk_time <= 800,
                 total_time_ms=total_time,
