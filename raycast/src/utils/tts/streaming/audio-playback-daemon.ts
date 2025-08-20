@@ -1131,7 +1131,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
         // Force stop if timeout occurs
         this.forceStop();
         resolve();
-      }, 30000); // 30 second timeout
+      }, 120000); // 120 second timeout (2 minutes) - extended for long TTS generation
 
       const onCompleted = () => {
         clearTimeout(timeout);

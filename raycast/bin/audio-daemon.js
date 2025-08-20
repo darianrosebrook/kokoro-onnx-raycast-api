@@ -1184,10 +1184,17 @@ class AudioProcessor extends EventEmitter {
     }
 
     this.processStartTime = performance.now();
-    const keepAliveDuration = this.audioDurationMs + 1000; // Add 1 second buffer
+
+    // FIXED: Use a much longer keep-alive duration to accommodate TTS generation time
+    // The previous logic was too aggressive and cut off audio during long TTS generation
+    // TTS generation can take 10+ seconds, so we need a generous buffer
+    const keepAliveDuration = Math.max(
+      this.audioDurationMs * 5, // 5x audio duration as minimum
+      30000 // At least 30 seconds for TTS generation
+    );
 
     console.log(
-      `[${this.instanceId}] Starting process keep-alive timer for ${keepAliveDuration.toFixed(1)}ms`
+      `[${this.instanceId}] Starting process keep-alive timer for ${keepAliveDuration.toFixed(1)}ms (TTS generation buffer: ${(keepAliveDuration - this.audioDurationMs).toFixed(1)}ms)`
     );
 
     this.processKeepAliveTimer = setTimeout(() => {
@@ -1216,16 +1223,24 @@ class AudioProcessor extends EventEmitter {
       remainingBuffer: this.ringBuffer.size + " bytes",
     });
 
+    // FIXED: Less aggressive termination logic to prevent cutting off audio during TTS generation
     // Only terminate if we've exceeded the expected duration and buffer is empty
     if (elapsedTime >= expectedEndTime && this.ringBuffer.size === 0) {
-      console.log(`[${this.instanceId}] Terminating process after expected duration`);
+      console.log(
+        `[${this.instanceId}] Terminating process after expected duration (buffer empty)`
+      );
       this.terminateProcessGracefully();
-    } else if (elapsedTime >= expectedEndTime * 1.5) {
-      // Force termination if we're way past expected duration
-      console.log(`[${this.instanceId}] Force terminating process (50% past expected duration)`);
+    } else if (elapsedTime >= expectedEndTime * 3) {
+      // FIXED: Increased from 1.5x to 3x to be less aggressive
+      // This prevents premature termination during long TTS generation
+      console.log(
+        `[${this.instanceId}] Force terminating process (200% past expected duration - TTS generation likely complete)`
+      );
       this.terminateProcessGracefully();
     } else {
-      console.log(`[${this.instanceId}] Process should continue running`);
+      console.log(
+        `[${this.instanceId}] Process should continue running (TTS generation in progress)`
+      );
     }
   }
 
@@ -1593,7 +1608,7 @@ class AudioDaemon extends EventEmitter {
     // Set up audio processor event handlers with throttled status updates
     let lastStatusUpdate = 0;
     const STATUS_UPDATE_INTERVAL = 2000; // Only send status updates every 2 seconds
-    
+
     this.audioProcessor.on("chunkReceived", (data) => {
       const now = Date.now();
       if (now - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {

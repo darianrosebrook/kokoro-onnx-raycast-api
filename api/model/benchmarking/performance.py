@@ -17,11 +17,34 @@ logger = logging.getLogger(__name__)
 
 def benchmark_providers(capabilities: Optional[Dict[str, Any]] = None) -> Tuple[Optional[str], Dict[str, Any]]:
     """
-    Benchmark available providers and return the optimal choice.
+    Benchmark available ONNX providers to determine the optimal one for the current hardware.
     
-    @param capabilities: Hardware capabilities dictionary (auto-detected if not provided)
+    @param capabilities: Hardware capabilities dictionary
     @returns: Tuple of (optimal_provider_name, benchmark_results)
     """
+    import os
+    
+    # Check if CPU provider is forced via environment variables
+    force_cpu = (
+        os.environ.get('KOKORO_FORCE_CPU_PROVIDER', '').lower() == 'true' or
+        os.environ.get('KOKORO_COREML_COMPUTE_UNITS', '').upper() == 'CPUONLY' or
+        os.environ.get('KOKORO_DEV_PERFORMANCE_PROFILE', '').lower() == 'minimal'
+    )
+    
+    if force_cpu:
+        logger.info("🔧 CPU provider forced via environment variables - skipping benchmarking")
+        return "CPUExecutionProvider", {"CPUExecutionProvider": {"forced": True}}
+    
+    # Check if benchmarking is disabled
+    disable_benchmarking = (
+        os.environ.get('KOKORO_DISABLE_PROVIDER_BENCHMARKING', '').lower() == 'true' or
+        os.environ.get('KOKORO_DISABLE_ADAPTIVE_PROVIDER', '').lower() == 'true'
+    )
+    
+    if disable_benchmarking:
+        logger.info("🔧 Provider benchmarking disabled via environment variables - using CPU provider")
+        return "CPUExecutionProvider", {"CPUExecutionProvider": {"disabled": True}}
+    
     logger.info("Starting provider benchmarking...")
     
     if capabilities is None:

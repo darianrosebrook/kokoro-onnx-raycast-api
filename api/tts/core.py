@@ -61,6 +61,10 @@ _inference_cache_lock = threading.Lock()
 _inference_cache_max_size = 1000
 _inference_cache_ttl = 3600  # seconds
 
+# Cache hit/miss tracking
+_inference_cache_hits = 0
+_inference_cache_misses = 0
+
 # Primer micro-cache for the very first tiny segment (TTFA boost)
 _primer_microcache: Dict[str, Tuple[np.ndarray, float]] = {}
 _primer_microcache_ttl_s: float = 300.0  # 5 minutes
@@ -137,17 +141,23 @@ def _create_inference_cache_key(text: str, voice: str, speed: float, lang: str) 
 
 def _get_cached_inference(cache_key: str) -> Optional[Tuple[np.ndarray, str]]:
     """Retrieve cached inference result if valid."""
+    global _inference_cache_hits, _inference_cache_misses
+    
     with _inference_cache_lock:
         item = _inference_cache.get(cache_key)
         if not item:
+            _inference_cache_misses += 1
+            logger.debug(f"Cache miss {cache_key[:8]}…")
             return None
         
         samples, ts, provider = item
         if (time.time() - ts) < _inference_cache_ttl:
+            _inference_cache_hits += 1
             logger.debug(f"Cache hit {cache_key[:8]}…")
             return samples, provider
         
         _inference_cache.pop(cache_key, None)
+        _inference_cache_misses += 1
         logger.debug(f"Cache expired {cache_key[:8]}…")
         return None
 
@@ -181,17 +191,28 @@ def cleanup_inference_cache() -> None:
 
 def get_inference_cache_stats() -> Dict[str, Any]:
     """Get inference cache statistics."""
+    global _inference_cache_hits, _inference_cache_misses
+    
     with _inference_cache_lock:
         now = time.time()
         valid = sum(1 for _, (__, ts, ___) in _inference_cache.items() if (now - ts) < _inference_cache_ttl)
         expired = len(_inference_cache) - valid
+        
+        # Calculate real hit rates
+        total_requests = _inference_cache_hits + _inference_cache_misses
+        hit_rate = (_inference_cache_hits / total_requests * 100) if total_requests > 0 else 0.0
+        miss_rate = (_inference_cache_misses / total_requests * 100) if total_requests > 0 else 0.0
+        
         return {
             "total_entries": len(_inference_cache),
             "valid_entries": valid,
             "expired_entries": expired,
             "cache_size_mb": len(_inference_cache) * 0.1,  # heuristic
-            "hit_rate": 0.0,
-            "miss_rate": 0.0,
+            "hits": _inference_cache_hits,
+            "misses": _inference_cache_misses,
+            "total_requests": total_requests,
+            "hit_rate": hit_rate,
+            "miss_rate": miss_rate,
         }
 
 
@@ -775,16 +796,17 @@ async def stream_tts_audio(
         except Exception as e:
             logger.debug(f"[{request_id}] Metrics update failed: {e}")
 
-        # Session cleanup
-        dual_session_manager = get_dual_session_manager()
-        if dual_session_manager:
-            try:
-                dual_session_manager.cleanup_sessions()
-                logger.debug(f"[{request_id}] Session cleanup completed")
-            except Exception as e:
-                logger.warning(f"[{request_id}] Session cleanup failed: {e}")
-                if not error_details:
-                    error_details = f"Session cleanup failed: {e}"
+        # Session cleanup - DISABLED to prevent audio gaps
+        # This was causing 8+ second delays after every request
+        # dual_session_manager = get_dual_session_manager()
+        # if dual_session_manager:
+        #     try:
+        #         dual_session_manager.cleanup_sessions()
+        #         logger.debug(f"[{request_id}] Session cleanup completed")
+        #     except Exception as e:
+        #         logger.warning(f"[{request_id}] Session cleanup failed: {e}")
+        #         if not error_details:
+        #             error_details = f"Session cleanup failed: {e}"
 
         # Record stream health for optimization
         variation_handler.record_stream_health(
@@ -831,13 +853,14 @@ async def stream_tts_audio(
         except Exception as health_err:
             logger.debug(f"[{request_id}] Failed to record stream health: {health_err}")
         
-        # Session cleanup on error
-        try:
-            dual_session_manager = get_dual_session_manager()
-            if dual_session_manager:
-                dual_session_manager.cleanup_sessions()
-        except Exception as cleanup_err:
-            logger.warning(f"[{request_id}] Error cleanup failed: {cleanup_err}")
+        # Session cleanup on error - DISABLED to prevent audio gaps
+        # This was causing 8+ second delays during error conditions
+        # try:
+        #     dual_session_manager = get_dual_session_manager()
+        #     if dual_session_manager:
+        #         dual_session_manager.cleanup_sessions()
+        # except Exception as cleanup_err:
+        #     logger.warning(f"[{request_id}] Error cleanup failed: {cleanup_err}")
         
         raise
 

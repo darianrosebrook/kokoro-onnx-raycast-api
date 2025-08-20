@@ -588,7 +588,7 @@ export const TTS_CONSTANTS = {
   MAX_CACHE_SIZE: 50 * 1024 * 1024, // 50MB
 
   // Timeout configuration
-  NETWORK_TIMEOUT_MS: 30000,
+  NETWORK_TIMEOUT_MS: 120000, // 2 minutes for long TTS generation
   HEALTH_CHECK_TIMEOUT_MS: 5000,
 } as const;
 

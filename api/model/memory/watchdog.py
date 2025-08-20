@@ -157,15 +157,16 @@ class MemoryFragmentationWatchdog:
         }
         
         try:
-            # 1. Clean up dual session manager if available
-            try:
-                from api.model.sessions import get_dual_session_manager
-                dual_session_manager = get_dual_session_manager()
-                if dual_session_manager:
-                    dual_session_manager.cleanup_sessions()
-                    cleanup_results['actions_taken'].append('dual_session_cleanup')
-            except Exception as e:
-                cleanup_results['errors'].append(f'dual_session_cleanup: {e}')
+            # 1. Clean up dual session manager if available - DISABLED to prevent audio gaps
+            # This was causing 8+ second delays during automatic memory cleanup
+            # try:
+            #     from api.model.sessions import get_dual_session_manager
+            #     dual_session_manager = get_dual_session_manager()
+            #     if dual_session_manager:
+            #         dual_session_manager.cleanup_sessions()
+            #         cleanup_results['actions_taken'].append('dual_session_cleanup')
+            # except Exception as e:
+            #     cleanup_results['errors'].append(f'dual_session_cleanup: {e}')
             
             # 2. Clean up dynamic memory manager if available
             try:

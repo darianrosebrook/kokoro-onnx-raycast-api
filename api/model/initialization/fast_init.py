@@ -220,6 +220,25 @@ def _benchmark_and_hotswap_async(capabilities: Dict[str, Any]) -> None:
     
     @param capabilities: Hardware capabilities dictionary
     """
+    import os
+    
+    # Check if CPU provider is forced via environment variables
+    force_cpu = (
+        os.environ.get('KOKORO_FORCE_CPU_PROVIDER', '').lower() == 'true' or
+        os.environ.get('KOKORO_COREML_COMPUTE_UNITS', '').upper() == 'CPUONLY' or
+        os.environ.get('KOKORO_DEV_PERFORMANCE_PROFILE', '').lower() == 'minimal'
+    )
+    
+    # Check if benchmarking is disabled
+    disable_benchmarking = (
+        os.environ.get('KOKORO_DISABLE_PROVIDER_BENCHMARKING', '').lower() == 'true' or
+        os.environ.get('KOKORO_DISABLE_ADAPTIVE_PROVIDER', '').lower() == 'true'
+    )
+    
+    if force_cpu or disable_benchmarking:
+        logger.info("🔧 CPU provider locked via environment variables - skipping hot-swap")
+        return
+    
     def _run():
         try:
             optimal_provider, _results = benchmark_providers(capabilities=capabilities)

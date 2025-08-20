@@ -6,6 +6,7 @@ import { PlaybackManager } from "./playback-manager.js";
 import { RetryManager } from "../api/retry-manager.js";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager.js";
 import { PerformanceMonitor } from "../performance/performance-monitor.js";
+import { PerformanceTracker } from "../core/performance-tracker.js";
 import { StatusUpdate } from "../../types.js";
 import { TextSegment } from "../validation/tts-types.js";
 
@@ -129,7 +130,7 @@ describe("TTSSpeechProcessor", () => {
         playbackManager: mockPlaybackManager as unknown as PlaybackManager,
         retryManager: mockRetryManager as unknown as RetryManager,
         adaptiveBufferManager: mockAdaptiveBufferManager as unknown as AdaptiveBufferManager,
-        performanceMonitor: mockPerformanceMonitor as unknown as PerformanceMonitor,
+        performanceTracker: mockPerformanceMonitor as unknown as PerformanceTracker,
       }
     );
   });
