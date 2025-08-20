@@ -272,7 +272,7 @@ export class AudioStreamer implements IAudioStreamer {
       serverUrl: this.config.serverUrl,
       textLength: request.text.length,
       voice: request.voice,
-      speed: request.speed
+      speed: request.speed,
     });
 
     // PHASE 1 OPTIMIZATION: Use PCM format for streaming to avoid WAV header + raw audio mixing
@@ -293,28 +293,28 @@ export class AudioStreamer implements IAudioStreamer {
     });
 
     const responseTime = performance.now() - requestStartTime;
-    
+
     // Log first byte received with performance tracker
     this.performanceTracker.logEvent(context.requestId, "FIRST_BYTE_RECEIVED", {
       responseTimeMs: responseTime,
       status: response.status,
       statusText: response.statusText,
-      headers: Object.fromEntries([...response.headers.entries()])
+      headers: Object.fromEntries([...response.headers.entries()]),
     });
 
     if (!response || !response.ok) {
       const status = response?.status || 500;
       const statusText = response?.statusText || "Unknown error";
-      
+
       // Log error with performance tracker
       this.performanceTracker.logEvent(context.requestId, "ERROR", {
         error: `TTS request failed: ${status} ${statusText}`,
         status,
         statusText,
         url,
-        requestTimeMs: responseTime
+        requestTimeMs: responseTime,
       });
-      
+
       throw new Error(`TTS request failed: ${status} ${statusText}`);
     }
 
@@ -421,7 +421,7 @@ export class AudioStreamer implements IAudioStreamer {
           this.performanceTracker.logEvent(context.requestId, "FIRST_AUDIO_CHUNK", {
             ttfaMs: elapsedTimeMs,
             chunkSize: value.length,
-            targetTTFA: 800
+            targetTTFA: 800,
           });
           firstChunk = false;
         }
@@ -431,7 +431,7 @@ export class AudioStreamer implements IAudioStreamer {
           chunkIndex,
           chunkSize: value.length,
           totalBytesReceived,
-          elapsedTimeMs
+          elapsedTimeMs,
         });
 
         // Log progress every 5th chunk
@@ -444,10 +444,8 @@ export class AudioStreamer implements IAudioStreamer {
             avgChunkSize,
             avgChunkTime,
             totalBytesReceived,
-            elapsedTimeMs
-          });
-            chunkSize: value.length,
-            elapsedTime: `${elapsedTimeMs}ms`,
+            _elapsedTime: `${elapsedTimeMs}ms`,
+            _chunkSize: value.length,
           });
         }
       }
@@ -499,19 +497,19 @@ export class AudioStreamer implements IAudioStreamer {
       totalBytesReceived,
       streamingDurationMs: this.stats.streamingDuration,
       efficiency: this.stats.efficiency,
-      audioDurationMs: this.stats.totalAudioDuration * 1000
+      audioDurationMs: this.stats.totalAudioDuration * 1000,
     });
 
     // Complete the request and get final metrics
     const finalMetrics = this.performanceTracker.completeRequest(context.requestId);
-    
+
     if (finalMetrics) {
       // Log final summary
       this.performanceTracker.logEvent(context.requestId, "REQUEST_COMPLETE", {
         totalTimeToFirstAudio: finalMetrics.totalTimeToFirstAudio,
         streamingEfficiency: finalMetrics.streamingEfficiency,
         totalChunks: finalMetrics.chunkCount,
-        audioDuration: finalMetrics.audioDuration
+        audioDuration: finalMetrics.audioDuration,
       });
     }
   }

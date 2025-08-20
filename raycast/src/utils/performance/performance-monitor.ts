@@ -723,6 +723,38 @@ export class PerformanceMonitor implements IPerformanceMonitor {
   }
 
   /**
+   * Record cache hit
+   */
+  recordCacheHit(): void {
+    this.recordMetric("cacheHits", 1);
+
+    this.emitEvent(TTSEvent.CACHE_HIT, {
+      timestamp: performance.now(),
+    });
+
+    console.debug("Cache hit recorded", {
+      component: this.name,
+      method: "recordCacheHit",
+    });
+  }
+
+  /**
+   * Record cache miss
+   */
+  recordCacheMiss(): void {
+    this.recordMetric("cacheMisses", 1);
+
+    this.emitEvent(TTSEvent.CACHE_MISS, {
+      timestamp: performance.now(),
+    });
+
+    console.debug("Cache miss recorded", {
+      component: this.name,
+      method: "recordCacheMiss",
+    });
+  }
+
+  /**
    * Record buffer adjustment event
    */
   recordBufferAdjustment(oldBufferMs: number, newBufferMs: number, reason: string): void {
