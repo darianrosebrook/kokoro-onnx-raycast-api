@@ -1014,6 +1014,23 @@ def clean_text(text: str) -> str:
     # Remove leading/trailing punctuation that can cause off-by-one errors
     text = re.sub(r'^\W+|\W+$', '', text)
     
+    # Normalize smart quotes, dashes, and backticks to avoid stalls
+    replacements = {
+        "‘": "'",
+        "’": "'",
+        "“": '"',
+        "”": '"',
+        "–": "-",
+        "—": "-",
+        "―": "-",
+    }
+    for _k, _v in replacements.items():
+        text = text.replace(_k, _v)
+    # Collapse triple backticks/code fences defensively
+    text = text.replace("```", '"')
+    # Normalize stray backticks to apostrophes
+    text = text.replace("`", "'")
+
     logger.debug(f"Cleaned text: '{text}'")
     return text
 
@@ -1111,6 +1128,73 @@ def segment_text(text: str, max_len: int) -> List[str]:
     # This preserves natural speech patterns and improves TTS quality
     sentences = re.split(r'(?<=[.!?])\s+', cleaned)
     segments = []
+
+    from api.config import TTSConfig
+
+    def _split_into_clauses(text: str, target_len: int, min_len: int, max_len_local: int) -> list:
+        """
+        Punctuation-aware clause splitter for long sentences.
+        - Prefers breaks at ; : , — – and em/en dashes
+        - Ensures each clause >= min_len and <= max_len_local
+        - Greedy aggregation around target_len
+        """
+        # Candidate break positions including punctuation and dashes
+        breaks = []
+        for i, ch in enumerate(text):
+            if ch in ";:,":
+                breaks.append(i + 1)
+            elif ch in "—–-":
+                # keep dash with previous word
+                breaks.append(i + 1)
+
+        # Always include sentence end as break
+        if len(text) not in breaks:
+            breaks.append(len(text))
+
+        clauses = []
+        start = 0
+        while start < len(text):
+            # Find next break at or after target
+            desired = min(start + target_len, len(text))
+            # Choose the smallest break >= desired, otherwise the largest < desired
+            next_break = None
+            for b in breaks:
+                if b <= start:
+                    continue
+                if b >= desired:
+                    next_break = b
+                    break
+            if next_break is None:
+                # fallback to last available break
+                candidates = [b for b in breaks if b > start]
+                next_break = candidates[-1] if candidates else len(text)
+
+            piece = text[start:next_break].strip()
+            if piece:
+                # Enforce size bounds by merging/splitting as needed
+                if len(piece) < min_len and clauses:
+                    # Merge with previous if too small
+                    clauses[-1] = f"{clauses[-1]} {piece}".strip()
+                elif len(piece) > max_len_local:
+                    # Hard split by whitespace to respect max_len
+                    cursor = 0
+                    while cursor < len(piece):
+                        end = min(cursor + max_len_local, len(piece))
+                        # prefer last space before end
+                        space = piece.rfind(' ', cursor, end)
+                        cut = space if space != -1 and space > cursor else end
+                        clauses.append(piece[cursor:cut].strip())
+                        cursor = cut
+                else:
+                    clauses.append(piece)
+            start = next_break
+
+        # Final pass: merge any trailing tiny clause
+        if len(clauses) >= 2 and len(clauses[-1]) < min_len:
+            clauses[-2] = f"{clauses[-2]} {clauses[-1]}".strip()
+            clauses.pop()
+
+        return [c for c in clauses if c]
     
     for sentence in sentences:
         sentence = sentence.strip()
@@ -1120,24 +1204,30 @@ def segment_text(text: str, max_len: int) -> List[str]:
         # Additional cleaning for each sentence
         sentence = re.sub(r'\s+', ' ', sentence).strip()
         
-        # Handle sentences longer than max_len
-        while len(sentence) > max_len:
-            # Try to find a natural break point (space) within max_len
-            pos = sentence.rfind(' ', 0, max_len)
-            
-            if pos == -1:
-                # No space found - handle very long words by force-splitting
-                pos = max_len
-                logger.debug(f"Force-splitting long word at position {pos}")
-            
-            segment = sentence[:pos].strip()
-            if segment and len(segment) > 0:  # Only add non-empty segments
-                segments.append(segment)
-            
-            sentence = sentence[pos:].strip()
-        
-        # Add remaining sentence if it's not empty
-        if sentence and len(sentence) > 0:
+        # Clause-level segmentation for long sentences to improve TTFA
+        # Split sentences longer than ~200 characters into clauses at punctuation
+        if len(sentence) > 200:
+            clause_target = min(max_len, getattr(TTSConfig, "CLAUSE_TARGET_CHARS", 160))
+            clause_min = getattr(TTSConfig, "CLAUSE_MIN_CHARS", 100)
+            clauses = _split_into_clauses(sentence, clause_target, clause_min, max_len)
+            for clause in clauses:
+                # If any clause still exceeds max_len (edge-case), fallback splitting
+                if len(clause) > max_len:
+                    cursor = 0
+                    while cursor < len(clause):
+                        end = min(cursor + max_len, len(clause))
+                        space = clause.rfind(' ', cursor, end)
+                        cut = space if space != -1 and space > cursor else end
+                        seg = clause[cursor:cut].strip()
+                        if seg:
+                            segments.append(seg)
+                        cursor = cut
+                else:
+                    segments.append(clause)
+            continue
+
+        # For shorter sentences, retain as-is
+        if sentence:
             segments.append(sentence)
     
     # Validate full text coverage to ensure no content is lost

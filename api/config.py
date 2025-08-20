@@ -491,6 +491,17 @@ class TTSConfig:
         # Production optimized: allow larger segments for better single-segment processing
         # reducing server-side processing overhead and improving time-to-first-audio
         MAX_SEGMENT_LENGTH = 1200  # Increased from 800 based on optimization gains  
+
+    # Primer/segmentation behavior
+    # Allow disabling aggressive primer splitting which can cause audible pauses
+    ENABLE_PRIMER_SPLIT = os.environ.get("KOKORO_ENABLE_PRIMER_SPLIT", "false").lower() == "true"
+    # When primer split is enabled, enforce punctuation-aware boundaries and minimum size
+    FIRST_SEGMENT_MIN_CHARS = int(os.environ.get("KOKORO_FIRST_SEGMENT_MIN_CHARS", "120"))
+    FIRST_SEGMENT_REQUIRE_PUNCT = os.environ.get("KOKORO_FIRST_SEGMENT_REQUIRE_PUNCT", "true").lower() == "true"
+
+    # Clause splitting thresholds (punctuation-aware sub-sentence segmentation)
+    CLAUSE_MIN_CHARS = int(os.environ.get("KOKORO_CLAUSE_MIN_CHARS", "100"))
+    CLAUSE_TARGET_CHARS = int(os.environ.get("KOKORO_CLAUSE_TARGET_CHARS", "160"))
     
     # ORT (ONNX Runtime) optimization settings
     ORT_OPTIMIZATION_ENABLED = os.environ.get("KOKORO_ORT_OPTIMIZATION", "auto").lower()

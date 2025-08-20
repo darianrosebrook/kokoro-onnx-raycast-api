@@ -122,35 +122,40 @@ class IncrementalAudioGenerator:
         """
         Optimize text segmentation for streaming performance.
         
-        This creates very small first segments for minimal TTFA,
-        with larger subsequent segments for efficiency.
+        This is now punctuation-aware and avoids excessively tiny first segments
+        to preserve prosody while still achieving low TTFA.
         """
         if len(text) <= 50:
             return [text]
         
         segments = []
         
-        # Create tiny first segment for ultra-fast TTFA
-        if len(text) > 100:
-            # Find first natural break point within first 30 characters
-            first_break = 20
-            for i, char in enumerate(text[:30]):
-                if char in '.!?':
-                    first_break = i + 1
+        # Create punctuation-aware first segment, but do not split too early
+        remaining = text
+        if len(text) > 160:
+            target = max(120, int(len(text) * 0.15))
+            cut = target
+            punct_found = False
+            # Prefer punctuation near the target
+            for i in range(max(0, target - 60), min(len(text), target + 80)):
+                if text[i] in '.!?;:':
+                    cut = i + 1
+                    punct_found = True
                     break
-                elif char in ',;':
-                    first_break = i + 1
-            
-            first_segment = text[:first_break].strip()
-            if first_segment:
+            if not punct_found:
+                # Fallback to nearest whitespace
+                for i in range(max(0, target - 40), min(len(text), target + 60)):
+                    if text[i].isspace():
+                        cut = i
+                        break
+            first_segment = text[:cut].strip()
+            if first_segment and len(first_segment) >= 120:
                 segments.append(first_segment)
-                remaining = text[first_break:].strip()
-            else:
-                remaining = text
+                remaining = text[cut:].strip()
         else:
             remaining = text
         
-        # Split remaining text into reasonable chunks
+        # Split remaining text into reasonable chunks with punctuation preference
         while remaining:
             if len(remaining) <= 100:
                 segments.append(remaining)
@@ -158,11 +163,11 @@ class IncrementalAudioGenerator:
             
             # Find break point around 80-120 characters
             break_point = 80
-            for i in range(80, min(120, len(remaining))):
-                if remaining[i] in '.!?':
+            for i in range(80, min(160, len(remaining))):
+                if remaining[i] in '.!?;:':
                     break_point = i + 1
                     break
-                elif remaining[i] in ' \n':
+                elif remaining[i].isspace():
                     break_point = i
             
             segment = remaining[:break_point].strip()

@@ -323,29 +323,31 @@ class AudioProcessor extends EventEmitter {
 
     console.log(`[${this.instanceId}] Starting new audio session - resetting state`);
 
+    // Force stop any existing processing loop
+    this._audioLoopActive = false;
+    if (this._audioLoopInterval) {
+      clearInterval(this._audioLoopInterval);
+      this._audioLoopInterval = null;
+    }
+
     // Complete session reset for new playback
     this.isStopping = false;
     this.isStopped = false;
+    this.isPlaying = false; // Force reset playing state
     this.restartAttempts = 0;
     this.isEndingStream = false;
     this.afplayMode = false;
 
-    // Clear ring buffer only if we're not already in the middle of processing
-    if (!this.isPlaying) {
-      this.ringBuffer.clear();
-      console.log(`[${this.instanceId}] Cleared ring buffer for new session`);
-    } else {
-      console.log(
-        `[${this.instanceId}] Keeping existing buffer data: ${this.ringBuffer.size} bytes`
-      );
-    }
+    // Always clear ring buffer for new session (since we just reset isPlaying)
+    this.ringBuffer.clear();
+    console.log(`[${this.instanceId}] Cleared ring buffer for new session`);
 
     // Reset audio process
     if (this.audioProcess) {
       try {
         this.audioProcess.kill("SIGTERM");
       } catch (e) {
-        // Process might already be dead
+        // Process might already be dead, RIP little buddy
       }
       this.audioProcess = null;
     }
@@ -449,6 +451,24 @@ class AudioProcessor extends EventEmitter {
           PATH: process.env.PATH + ":/opt/homebrew/bin:/usr/local/bin:/usr/bin",
         },
       });
+
+      // Configure sox stdin for better back-pressure handling
+      if (this.audioProcess.stdin) {
+        this.audioProcess.stdin.setDefaultEncoding("binary");
+        // Increase the high water mark to reduce back-pressure frequency
+        this.audioProcess.stdin._writableState.highWaterMark = 65536; // 64KB buffer
+
+        // Handle stdin errors gracefully
+        this.audioProcess.stdin.on("error", (error) => {
+          if (error.code === "EPIPE") {
+            console.log(`[${this.instanceId}] Sox stdin pipe closed - sox process terminated`);
+            // Stop the audio processing loop to prevent further EPIPE errors
+            this._audioLoopActive = false;
+          } else {
+            console.error(`[${this.instanceId}] Sox stdin error:`, error.message);
+          }
+        });
+      }
 
       this.audioProcess.on("error", (error) => {
         console.error("Audio process error:", error.message);
@@ -554,10 +574,13 @@ class AudioProcessor extends EventEmitter {
       if (this.audioProcess.stdin) {
         this.audioProcess.stdin.on("error", (error) => {
           if (error.code === "EPIPE") {
-            console.log("Audio process stdin pipe closed");
+            console.log("Audio process stdin pipe closed - sox process terminated");
             this.isPlaying = false;
+            // Don't restart automatically during EPIPE - this is normal when audio completes
           } else {
             console.error("Audio process stdin error:", error.message);
+            // For other errors, attempt restart
+            this.restartAudioProcess();
           }
         });
       }
@@ -922,6 +945,15 @@ class AudioProcessor extends EventEmitter {
     }
   }
 
+  /**
+   * COMPLETELY REWRITTEN: Robust audio processing loop for long TTS sessions
+   *
+   * Key improvements:
+   * 1. No arbitrary timeouts - only stops when explicitly told to
+   * 2. Handles buffer gaps between segments gracefully
+   * 3. Continues processing until ALL audio is complete
+   * 4. Better error handling and recovery
+   */
   processAudioLoop() {
     if (this._audioLoopInterval) {
       clearInterval(this._audioLoopInterval);
@@ -932,7 +964,7 @@ class AudioProcessor extends EventEmitter {
       return;
     }
     this._audioLoopActive = true;
-    console.log(`[${this.instanceId}] processAudioLoop START`);
+    console.log(`[${this.instanceId}] 🚀 NEW ROBUST AUDIO LOOP STARTED`);
 
     // Record playback start time
     if (this.stats.playbackStartTime === 0) {
@@ -940,183 +972,169 @@ class AudioProcessor extends EventEmitter {
       console.log(
         `[${this.instanceId}] Playback start time recorded: ${this.stats.playbackStartTime.toFixed(2)}ms`
       );
-
-      // Start the keep-alive timer when playback begins
       this.startProcessKeepAlive();
     }
 
     if (!this.audioProcess) {
-      console.log(`[${this.instanceId}] No audio process`);
+      console.log(`[${this.instanceId}] ❌ No audio process available`);
       this._audioLoopActive = false;
       return;
     }
-    const chunkSize = this.format.bytesPerSecond * 0.05; // 50ms chunks
-    debugLog(`[${this.instanceId}] Processing with chunk size:`, chunkSize, "bytes");
 
-    // Adaptive polling based on buffer utilization
-    let _lastProcessTime = Date.now();
-    let adaptiveDelay = 10; // Start with 10ms
+    const chunkSize = this.format.bytesPerSecond * 0.05; // 50ms chunks
+    console.log(`[${this.instanceId}] Processing with chunk size: ${chunkSize} bytes`);
+
+    // NEW: Robust state tracking
+    let consecutiveEmptyBuffers = 0;
+    let lastChunkReceived = Date.now();
+    let totalChunksProcessed = 0;
+    let isWaitingForMoreData = false;
+
+    // NEW: No arbitrary timeouts - only stop when explicitly told
+    const MAX_CONSECUTIVE_EMPTY_BUFFERS = 100; // Allow up to 5 seconds of empty buffers (100 * 50ms)
+    const MAX_WAIT_TIME_MS = 60000; // Wait up to 1 minute for new data before giving up
 
     const processChunk = () => {
-      if (!this.audioProcess) {
+      // NEW: Only stop if explicitly told to stop
+      if (this.isStopped) {
+        console.log(`[${this.instanceId}] 🛑 Explicitly stopped - ending audio loop`);
         this._audioLoopActive = false;
         return;
       }
 
-      if (this.audioProcess.killed || this.audioProcess.exitCode !== null) {
-        debugLog(`[${this.instanceId}] Audio process died, checking if buffer needs draining...`);
+      // NEW: Check if we should end stream (only when explicitly requested)
+      if (this.isEndingStream && this.ringBuffer.size === 0) {
+        console.log(
+          `[${this.instanceId}] 🎯 End stream requested and buffer empty - completing naturally`
+        );
+        this._completePlaybackSession();
+        return;
+      }
+
+      // NEW: Check if audio process is still alive
+      if (!this.audioProcess || this.audioProcess.killed || this.audioProcess.exitCode !== null) {
+        console.log(`[${this.instanceId}] ⚠️ Audio process died, attempting recovery...`);
         if (this.ringBuffer.size > 0) {
-          debugLog(
-            `[${this.instanceId}] Buffer has ${this.ringBuffer.size} bytes remaining, continuing to drain...`
+          console.log(
+            `[${this.instanceId}] Buffer has ${this.ringBuffer.size} bytes remaining, restarting process...`
           );
-          // Continue processing to drain the buffer
-        } else {
-          debugLog(`[${this.instanceId}] Buffer empty, restarting audio process...`);
           this.restartAudioProcess();
+          // Continue processing after restart
+          setTimeout(processChunk, 100);
+          return;
+        } else {
+          console.log(`[${this.instanceId}] Buffer empty and process dead, ending loop`);
+          this._audioLoopActive = false;
           return;
         }
       }
 
       const available = this.ringBuffer.size;
       const utilization = available / this.ringBuffer.capacity;
-      // debugLog(
-      //   `Utilization:`,
-      //   utilization,
-      //   "available:",
-      //   available,
-      //   "capacity:",
-      //   this.ringBuffer.capacity
-      // );
-
-      // Adaptive delay based on buffer state
-      if (utilization > 0.9) {
-        // High utilization - process faster
-        adaptiveDelay = Math.max(5, adaptiveDelay * 0.8);
-      } else if (utilization < 0.3) {
-        // Low utilization - slow down to avoid underruns
-        adaptiveDelay = Math.min(50, adaptiveDelay * 1.2);
-      } else {
-        // Normal utilization - maintain current rate
-        adaptiveDelay = Math.max(5, Math.min(30, adaptiveDelay));
-      }
 
       if (available >= chunkSize) {
-        const chunk = this.ringBuffer.read(chunkSize);
+        // NEW: Reset empty buffer counter when we have data
+        consecutiveEmptyBuffers = 0;
+        isWaitingForMoreData = false;
 
-        // Only try to write to the process if it's still alive
+        const chunk = this.ringBuffer.read(chunkSize);
+        lastChunkReceived = Date.now();
+        totalChunksProcessed++;
+
+        // Process the chunk
         if (this.audioProcess && !this.audioProcess.killed && this.audioProcess.exitCode === null) {
           const writeResult = this.audioProcess.stdin.write(chunk, (err) => {
-            if (err) console.error("stdin.write error:", err);
-            else debugLog("Wrote chunk to sox:", chunk.length);
+            if (err) {
+              if (err.code === "EPIPE") {
+                console.log(`[${this.instanceId}] Sox stdin pipe closed - sox process terminated`);
+              } else {
+                console.error(`[${this.instanceId}] stdin.write error:`, err);
+              }
+            }
           });
 
           if (!writeResult) {
-            // Back-pressure detected, wait for drain
-            console.log(`[${this.instanceId}] Back-pressure detected, waiting for drain...`);
+            // Back-pressure detected - wait for drain
             this.audioProcess.stdin.once("drain", () => {
-              console.log(`[${this.instanceId}] Drain event received, resuming...`);
-              setImmediate(processChunk);
+              setTimeout(processChunk, 10);
             });
             return;
           }
-        } else {
-          debugLog(
-            `[${this.instanceId}] Audio process not available, skipping write but processing chunk: ${chunk.length} bytes`
-          );
         }
 
+        // Update statistics
         this.stats.bytesProcessed += chunk.length;
         this.stats.audioPosition += chunk.length;
 
-        // Schedule next chunk with adaptive timing
-        setTimeout(processChunk, adaptiveDelay);
+        // NEW: Adaptive delay based on buffer state
+        let nextDelay = 10; // Default 10ms
+        if (utilization > 0.8) {
+          nextDelay = 5; // High utilization - process faster
+        } else if (utilization < 0.2) {
+          nextDelay = 20; // Low utilization - slow down
+        }
+
+        // Continue processing
+        setTimeout(processChunk, nextDelay);
       } else {
-        // Buffer empty, check if we should stop
-        if (this.isStopped && this.ringBuffer.size === 0) {
-          console.log(`[${this.instanceId}] Buffer empty and stopped, ending processing`);
+        // Buffer empty - this is normal between segments
+        consecutiveEmptyBuffers++;
 
-          // Calculate final timing statistics
-          if (this.stats.playbackStartTime > 0 && this.stats.playbackEndTime === 0) {
-            this.stats.playbackEndTime = performance.now();
-            this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
-
-            // Calculate timing accuracy and processing overhead
-            this.stats.timingAccuracy =
-              this.stats.actualDuration > 0
-                ? (this.stats.expectedDuration / this.stats.actualDuration) * 100
-                : 0;
-            this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
-
-            console.log(`[${this.instanceId}] Final playback timing:`, {
-              startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
-              endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
-              actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
-              expectedDuration: this.stats.expectedDuration.toFixed(2) + "ms",
-              difference:
-                (this.stats.actualDuration - this.stats.expectedDuration).toFixed(2) + "ms",
-              accuracy: this.stats.timingAccuracy.toFixed(1) + "%",
-              processingOverhead: this.stats.processingOverhead.toFixed(2) + "ms",
-              totalBytesProcessed: this.stats.bytesProcessed,
-              totalChunks: this.stats.totalChunksReceived,
-              averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
-            });
-          }
-
-          this.ringBuffer.clear();
-          this._audioLoopActive = false;
-          return;
-        }
-
-        // Check if we're ending stream and buffer is empty
-        if (this.isEndingStream && this.ringBuffer.size === 0) {
+        if (!isWaitingForMoreData) {
           console.log(
-            `[${this.instanceId}] End stream requested and buffer empty - completing naturally`
+            `[${this.instanceId}] ⏳ Buffer empty (${consecutiveEmptyBuffers}/${MAX_CONSECUTIVE_EMPTY_BUFFERS}) - waiting for more data...`
           );
-
-          // Calculate final timing statistics
-          if (this.stats.playbackStartTime > 0 && this.stats.playbackEndTime === 0) {
-            this.stats.playbackEndTime = performance.now();
-            this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
-
-            // Calculate timing accuracy and processing overhead
-            this.stats.timingAccuracy =
-              this.stats.actualDuration > 0
-                ? (this.stats.expectedDuration / this.stats.actualDuration) * 100
-                : 0;
-            this.stats.processingOverhead = this.stats.actualDuration - this.stats.expectedDuration;
-
-            console.log(`[${this.instanceId}] Natural completion timing:`, {
-              startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
-              endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
-              actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
-              expectedDuration: this.stats.expectedDuration.toFixed(2) + "ms",
-              difference:
-                (this.stats.actualDuration - this.stats.expectedDuration).toFixed(2) + "ms",
-              accuracy: this.stats.timingAccuracy.toFixed(1) + "%",
-              processingOverhead: this.stats.processingOverhead.toFixed(2) + "ms",
-              totalBytesProcessed: this.stats.bytesProcessed,
-              totalChunks: this.stats.totalChunksReceived,
-              averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
-            });
-          }
-
-          // Emit completed event for natural stream ending
-          this.emit("completed");
-
-          // Reset the ending stream flag
-          this.isEndingStream = false;
-
-          this.ringBuffer.clear();
-          this._audioLoopActive = false;
-          return;
+          isWaitingForMoreData = true;
         }
 
-        // Buffer empty, poll again after adaptive delay
-        setTimeout(processChunk, adaptiveDelay);
+        // NEW: Only give up if we've waited too long with no data
+        if (consecutiveEmptyBuffers > MAX_CONSECUTIVE_EMPTY_BUFFERS) {
+          const timeSinceLastChunk = Date.now() - lastChunkReceived;
+          if (timeSinceLastChunk > MAX_WAIT_TIME_MS) {
+            console.log(
+              `[${this.instanceId}] ⚠️ No new data for ${timeSinceLastChunk}ms - ending audio loop`
+            );
+            this._audioLoopActive = false;
+            return;
+          }
+        }
+
+        // NEW: Continue waiting for more data with exponential backoff
+        const waitDelay = Math.min(1000, Math.pow(2, Math.min(consecutiveEmptyBuffers / 10, 6)));
+        setTimeout(processChunk, waitDelay);
       }
     };
 
+    // Start the robust processing loop
     processChunk();
+  }
+
+  /**
+   * Helper method to complete playback session with proper timing calculation
+   */
+  _completePlaybackSession() {
+    if (this.stats.playbackStartTime > 0 && this.stats.playbackEndTime === 0) {
+      this.stats.playbackEndTime = performance.now();
+      this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
+
+      console.log(`[${this.instanceId}] 🎯 Playback session completed:`, {
+        startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
+        endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
+        actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
+        expectedDuration: this.stats.expectedDuration.toFixed(2) + "ms",
+        difference: (this.stats.actualDuration - this.stats.expectedDuration).toFixed(2) + "ms",
+        totalBytesProcessed: this.stats.bytesProcessed,
+        totalChunks: this.stats.totalChunksReceived,
+      });
+    }
+
+    // Emit completed event
+    this.emit("completed");
+
+    // Reset flags
+    this.isEndingStream = false;
+    this.ringBuffer.clear();
+    this._audioLoopActive = false;
   }
 
   // Memory usage logging
@@ -1216,30 +1234,46 @@ class AudioProcessor extends EventEmitter {
 
     const elapsedTime = performance.now() - this.processStartTime;
     const expectedEndTime = this.audioDurationMs;
+    const idleSinceLastChunk =
+      this.stats.lastChunkTime > 0 ? performance.now() - this.stats.lastChunkTime : 0;
+    const IDLE_GRACE_MS = 8000; // Allow idle gaps between segments without killing the process
 
     console.log(`[${this.instanceId}] Process termination check:`, {
       elapsedTime: elapsedTime.toFixed(1) + "ms",
       expectedEndTime: expectedEndTime.toFixed(1) + "ms",
       remainingBuffer: this.ringBuffer.size + " bytes",
+      idleSinceLastChunk: idleSinceLastChunk.toFixed(1) + "ms",
+      isEndingStream: this.isEndingStream,
     });
 
-    // FIXED: Less aggressive termination logic to prevent cutting off audio during TTS generation
-    // Only terminate if we've exceeded the expected duration and buffer is empty
-    if (elapsedTime >= expectedEndTime && this.ringBuffer.size === 0) {
+    // Revised termination policy:
+    // 1) Prefer explicit end_stream signal to terminate
+    // 2) Otherwise, only terminate after a generous idle grace window with empty buffer
+    // 3) Keep legacy hard cap at 3x expected duration, but still require idle grace
+
+    const bufferEmpty = this.ringBuffer.size === 0;
+
+    if (this.isEndingStream && elapsedTime >= expectedEndTime && bufferEmpty) {
       console.log(
-        `[${this.instanceId}] Terminating process after expected duration (buffer empty)`
+        `[${this.instanceId}] Terminating after end_stream and expected duration (buffer empty)`
       );
       this.terminateProcessGracefully();
-    } else if (elapsedTime >= expectedEndTime * 3) {
-      // FIXED: Increased from 1.5x to 3x to be less aggressive
-      // This prevents premature termination during long TTS generation
+    } else if (
+      elapsedTime >= expectedEndTime * 3 &&
+      idleSinceLastChunk > IDLE_GRACE_MS &&
+      bufferEmpty
+    ) {
       console.log(
-        `[${this.instanceId}] Force terminating process (200% past expected duration - TTS generation likely complete)`
+        `[${this.instanceId}] Force terminating after prolonged idle beyond 3x expected duration`
       );
       this.terminateProcessGracefully();
+    } else if (idleSinceLastChunk <= IDLE_GRACE_MS || !bufferEmpty) {
+      console.log(
+        `[${this.instanceId}] Process should continue running (awaiting next segment or buffered audio present)`
+      );
     } else {
       console.log(
-        `[${this.instanceId}] Process should continue running (TTS generation in progress)`
+        `[${this.instanceId}] Idle grace exceeded but below 3x duration; keeping process alive until end_stream`
       );
     }
   }
@@ -1454,6 +1488,7 @@ class AudioDaemon extends EventEmitter {
     this.audioProcessor = null;
     this.clients = new Set();
     this.heartbeatInterval = null;
+    this.lastHeartbeatLog = 0;
 
     // Parse command line arguments
     this.parseArgs();
@@ -1664,7 +1699,16 @@ class AudioDaemon extends EventEmitter {
    * Handle incoming WebSocket messages
    */
   handleMessage(ws, message) {
-    console.log("Received message:", message.type);
+    // Debounce heartbeat logging to reduce spam
+    if (message.type === "heartbeat") {
+      const now = Date.now();
+      if (!this.lastHeartbeatLog || now - this.lastHeartbeatLog > 30000) {
+        console.log("Received message: heartbeat (debounced - logging every 30s)");
+        this.lastHeartbeatLog = now;
+      }
+    } else {
+      console.log("Received message:", message.type);
+    }
     switch (message.type) {
       case "start":
         this.handleStart(ws, message);

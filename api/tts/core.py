@@ -46,6 +46,8 @@ from api.tts.text_processing import (
     get_phoneme_cache_stats,
     preprocess_text_for_inference,
     segment_text as split_segments,   # avoid name shadowing with local identifiers
+    normalize_for_tts as _normalize_for_tts,
+    clean_text as _clean_text,
 )
 from api.tts.audio_variation_handler import get_variation_handler
 
@@ -135,8 +137,14 @@ def _get_cached_model(provider: str) -> Kokoro:
 
 
 def _create_inference_cache_key(text: str, voice: str, speed: float, lang: str) -> str:
-    """Create cache key for inference results."""
-    return hashlib.md5(f"{text}|{voice}|{speed:.3f}|{lang}".encode("utf-8")).hexdigest()
+    """Create cache key for inference results using normalized text.
+    This ensures identical text hits cache even when phoneme preprocessing is skipped.
+    """
+    try:
+        normalized = _clean_text(_normalize_for_tts(text))
+    except Exception:
+        normalized = text.strip()
+    return hashlib.md5(f"{normalized}|{voice}|{speed:.3f}|{lang}".encode("utf-8")).hexdigest()
 
 
 def _get_cached_inference(cache_key: str) -> Optional[Tuple[np.ndarray, str]]:
@@ -580,52 +588,66 @@ async def stream_tts_audio(
         segments_override: Optional[List[str]] = None  # holds [early, rest, ...] if we split the primer
 
         def _split_segment_for_early_ttfa(seg: str) -> Tuple[str, str]:
-            """Split first segment for faster TTFA."""
-            length = len(seg)
-            if length <= 50:
+            """Split first segment for faster TTFA with punctuation-aware guardrails.
+            Respect config to disable primer splitting entirely.
+            """
+            if not getattr(TTSConfig, "ENABLE_PRIMER_SPLIT", False):
                 return seg, ""
-            
-            split_percentage = min(0.15, max(0.10, 50.0 / length))
+
+            length = len(seg)
+            min_chars = getattr(TTSConfig, "FIRST_SEGMENT_MIN_CHARS", 120)
+            require_punct = getattr(TTSConfig, "FIRST_SEGMENT_REQUIRE_PUNCT", True)
+
+            # Do not split if below minimum threshold
+            if length <= max(80, min_chars):
+                return seg, ""
+
+            # Candidate split target around 15% with bounds
+            split_percentage = min(0.18, max(0.12, 120.0 / length))
             cut = int(length * split_percentage)
-            
-            # Find word boundary
-            for i in range(cut, min(length, cut + 50)):
-                if seg[i].isspace():
-                    cut = i
+
+            # Search for punctuation boundary first, then fallback to space
+            punct_found = False
+            for i in range(max(0, cut - 40), min(length, cut + 60)):
+                ch = seg[i]
+                if ch in ".!?;:" or (i + 1 < length and seg[i:i+2] in [". ", "! ", "? ", "; ", ": "]):
+                    cut = i + 1
+                    punct_found = True
                     break
-            
+            if not punct_found:
+                # Fallback to nearest whitespace
+                for i in range(max(0, cut - 30), min(length, cut + 50)):
+                    if seg[i].isspace():
+                        cut = i
+                        break
+
             early = seg[:cut].strip()
             rest = seg[cut:].strip()
-            
-            if not early or len(early) < 10:
+
+            # Enforce minimum and punctuation requirement if configured
+            if (len(early) < min_chars) or (require_punct and not any(p in early for p in ".!?;:")):
                 return seg, ""
-            
+
             return early, rest
 
-        # Handle primer segment for immediate TTFA
+        # Handle primer segment for immediate TTFA (optionally disabled)
         if segments:
             early, rest = _split_segment_for_early_ttfa(segments[0])
             if early and rest:
                 primer_key = _get_primer_cache_key(early, voice, speed, lang)
                 cached_primer = None if no_cache else _get_cached_primer(primer_key)
-                
+
                 if cached_primer is not None and cached_primer.size > 0:
-                    # Emit cached primer immediately
                     try:
                         scaled = np.int16(np.asarray(cached_primer, dtype=np.float32) * 32767)
                         primer_bytes = scaled.tobytes()
-                        
-                        # Yield in small chunks for immediate playback
                         yield primer_bytes[:max(1024, len(primer_bytes) // 4)]
                         if len(primer_bytes) > 2048:
                             yield primer_bytes[max(1024, len(primer_bytes) // 4):max(2048, len(primer_bytes) // 2)]
-                        
                         logger.info(f"[{request_id}] Primer emitted from cache ({len(primer_bytes)} bytes)")
-                        
                     except Exception as e:
                         logger.debug(f"[{request_id}] Primer emit failed: {e}")
                 else:
-                    # Split segment and mark first for fast processing
                     segments_override = [early, rest] + segments[1:]
                     fast_indices.add(0)
                     primer_hint_key = primer_key

@@ -266,8 +266,7 @@ export class TTSSpeechProcessor {
     this.textProcessor = dependencies.textProcessor ?? new TextProcessor(processorConfig);
     this.audioStreamer = dependencies.audioStreamer ?? new AudioStreamer(processorConfig);
     this.playbackManager = dependencies.playbackManager ?? new PlaybackManager(processorConfig);
-    this.performanceTracker =
-      dependencies.performanceTracker ?? PerformanceTracker.getInstance();
+    this.performanceTracker = dependencies.performanceTracker ?? PerformanceTracker.getInstance();
     this.retryManager = dependencies.retryManager ?? new RetryManager(processorConfig);
     this.adaptiveBufferManager =
       dependencies.adaptiveBufferManager ??
@@ -585,9 +584,10 @@ export class TTSSpeechProcessor {
 
               if (isNormalTermination) {
                 console.log(
-                  `[${this.instanceId}] Normal termination detected - marking streaming as complete`
+                  `[${this.instanceId}] Normal termination detected for segment ${segment.index + 1} - continuing to next segment`
                 );
-                streamingTerminated = true;
+                // Don't set streamingTerminated = true here - wait until ALL segments are complete
+                // streamingTerminated = true;  // REMOVED: This was causing early termination
                 afplayTerminated = true;
                 // Don't abort or fallback for normal termination
                 return;
@@ -601,7 +601,8 @@ export class TTSSpeechProcessor {
               }
             }
           } else if (this.useStreaming && streamingTerminated) {
-            // Streaming completed normally - skip remaining chunks
+            // Streaming completed normally for ALL segments - skip remaining chunks
+            // Only set streamingTerminated = true after ALL segments are processed
             return;
           } else if (this.useStreaming && streamingFailed) {
             // Streaming failed - skip remaining chunks to prevent fallback
@@ -621,31 +622,29 @@ export class TTSSpeechProcessor {
         console.log(`[${this.instanceId}] Segment ${segment.index + 1} processing complete`);
       }
 
-      console.log(`[${this.instanceId}] All segments processed, ending streaming playback`);
+      console.log(
+        `[${this.instanceId}] All segments processed - letting daemon finish playing naturally`
+      );
 
-      // PHASE 1 OPTIMIZATION: End streaming playback
+      // Mark streaming as terminated only after ALL segments are complete
+      streamingTerminated = true;
+
+      // CRITICAL FIX: Wait for daemon to signal completion before closing connection
+      // The daemon will send a "completed" event when all audio is finished playing
+      console.log(`[${this.instanceId}] Waiting for daemon to signal audio completion...`);
+
       if (streamingPlayback && streamingStarted && !streamingFailed) {
-        console.log(`[${this.instanceId}] Ending streaming playback`);
-        try {
-          await streamingPlayback.endStream();
-          console.log(`[${this.instanceId}] Streaming playback ended gracefully`);
-        } catch (endStreamError) {
-          console.error(`[${this.instanceId}] Error ending streaming playback:`, endStreamError);
-          // Check if this is a normal termination
-          const errorMessage =
-            endStreamError instanceof Error ? endStreamError.message : String(endStreamError);
-          const isNormalTermination =
-            errorMessage.includes("SIGTERM") ||
-            errorMessage.includes("normal termination") ||
-            errorMessage.includes("process ended") ||
-            errorMessage.includes("Stream ended normally despite timeout");
+        console.log(
+          `[${this.instanceId}] Streaming playback active - waiting for daemon completion signal`
+        );
 
-          if (isNormalTermination) {
-            console.log(`[${this.instanceId}] Normal termination during endStream - continuing`);
-          } else {
-            console.error(`[${this.instanceId}] Failed to end streaming playback:`, endStreamError);
-            // Don't throw for endStream errors - they're not critical
-          }
+        // Wait for the daemon to signal completion
+        try {
+          await this.waitForDaemonCompletion(streamingPlayback);
+          console.log(`[${this.instanceId}] Daemon signaled completion - audio playback finished`);
+        } catch (completionError) {
+          console.warn(`[${this.instanceId}] Error waiting for completion:`, completionError);
+          // Don't fail the entire process - just log the warning
         }
       } else if (streamingTerminated) {
         console.log(
@@ -663,9 +662,9 @@ export class TTSSpeechProcessor {
           averageChunkTime:
             totalChunksReceived > 0 ? (totalTime / totalChunksReceived).toFixed(2) + "ms" : "N/A",
         });
-            console.log(
-      ` [${this.instanceId}] All ${totalChunksReceived} chunks processed in ${totalTime}ms`
-    );
+        console.log(
+          ` [${this.instanceId}] All ${totalChunksReceived} chunks processed in ${totalTime}ms`
+        );
         this.onStatusUpdate({
           message: "Speech completed",
           style: Toast.Style.Success,
@@ -690,7 +689,8 @@ export class TTSSpeechProcessor {
       if (streamingPlayback && !streamingFailed) {
         console.log(` [${this.instanceId}]  Cleaning up streaming playback after error`);
         try {
-          await streamingPlayback.endStream();
+          // Don't call endStream() during error cleanup - let daemon handle it naturally
+          console.log(` [${this.instanceId}]  Letting daemon handle cleanup naturally`);
         } catch (cleanupError) {
           console.error(
             ` [${this.instanceId}]  Failed to clean up streaming playback:`,
@@ -715,7 +715,7 @@ export class TTSSpeechProcessor {
       const finalTime = performance.now() - startTime;
       console.log(` [${this.instanceId}]  Final session duration:`, finalTime.toFixed(2) + "ms");
 
-          this.performanceTracker.completeRequest(requestId);
+      this.performanceTracker.completeRequest(requestId);
       await this.cleanup();
       this.abortController = null;
 
@@ -806,6 +806,50 @@ export class TTSSpeechProcessor {
    */
   get paused(): boolean {
     return this.playbackManager.isPaused();
+  }
+
+  /**
+   * Wait for the daemon to signal that all audio playback is complete
+   * This prevents premature WebSocket closure and ensures all audio is played
+   */
+  private async waitForDaemonCompletion(streamingPlayback: any): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        console.warn(`[${this.instanceId}] Daemon completion timeout - forcing resolution`);
+        resolve(); // Don't reject - just resolve to continue
+      }, 300000); // 5 minute timeout for very long TTS sessions
+
+      // CRITICAL FIX: Add keep-alive mechanism to prevent Raycast extension timeout
+      const keepAliveInterval = setInterval(() => {
+        console.log(`[${this.instanceId}] Keep-alive ping - preventing Raycast extension timeout`);
+        // This prevents Raycast from timing out the extension during long TTS sessions
+      }, 30000); // Send keep-alive every 30 seconds
+
+      // Listen for the daemon's completed event
+      const onCompleted = () => {
+        clearTimeout(timeout);
+        clearInterval(keepAliveInterval);
+        console.log(`[${this.instanceId}] Daemon completed event received`);
+        resolve();
+      };
+
+      const onError = (error: Error) => {
+        clearTimeout(timeout);
+        clearInterval(keepAliveInterval);
+        console.warn(`[${this.instanceId}] Daemon completion error:`, error);
+        resolve(); // Don't reject - just resolve to continue
+      };
+
+      // Add listeners to the streaming playback
+      if (streamingPlayback && typeof streamingPlayback.on === "function") {
+        streamingPlayback.once("completed", onCompleted);
+        streamingPlayback.once("error", onError);
+      } else {
+        console.warn(`[${this.instanceId}] Streaming playback not available for completion events`);
+        clearInterval(keepAliveInterval);
+        resolve(); // Resolve immediately if no streaming playback
+      }
+    });
   }
 
   /**

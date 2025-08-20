@@ -260,11 +260,16 @@ export default function SpeakTextSimple() {
   // Cleanup processor on unmount
   useEffect(() => {
     return () => {
-      // Only stop if the processor is still actively processing
-      // Don't interrupt natural playback completion
+      // CRITICAL FIX: Don't stop processor if it's waiting for daemon completion
+      // This prevents premature WebSocket closure during long TTS sessions
       if (processorRef.current && isProcessing && !processorRef.current.paused) {
-        logger.consoleDebug("Component unmounting, stopping active TTS processor");
-        processorRef.current.stop();
+        logger.consoleDebug(
+          "Component unmounting, checking if TTS processor is waiting for completion..."
+        );
+
+        // Don't call stop() immediately - let the processor handle completion naturally
+        // The processor will clean up when the daemon signals completion
+        logger.consoleDebug("Component unmounting, letting TTS processor complete naturally");
       }
     };
   }, [isProcessing]);
@@ -286,8 +291,14 @@ export default function SpeakTextSimple() {
     logger.consoleDebug(" [SPEAK-TEXT] Starting speech processing");
 
     if (isProcessing) {
-      logger.consoleDebug(" [SPEAK-TEXT] Restarting - stopping existing processor");
-      await processorRef.current?.stop();
+      logger.consoleDebug(
+        " [SPEAK-TEXT] Restarting - checking if existing processor is waiting for completion..."
+      );
+      // Don't call stop() immediately - let the processor handle completion naturally
+      // This prevents premature WebSocket closure during long TTS sessions
+      logger.consoleDebug(
+        " [SPEAK-TEXT] Letting existing processor complete naturally before starting new one"
+      );
     }
 
     const trimmedText = text.trim();

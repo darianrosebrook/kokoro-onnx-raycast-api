@@ -1285,12 +1285,21 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Send message to daemon via WebSocket
    */
   private async sendMessage(message: DaemonMessage): Promise<void> {
-    if (!this.daemonProcess?.isConnected || !this.ws) {
-      throw new Error("Daemon not connected or WebSocket not established");
+    // Auto-reconnect if daemon is not connected
+    if (!this.daemonProcess?.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.log("WebSocket not connected, attempting to reconnect...");
+      try {
+        await this.startDaemon();
+        await this.establishWebSocketConnection();
+        // Give connection a moment to establish
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        throw new Error(`Failed to reconnect to daemon: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     }
 
-    if (this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error("WebSocket connection not open");
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error("WebSocket connection could not be established");
     }
 
     console.warn("Sending message to daemon", {
