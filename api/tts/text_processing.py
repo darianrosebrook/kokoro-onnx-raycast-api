@@ -578,6 +578,12 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
     fixed length. This is critical for CoreML optimization as it allows the Neural
     Engine to reuse compiled graphs and avoid recompilation overhead.
     
+    ## Enhanced CoreML Compatibility
+    
+    This version includes additional safeguards to prevent CoreML dynamic resizing
+    errors by ensuring more conservative sequence length handling and better
+    boundary detection for problematic text lengths.
+    
     ## Why Phoneme-Based Padding?
     
     CoreML requires tensor shape determinism at the model level, not just string level.
@@ -594,11 +600,13 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
     - **Truncation**: Smart truncation with boundary detection for long sequences
     - **Padding**: Addition of silence tokens to reach fixed length
     - **Preservation**: Maintains original phoneme sequence integrity
+    - **CoreML Safety**: Conservative length limits to prevent resizing errors
     
     ### Performance Impact
     - **Graph Reuse**: Enables CoreML graph reuse for 2-5x performance improvement
     - **Memory Efficiency**: Consistent memory allocation patterns
     - **Neural Engine Optimization**: Maximizes Apple Silicon acceleration
+    - **Error Prevention**: Reduces CoreML dynamic resizing failures
     
     Args:
         phonemes (List[str]): Input phoneme sequence to pad
@@ -621,25 +629,29 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
     if not phonemes:
         return [PHONEME_PADDING_TOKEN] * max_len
     
-    # Handle sequences longer than max_len with enhanced smart truncation
-    if len(phonemes) > max_len:
-        logger.warning(f"Truncating phoneme sequence: {len(phonemes)} → {max_len} (consider increasing DEFAULT_MAX_PHONEME_LENGTH if this occurs frequently)")
+    # CoreML safety: Use more conservative max length to prevent resizing errors
+    # CoreML has issues with very long sequences, so we cap at a safer limit
+    coreml_safe_max = min(max_len, 512)  # Conservative limit for CoreML stability
+    
+    # Handle sequences longer than safe max with enhanced smart truncation
+    if len(phonemes) > coreml_safe_max:
+        logger.warning(f"Truncating phoneme sequence for CoreML safety: {len(phonemes)} → {coreml_safe_max} (CoreML resizing error prevention)")
         
         # Try to truncate at word boundaries (space characters) for better quality
-        truncated = phonemes[:max_len]
+        truncated = phonemes[:coreml_safe_max]
         
         # Find the last space within the truncation boundary for cleaner cut
         # Extended search range to better handle longer sequences
         last_space_idx = -1
-        search_range = min(150, max_len // 3)  # Adaptive search range based on max_len
+        search_range = min(200, coreml_safe_max // 2)  # More aggressive search for better boundaries
         
-        for i in range(max_len - 1, max(0, max_len - search_range), -1):
+        for i in range(coreml_safe_max - 1, max(0, coreml_safe_max - search_range), -1):
             if i < len(phonemes) and phonemes[i] == ' ':
                 last_space_idx = i
                 break
         
         # Use word boundary truncation if found within search range
-        if last_space_idx > max_len - search_range:
+        if last_space_idx > coreml_safe_max - search_range:
             truncated = phonemes[:last_space_idx]
             # Pad to exact length
             truncated += [PHONEME_PADDING_TOKEN] * (max_len - len(truncated))
@@ -647,16 +659,18 @@ def pad_phoneme_sequence(phonemes: List[str], max_len: int = DEFAULT_MAX_PHONEME
         else:
             # If no word boundary found, try to find a better break point
             # Look for sentence endings or punctuation
-            for i in range(max_len - 1, max(0, max_len - 100), -1):
+            for i in range(coreml_safe_max - 1, max(0, coreml_safe_max - 150), -1):
                 if i < len(phonemes) and phonemes[i] in ['.', '!', '?', ';', ':']:
                     truncated = phonemes[:i + 1]
                     truncated += [PHONEME_PADDING_TOKEN] * (max_len - len(truncated))
                     logger.debug(f"Truncated at sentence boundary: position {i} (preserved {len(truncated)} phonemes)")
                     break
             else:
-                # Force truncation at max_len if no good break point found
-                logger.warning(f"Could not find optimal break point for clean truncation, forced cut at {max_len}")
-                truncated = phonemes[:max_len]
+                # Force truncation at safe max if no good break point found
+                logger.warning(f"Could not find optimal break point for clean truncation, forced cut at {coreml_safe_max}")
+                truncated = phonemes[:coreml_safe_max]
+                # Pad to exact length
+                truncated += [PHONEME_PADDING_TOKEN] * (max_len - len(truncated))
         
         return truncated
     

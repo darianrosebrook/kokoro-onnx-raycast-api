@@ -226,8 +226,61 @@ class DualSessionManager:
                 return samples, metadata
                 
             except Exception as e:
-                self.logger.error(f"Error processing segment with dual session manager: {e}")
-                # Try to fallback to CPU session
+                error_msg = str(e)
+                self.logger.error(f"Error processing segment with dual session manager: {error_msg}")
+                
+                # Enhanced error handling with CoreML-specific fallback strategies
+                try:
+                    from api.model.providers.coreml import handle_coreml_execution_error
+                    error_analysis = handle_coreml_execution_error(error_msg, len(text))
+                    
+                    if error_analysis.get('fallback_provider') == 'CPUExecutionProvider':
+                        # Track CoreML error for this session type to avoid retrying soon
+                        if not hasattr(self, '_recent_coreml_errors'):
+                            self._recent_coreml_errors = {}
+                        self._recent_coreml_errors[session_type] = time.time()
+                        
+                        self.logger.info(f"🔄 Switching to CPU fallback due to: {error_analysis.get('reason')}")
+                        cpu_session = self._get_session('cpu')
+                        if cpu_session:
+                            with self.session_locks['cpu']:
+                                result = cpu_session.create(text, voice, speed, lang)
+                                if isinstance(result, tuple) and len(result) >= 2:
+                                    samples = result[0]
+                                else:
+                                    samples = result
+                            return samples, {
+                                'session_type': 'cpu_fallback', 
+                                'error': str(e),
+                                'fallback_reason': error_analysis.get('reason'),
+                                'coreml_disabled': error_analysis.get('coreml_disabled', False)
+                            }
+                    
+                    elif error_analysis.get('cleanup_performed'):
+                        # Retry with CoreML after cleanup
+                        self.logger.info("🔄 Retrying with CoreML after cleanup...")
+                        try:
+                            result = session.create(text, voice, speed, lang)
+                            if isinstance(result, tuple) and len(result) >= 2:
+                                samples = result[0]
+                                model_metadata = result[1] if len(result) > 1 else {}
+                            else:
+                                samples = result
+                                model_metadata = {}
+                            return samples, {
+                                'session_type': session_type,
+                                'retry_after_cleanup': True,
+                                'cleanup_reason': error_analysis.get('reason')
+                            }
+                        except Exception as retry_error:
+                            self.logger.warning(f"CoreML retry after cleanup failed: {retry_error}")
+                            # Fall through to CPU fallback
+                    
+                except ImportError:
+                    # Fallback if CoreML error handling not available
+                    pass
+                
+                # Standard CPU fallback
                 try:
                     cpu_session = self._get_session('cpu')
                     if cpu_session:
@@ -251,6 +304,8 @@ class DualSessionManager:
         """
         Determine the optimal session type based on text complexity and availability.
         
+        Enhanced with CoreML error history tracking to avoid problematic sessions.
+        
         @param text: Text to analyze
         @returns: Session type ('ane', 'gpu', or 'cpu')
         """
@@ -270,6 +325,21 @@ class DualSessionManager:
             self.session_locks['gpu'].release()  
         if cpu_available:
             self.session_locks['cpu'].release()
+        
+        # Check for recent CoreML errors to avoid problematic sessions
+        recent_errors = getattr(self, '_recent_coreml_errors', {})
+        current_time = time.time()
+        
+        # Clean old error records (older than 5 minutes)
+        for session_type in list(recent_errors.keys()):
+            if current_time - recent_errors[session_type] > 300:  # 5 minutes
+                del recent_errors[session_type]
+        
+        # Skip sessions that have had recent CoreML errors
+        if recent_errors.get('ane', 0) > current_time - 60:  # Skip ANE if error in last minute
+            ane_available = False
+        if recent_errors.get('gpu', 0) > current_time - 60:  # Skip GPU if error in last minute
+            gpu_available = False
         
         # Decision logic based on complexity and availability
         if text_length > 200 or word_count > 30:

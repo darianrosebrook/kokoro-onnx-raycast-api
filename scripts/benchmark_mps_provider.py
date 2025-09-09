@@ -32,13 +32,27 @@ def get_model_size_mb(path: str) -> float:
     except Exception:
         return 0.0
 
-def benchmark_model_mps(model_path: str, runs: int = 5) -> Dict[str, Any]:
-    """Benchmark a model with MPS provider"""
-    logger.info(f"Benchmarking {os.path.basename(model_path)} with MPS provider...")
+def benchmark_model_mps(model_path: str, runs: int = 5, providers_order: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Benchmark a model with a specific provider order (MPS/CoreML/CPU)."""
+    pretty_order = ",".join(providers_order) if providers_order else "MPS,CoreML,CPU"
+    logger.info(f"Benchmarking {os.path.basename(model_path)} with providers: {pretty_order} ...")
     
     try:
-        # Try MPS provider first, fallback to CoreML
-        providers = ["MPSExecutionProvider", "CoreMLExecutionProvider", "CPUExecutionProvider"]
+        # Build providers preference
+        if providers_order is None:
+            providers = ["MPSExecutionProvider", "CoreMLExecutionProvider", "CPUExecutionProvider"]
+        else:
+            # Map shorthand to ORT provider names
+            mapping = {
+                "mps": "MPSExecutionProvider",
+                "coreml": "CoreMLExecutionProvider",
+                "cpu": "CPUExecutionProvider",
+                # Allow direct ORT names too
+                "MPSExecutionProvider": "MPSExecutionProvider",
+                "CoreMLExecutionProvider": "CoreMLExecutionProvider",
+                "CPUExecutionProvider": "CPUExecutionProvider",
+            }
+            providers = [mapping.get(p.lower(), p) for p in providers_order]
         session = ort.InferenceSession(model_path, providers=providers)
         
         # Get actual provider being used
@@ -88,9 +102,9 @@ def benchmark_model_mps(model_path: str, runs: int = 5) -> Dict[str, Any]:
             'error': str(e)
         }
 
-def compare_models_mps(model_paths: List[str], runs: int = 5) -> Dict[str, Any]:
-    """Compare multiple models with MPS provider"""
-    logger.info("Comparing models with MPS provider...")
+def compare_models_mps(model_paths: List[str], runs: int = 5, providers_order: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Compare multiple models with a given provider order."""
+    logger.info("Comparing models with provider order: %s", ",".join(providers_order) if providers_order else "MPS,CoreML,CPU")
     
     results = {}
     
@@ -102,7 +116,7 @@ def compare_models_mps(model_paths: List[str], runs: int = 5) -> Dict[str, Any]:
         model_name = os.path.basename(model_path)
         size_mb = get_model_size_mb(model_path)
         
-        bench_results = benchmark_model_mps(model_path, runs)
+        bench_results = benchmark_model_mps(model_path, runs, providers_order)
         bench_results['size_mb'] = size_mb
         
         results[model_name] = bench_results
@@ -195,16 +209,37 @@ def generate_report(results: Dict[str, Any], output_file: Optional[str] = None) 
     return report_text
 
 def main():
-    parser = argparse.ArgumentParser(description="MPS Provider Benchmark for Kokoro TTS Models")
+    parser = argparse.ArgumentParser(description="Provider Benchmark for Kokoro TTS Models (MPS/CoreML/CPU)")
     parser.add_argument("--models", nargs="+", required=True, help="Model paths to benchmark")
     parser.add_argument("--runs", type=int, default=5, help="Number of benchmark runs")
     parser.add_argument("--output", help="Output file for report")
     parser.add_argument("--json", help="Output JSON results file")
+    parser.add_argument(
+        "--provider",
+        choices=["cpu", "coreml", "mps"],
+        help="Force a specific provider (CPU/CoreML/MPS). Overrides --providers if set.",
+    )
+    parser.add_argument(
+        "--providers",
+        help="Comma-separated provider order (e.g., 'MPSExecutionProvider,CoreMLExecutionProvider,CPUExecutionProvider')",
+    )
     
     args = parser.parse_args()
     
+    # Resolve providers order
+    providers_order: Optional[List[str]] = None
+    if args.provider:
+        if args.provider == "cpu":
+            providers_order = ["CPUExecutionProvider"]
+        elif args.provider == "coreml":
+            providers_order = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
+        elif args.provider == "mps":
+            providers_order = ["MPSExecutionProvider", "CPUExecutionProvider"]
+    elif args.providers:
+        providers_order = [p.strip() for p in args.providers.split(",") if p.strip()]
+
     # Benchmark all models
-    results = compare_models_mps(args.models, args.runs)
+    results = compare_models_mps(args.models, args.runs, providers_order)
     
     # Generate report
     report = generate_report(results, args.output)

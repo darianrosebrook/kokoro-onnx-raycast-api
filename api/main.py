@@ -216,7 +216,6 @@ from api.model.loader import (
 from api.performance.startup_profiler import get_timings as get_startup_timings
 from api.performance.stats import get_performance_stats
 from api.tts.core import _generate_audio_segment, stream_tts_audio, get_tts_processing_stats
-# from api.tts.core_merged import stream_tts_audio as stream_tts_audio_merged  # Temporarily disabled for testing
 from api.tts.core import get_primer_microcache_stats
 from api.utils.cache_cleanup import cleanup_cache, get_cache_info
 from api.tts.text_processing import segment_text
