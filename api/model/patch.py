@@ -263,7 +263,7 @@ def apply_all_patches():
         logger.debug(" Patches already applied, skipping...")
         return
     
-    logger.info(" Applying production patches to kokoro-onnx library...")
+    logger.debug(" Applying production patches to kokoro-onnx library...")
     start_time = time.perf_counter()
     
     try:
@@ -710,8 +710,5 @@ def get_patch_status() -> Dict[str, Any]:
         }
     }
 
-# Auto-apply patches when module is imported
-# This ensures patches are active as soon as the module is imported
-logger.debug(" Auto-applying patches on module import...")
-apply_all_patches()
-logger.debug("✅ All patches applied automatically on import") 
+# Note: Patches are applied explicitly during application startup to avoid
+# duplicate application and to keep log ordering clean.

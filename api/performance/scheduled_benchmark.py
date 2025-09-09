@@ -152,6 +152,14 @@ async def run_scheduled_benchmark() -> Dict[str, Any]:
         _last_benchmark_run = datetime.now()
         _benchmark_results_file = results_file
         
+        # After successful benchmark, refresh model cache on the same cadence
+        try:
+            from api.tts.core import refresh_model_cache_now
+            refresh_model_cache_now(non_blocking=True)
+            logger.info("Triggered model cache refresh after benchmark completion")
+        except Exception as e:
+            logger.debug(f"Could not trigger model cache refresh: {e}")
+        
         logger.info(f"Scheduled benchmark completed successfully in {benchmark_results['duration_seconds']:.2f}s")
         return benchmark_results
         
@@ -178,7 +186,7 @@ async def benchmark_scheduler_loop():
     """
     Main scheduler loop that periodically checks if benchmarks should run.
     """
-    logger.info("Starting benchmark scheduler...")
+    logger.debug("Starting benchmark scheduler...")
     
     while True:
         try:
@@ -209,7 +217,7 @@ def start_benchmark_scheduler() -> asyncio.Task:
         return _benchmark_scheduler_task
     
     _benchmark_scheduler_task = asyncio.create_task(benchmark_scheduler_loop())
-    logger.info("Benchmark scheduler started")
+    logger.debug("Benchmark scheduler started")
     return _benchmark_scheduler_task
 
 def stop_benchmark_scheduler():

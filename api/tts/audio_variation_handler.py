@@ -125,7 +125,11 @@ class AudioVariationHandler:
                 else:
                     self.stats['avg_variation_pct'] = variation_pct
         
-        logger.info(f"Audio variation analysis: {result}")
+        # Reduce log noise: only log inconsistencies at INFO, full result at DEBUG
+        if not result.get('is_consistent', True):
+            logger.info(f"🎯 Audio size variation detected: {result}")
+        else:
+            logger.debug(f"Audio variation analysis: {result}")
         return result
     
     def normalize_audio_for_streaming(self, audio_data: np.ndarray, target_size: Optional[int] = None) -> np.ndarray:

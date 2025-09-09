@@ -547,15 +547,53 @@ def update_endpoint_performance_stats(endpoint: str, processing_time: float, suc
             except Exception as e:
                 logger.debug(f"Could not update runtime stats in report: {e}")
         
-        # Log warnings for target misses
+        # Log warnings for target misses and check for severe performance degradation
+        severe_degradation = False
+        
         if ttfa_ms > coreml_performance_stats['ttfa_target']:
             logger.warning(f"TTFA target missed: {ttfa_ms:.1f}ms > {coreml_performance_stats['ttfa_target']}ms")
+            # Check for severe TTFA degradation (>15x target, was 10x)
+            if ttfa_ms > coreml_performance_stats['ttfa_target'] * 15:
+                severe_degradation = True
+                logger.error(f"SEVERE TTFA degradation detected: {ttfa_ms:.1f}ms is {ttfa_ms/coreml_performance_stats['ttfa_target']:.1f}x the target")
         
         if rtf > coreml_performance_stats['rtf_target']:
             logger.warning(f"RTF target missed: {rtf:.3f} > {coreml_performance_stats['rtf_target']}")
+            # Check for severe RTF degradation (>3x target, was 2x)
+            if rtf > coreml_performance_stats['rtf_target'] * 3:
+                severe_degradation = True
+                logger.error(f"SEVERE RTF degradation detected: {rtf:.3f} is {rtf/coreml_performance_stats['rtf_target']:.1f}x the target")
         
         if streaming_efficiency < coreml_performance_stats['efficiency_target']:
             logger.warning(f"Streaming efficiency target missed: {streaming_efficiency*100:.1f}% < {coreml_performance_stats['efficiency_target']*100:.0f}%")
+        
+        # Trigger emergency cleanup if severe degradation is detected (with cooldown)
+        if severe_degradation:
+            # Check cooldown period to prevent too frequent emergency cleanups
+            import time
+            current_time = time.time()
+            cooldown_period = 300  # 5 minutes
+            
+            # Initialize last cleanup time if not exists
+            if not hasattr(update_endpoint_performance_stats, '_last_emergency_cleanup'):
+                update_endpoint_performance_stats._last_emergency_cleanup = 0
+            
+            time_since_last_cleanup = current_time - update_endpoint_performance_stats._last_emergency_cleanup
+            
+            if time_since_last_cleanup >= cooldown_period:
+                logger.error("Severe performance degradation detected - triggering emergency session cleanup")
+                try:
+                    from api.model.sessions.dual_session import get_dual_session_manager
+                    dual_session_manager = get_dual_session_manager()
+                    if dual_session_manager:
+                        dual_session_manager.cleanup_sessions()
+                        update_endpoint_performance_stats._last_emergency_cleanup = current_time
+                        logger.info("Emergency session cleanup completed")
+                except Exception as cleanup_error:
+                    logger.error(f"Emergency cleanup failed: {cleanup_error}")
+            else:
+                remaining_cooldown = cooldown_period - time_since_last_cleanup
+                logger.warning(f"Emergency cleanup on cooldown - {remaining_cooldown:.0f}s remaining")
         
     except Exception as e:
         logger.error(f"Error updating performance stats: {e}")

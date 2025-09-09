@@ -597,13 +597,16 @@ def validate_patch_status():
         raise RuntimeError(f"Patch validation failed: {e}")
 
 
-# Setup comprehensive logging
+# Setup comprehensive logging FIRST - before any other initialization
 setup_application_logging()
 logger = logging.getLogger(__name__)
 
+# Log the start of application initialization immediately
+logger.info("🚀 Application initialization starting...")
+
 # Initialize warning handlers for various noise sources
 # This must be called before any ONNX Runtime operations
-logger.debug("Initializing warning management systems...")
+logger.info(" Initializing warning management systems...")
 configure_onnx_runtime_logging()
 setup_coreml_warning_handler()
 suppress_phonemizer_warnings()
@@ -621,10 +624,7 @@ except Exception as e:
 # Note: Stderr interceptor is already activated at module import time in warnings.py
 # This ensures early warning suppression before any ONNX Runtime operations
 
-# Apply monkey patches for eSpeak integration and Kokoro model fixes
-# These patches fix known issues with the upstream kokoro-onnx library
-logger.debug("Applying production patches to kokoro-onnx library...")
-apply_all_patches()
+# Apply monkey patches moved into lifespan startup sequence (Step 1)
 
 # Global variables for application state
 kokoro_model: Optional[object] = None
@@ -693,30 +693,33 @@ def update_startup_progress(progress: int, message: str, status: str = "initiali
         "message": message,
         "started_at": startup_progress.get("started_at") or time.time()
     })
-    # Use print for immediate console output only
-    print(f"Startup Progress ({progress}%): {message}", flush=True)
+    # Log progress for immediate feedback
+    logger.info(f"Startup Progress ({progress}%): {message}")
 
 
 async def initialize_model():
-    """Initialize the model with progress tracking"""
+    """Initialize the model with coordinated progress tracking"""
     global kokoro_model, model_initialization_complete, model_initialization_started
 
     if model_initialization_started:
+        logger.info("ℹ️ Model initialization already started, waiting for completion...")
+        # Wait for existing initialization to complete
+        while not model_initialization_complete:
+            await asyncio.sleep(0.5)
         return
 
     model_initialization_started = True
     startup_progress["started_at"] = time.time()
 
     try:
-        update_startup_progress(5, "Setting up warning management...")
-        # Note: Warning handler already setup at module level, skipping duplicate call
-
+        logger.info("🔧 Preparing model initialization environment...")
+        
         # Set TMPDIR to local cache to avoid CoreML permission issues
         local_cache_dir = os.path.abspath(".cache")
         os.environ['TMPDIR'] = local_cache_dir
         logger.debug(f"Set TMPDIR to local cache: {local_cache_dir}")
 
-        update_startup_progress(8, "Cleaning up cache files...")
+        update_startup_progress(10, "Cleaning up cache files...")
         try:
             cache_info = get_cache_info()
             if cache_info.get('needs_cleanup', False):
@@ -813,11 +816,8 @@ async def initialize_model():
         except Exception as e:
             logger.warning(f"⚠️ Could not setup CoreML temp directory: {e}")
 
-        update_startup_progress(10, "Applying production patches...")
-        apply_all_patches()
-
-        update_startup_progress(
-            15, "Initializing model with hardware acceleration...")
+        update_startup_progress(30, "Initializing model with hardware acceleration...")
+        logger.info("🚀 Starting model initialization with hardware acceleration...")
 
         start_time = time.time()
 
@@ -826,39 +826,31 @@ async def initialize_model():
             try:
                 initialize_model_sync()
             except Exception as e:
-                logger.error(
-                    f" Synchronous model initialization failed: {e}", exc_info=True)
+                logger.error(f"Synchronous model initialization failed: {e}", exc_info=True)
 
         try:
-            # Show progress and handle timeouts
-            update_startup_progress(
-                30, "Initializing model (this may take a moment)...", "initializing")
-            # Timeout handling can be added here if needed
-
+            update_startup_progress(50, "Loading model and optimizing for hardware...", "initializing")
+            
             # Use a thread for the synchronous model initialization
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, track_model_init)
 
+            update_startup_progress(90, "Finalizing model setup...")
+            
             # Final progress update
             if get_model_status():
                 model_initialization_complete = True  # Set global flag
-                update_startup_progress(
-                    100, "Model initialization complete!", "online")
-                logger.info(
-                    f"✅ Model initialization completed in {time.time() - start_time:.2f}s")
-                logger.info(
-                    "✅ Ready to start processing text to speech requests")
+                update_startup_progress(100, "Model initialization complete!", "online")
+                logger.info(f"✅ Model initialization completed successfully in {time.time() - start_time:.2f}s")
+                logger.info("✅ TTS model is ready to process requests")
             else:
                 model_initialization_complete = False  # Ensure flag is set
-                update_startup_progress(
-                    100, "Model initialization failed.", "error")
-                logger.error(" Model initialization failed.")
+                update_startup_progress(100, "Model initialization failed.", "error")
+                logger.error("❌ Model initialization failed - model not available")
 
         except Exception as e:
-            logger.error(
-                f"Asynchronous model initialization failed: {e}", exc_info=True)
-            update_startup_progress(
-                100, f"Initialization failed: {e}", "error")
+            logger.error(f"Model initialization failed: {e}", exc_info=True)
+            update_startup_progress(100, f"Initialization failed: {e}", "error")
 
     except Exception as e:
         logger.error(f" Model initialization failed: {e}", exc_info=True)
@@ -973,38 +965,51 @@ async def delayed_cold_start_warmup():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Application lifespan management with progress tracking
+    Application lifespan management with coordinated startup sequence
     """
-    # Startup
-    # Logging is already configured in setup_application_logging()
-
-    # Start model initialization in background
-    asyncio.create_task(initialize_model())
-
-    # Perform startup tasks after model initialization starts
+    # Startup sequence - execute in logical order for better log flow
+    logger.info("📋 Starting application startup sequence...")
+    
+    # Step 1: Validate environment and dependencies first
+    logger.info("🔍 Step 1/4: Validating environment and dependencies...")
     validate_dependencies()
     validate_model_files()
     validate_environment()
+    # Apply production patches once during startup, before validation of patch status
+    logger.info(" Applying production patches...")
+    apply_all_patches()
     validate_patch_status()
 
-    # Note: Pipeline warm-up is handled automatically by the heavy components initialization
-    # in fast_init.py to avoid duplicate initialization. No additional trigger needed here.
+    # Step 2: Initialize model (blocks until model is ready)
+    logger.info("🤖 Step 2/4: Initializing TTS model...")
+    await initialize_model()
 
-    # Perform cold-start warm-up inference (delayed to wait for model)
-    asyncio.create_task(delayed_cold_start_warmup())
-
-    # Start scheduled benchmark scheduler
+    # Step 3: Start background services after model is ready
+    logger.info("Step 3/4: Starting background services...")
+    
+    # Start scheduled benchmark scheduler (only if not already started by fast_init)
     try:
         from api.performance.scheduled_benchmark import start_benchmark_scheduler
-        start_benchmark_scheduler()
-        logger.info("Scheduled benchmark scheduler started")
+        # Check if scheduler is already running to avoid duplication
+        from api.performance.scheduled_benchmark import _benchmark_scheduler_task
+        if not _benchmark_scheduler_task or _benchmark_scheduler_task.done():
+            start_benchmark_scheduler()
+            logger.info("✅ Scheduled benchmark scheduler started")
+        else:
+            logger.info("ℹ️ Scheduled benchmark scheduler already running")
     except Exception as e:
         logger.warning(f"Could not start benchmark scheduler: {e}")
+
+    # Step 4: Start warm-up processes
+    logger.info("🔥 Step 4/4: Starting warm-up processes...")
+    asyncio.create_task(delayed_cold_start_warmup())
+    
+    logger.info("✅ Application startup sequence completed successfully")
 
     yield
 
     # Shutdown
-    logger.info(" Application shutting down")
+    logger.info("🛑 Application shutting down...")
 
 # Determine if running in production
 is_production = os.environ.get("KOKORO_PRODUCTION", "false").lower() == "true"
@@ -2472,7 +2477,7 @@ async def create_speech(request: Request, tts_request: TTSRequest, config: TTSCo
         # Process all segments in parallel for better performance
         all_audio_np = []
         for i, seg in enumerate(segments):
-            _, audio_np, _ = _generate_audio_segment(
+            _, audio_np, _, _ = _generate_audio_segment(
                 i, seg, tts_request.voice, tts_request.speed, normalized_lang
             )
             if audio_np is not None and audio_np.size > 0:

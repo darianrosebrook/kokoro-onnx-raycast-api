@@ -1110,12 +1110,12 @@ def segment_text(text: str, max_len: int) -> List[str]:
     if not cleaned: 
         return []
     
-    # Log detailed text processing for debugging non-deterministic behavior
-    logger.info(f"TEXT_PROCESSING: original_len={len(text)}, normalized_len={len(normalized_text)}, cleaned_len={len(cleaned)}")
-    logger.info(f"TEXT_ORIGINAL: '{text[:100]}...'")
-    logger.info(f"TEXT_NORMALIZED: '{normalized_text[:100]}...'")
-    logger.info(f"TEXT_CLEANED: '{cleaned[:100]}...'")
-    logger.info(f"SEGMENTATION: text_len={len(cleaned)}, max_len={max_len}, boundary={max_len}")
+    # Detailed text processing logs (demoted to DEBUG to reduce noise)
+    logger.debug(f"TEXT_PROCESSING: original_len={len(text)}, normalized_len={len(normalized_text)}, cleaned_len={len(cleaned)}")
+    logger.debug(f"TEXT_ORIGINAL: '{text[:100]}...'")
+    logger.debug(f"TEXT_NORMALIZED: '{normalized_text[:100]}...'")
+    logger.debug(f"TEXT_CLEANED: '{cleaned[:100]}...'")
+    logger.debug(f"SEGMENTATION: text_len={len(cleaned)}, max_len={max_len}, boundary={max_len}")
     
     # Store the boundary check for consistent logging
     within_single_segment_limit = len(cleaned) <= max_len
@@ -1124,16 +1124,16 @@ def segment_text(text: str, max_len: int) -> List[str]:
     # PHASE 1 OPTIMIZATION: Keep short texts as single segments for better TTFA
     # This reduces unnecessary segmentation overhead and improves processing speed
     if within_single_segment_limit:
-        logger.info(f"SEGMENTATION RESULT: Single segment (text ≤ max_len: {len(cleaned)} ≤ {max_len})")
+        logger.debug(f"SEGMENTATION RESULT: Single segment (text ≤ max_len: {len(cleaned)} ≤ {max_len})")
         return [cleaned] if cleaned.strip() else []
     
     # PHASE 1 OPTIMIZATION: For moderately long texts, apply strict deterministic rules
     # This ensures consistent segmentation behavior across identical requests
     if within_moderate_text_limit:
         # Text exceeds max_len but is under 1000 chars - must segment
-        logger.info(f"SEGMENTATION RESULT: Multiple segments required (text > max_len: {len(cleaned)} > {max_len})")
+        logger.debug(f"SEGMENTATION RESULT: Multiple segments required (text > max_len: {len(cleaned)} > {max_len})")
     else:
-        logger.info(f"SEGMENTATION RESULT: Long text segmentation (text > 1000: {len(cleaned)} chars)")
+        logger.debug(f"SEGMENTATION RESULT: Long text segmentation (text > 1000: {len(cleaned)} chars)")
     
     # For longer texts, proceed with intelligent segmentation
     logger.debug(f"Segmenting long text ({len(cleaned)} chars) into multiple segments")

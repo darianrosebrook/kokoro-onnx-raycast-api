@@ -540,12 +540,16 @@ def benchmark_mlcompute_units_if_needed(capabilities: Dict[str, Any]) -> str:
     return optimal_config
 
 
-def cleanup_coreml_contexts():
+def cleanup_coreml_contexts(aggressive: bool = False):
     """
     Clean up CoreML contexts and temporary files to address "Context leak detected" errors.
     
-    This function performs aggressive cleanup of CoreML-related resources to prevent
+    This function performs cleanup of CoreML-related resources to prevent
     the "msgtracer returned -1" context leak errors that cause TTS model corruption.
+    
+    Args:
+        aggressive (bool): If True, performs more thorough cleanup including
+                          system-wide CoreML caches and multiple GC passes.
     """
     logger = logging.getLogger(__name__)
     logger.debug("Starting CoreML context cleanup...")
@@ -570,36 +574,59 @@ def cleanup_coreml_contexts():
             except Exception as e:
                 logger.warning(f"Failed to clean CoreML temp directory {coreml_temp_dir}: {e}")
         
-        # Step 2: Clear system-wide CoreML cache directories
-        system_cache_patterns = [
-            '/tmp/coreml_*',
-            '/tmp/com.apple.CoreML.*',
-            '/var/folders/*/T/coreml_*',
-            os.path.expanduser('~/Library/Caches/com.apple.CoreML.*')
-        ]
+        # Step 2: Clear system-wide CoreML cache directories (only in aggressive mode)
+        if aggressive:
+            system_cache_patterns = [
+                '/tmp/coreml_*',
+                '/tmp/com.apple.CoreML.*',
+                '/var/folders/*/T/coreml_*',
+                os.path.expanduser('~/Library/Caches/com.apple.CoreML.*')
+            ]
+            
+            for pattern in system_cache_patterns:
+                try:
+                    cache_dirs = glob.glob(pattern)
+                    for cache_dir in cache_dirs:
+                        if os.path.exists(cache_dir):
+                            if os.path.isfile(cache_dir):
+                                os.unlink(cache_dir)
+                            else:
+                                shutil.rmtree(cache_dir)
+                            temp_dirs_cleaned += 1
+                            logger.debug(f"Cleaned CoreML cache: {cache_dir}")
+                except Exception as e:
+                    logger.debug(f"Could not clean cache pattern {pattern}: {e}")
+        else:
+            logger.debug("Skipping system-wide cache cleanup (not in aggressive mode)")
         
-        for pattern in system_cache_patterns:
-            try:
-                cache_dirs = glob.glob(pattern)
-                for cache_dir in cache_dirs:
-                    if os.path.exists(cache_dir):
-                        if os.path.isfile(cache_dir):
-                            os.unlink(cache_dir)
-                        else:
-                            shutil.rmtree(cache_dir)
-                        temp_dirs_cleaned += 1
-                        logger.debug(f"Cleaned CoreML cache: {cache_dir}")
-            except Exception as e:
-                logger.debug(f"Could not clean cache pattern {pattern}: {e}")
-        
-        # Step 3: Force Objective-C autorelease pool drain (if available)
+        # Step 3: Enhanced Objective-C autorelease pool management
         try:
             import objc
-            # Drain the current autorelease pool to release CoreML objects
-            objc.recycleAutoreleasePool()
-            logger.debug("Drained Objective-C autorelease pool")
+            # Multiple autorelease pool drains to ensure cleanup
+            for i in range(3):
+                objc.recycleAutoreleasePool()
+            logger.debug("Drained Objective-C autorelease pool (3 passes)")
+            
+            # Try to force CoreML framework cleanup if available
+            try:
+                import CoreML
+                # Force any pending CoreML operations to complete
+                logger.debug("CoreML framework available for enhanced cleanup")
+            except ImportError:
+                logger.debug("CoreML framework not directly accessible")
+                
         except ImportError:
             logger.debug("objc module not available - skipping autorelease pool drain")
+            # Fallback: try alternative cleanup methods
+            try:
+                import gc
+                # Force collection of native objects
+                for i in range(2):
+                    collected = gc.collect()
+                    if collected > 0:
+                        logger.debug(f"Fallback GC pass {i+1}: collected {collected} objects")
+            except Exception as fallback_error:
+                logger.debug(f"Fallback cleanup failed: {fallback_error}")
         except Exception as e:
             logger.debug(f"Failed to drain autorelease pool: {e}")
         
@@ -608,8 +635,10 @@ def cleanup_coreml_contexts():
             import gc
             
             # Multiple collection passes to ensure cleanup of cyclic references
+            # Use more passes in aggressive mode
+            passes = 5 if aggressive else 2
             total_collected = 0
-            for i in range(3):
+            for i in range(passes):
                 collected = gc.collect()
                 total_collected += collected
                 if collected > 0:
@@ -625,4 +654,57 @@ def cleanup_coreml_contexts():
         
     except Exception as e:
         logger.error(f"CoreML context cleanup failed: {e}")
+        # Don't raise - this is a best-effort cleanup
+
+
+def startup_context_leak_mitigation():
+    """
+    Specialized context leak mitigation for startup/session initialization.
+    
+    This function is designed to be called before and after ONNX Runtime session
+    creation to minimize context leaks during CoreML provider initialization.
+    """
+    logger = logging.getLogger(__name__)
+    logger.debug("Starting startup context leak mitigation...")
+    
+    try:
+        # Step 1: Aggressive autorelease pool management
+        try:
+            import objc
+            # Multiple aggressive autorelease pool drains
+            for i in range(5):
+                objc.recycleAutoreleasePool()
+            logger.debug("Aggressive autorelease pool drain completed (5 passes)")
+        except ImportError:
+            logger.debug("objc module not available for startup mitigation")
+        except Exception as e:
+            logger.debug(f"Autorelease pool drain failed: {e}")
+        
+        # Step 2: Force garbage collection with focus on native objects
+        try:
+            import gc
+            # Multiple aggressive GC passes
+            total_collected = 0
+            for i in range(3):
+                collected = gc.collect()
+                total_collected += collected
+                if collected > 0:
+                    logger.debug(f"Startup GC pass {i+1}: collected {collected} objects")
+            
+            if total_collected > 0:
+                logger.debug(f"Startup mitigation collected {total_collected} objects")
+        except Exception as e:
+            logger.debug(f"Startup garbage collection failed: {e}")
+        
+        # Step 3: Brief pause to allow system cleanup
+        try:
+            import time
+            time.sleep(0.05)  # 50ms pause
+        except Exception:
+            pass
+            
+        logger.debug("Startup context leak mitigation completed")
+        
+    except Exception as e:
+        logger.debug(f"Startup context leak mitigation failed: {e}")
         # Don't raise - this is a best-effort cleanup

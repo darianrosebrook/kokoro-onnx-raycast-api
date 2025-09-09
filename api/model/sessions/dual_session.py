@@ -58,8 +58,8 @@ class MemoryFragmentationWatchdog:
     
     def __init__(self):
         self.last_cleanup_time = time.time()
-        self.cleanup_interval = 3600.0  # 1 hour
-        self.memory_pressure_threshold = 0.85  # 85% memory usage
+        self.cleanup_interval = 14400.0  # 4 hours (was 1 hour)
+        self.memory_pressure_threshold = 0.95  # 95% memory usage (was 85%)
         self.logger = logging.getLogger(__name__ + ".MemoryFragmentationWatchdog")
     
     def check_memory_pressure(self) -> bool:
@@ -77,8 +77,20 @@ class MemoryFragmentationWatchdog:
     def should_cleanup(self) -> bool:
         """Determine if cleanup should be performed."""
         time_since_cleanup = time.time() - self.last_cleanup_time
-        return (time_since_cleanup > self.cleanup_interval or 
-                self.check_memory_pressure())
+        memory_pressure = self.check_memory_pressure()
+        
+        # Log cleanup decision for debugging
+        if time_since_cleanup > self.cleanup_interval:
+            self.logger.info(f"Cleanup triggered by time interval: {time_since_cleanup/3600:.1f}h > {self.cleanup_interval/3600:.1f}h")
+        elif memory_pressure:
+            try:
+                import psutil
+                mem = psutil.virtual_memory()
+                self.logger.info(f"Cleanup triggered by memory pressure: {mem.percent:.1f}% > {self.memory_pressure_threshold*100:.1f}%")
+            except:
+                self.logger.info("Cleanup triggered by memory pressure (details unavailable)")
+        
+        return (time_since_cleanup > self.cleanup_interval or memory_pressure)
     
     def cleanup_if_needed(self):
         """Perform cleanup if needed."""
@@ -91,7 +103,14 @@ class MemoryFragmentationWatchdog:
             # Get dual session manager if available
             dual_session_manager = get_dual_session_manager()
             if dual_session_manager:
-                dual_session_manager.cleanup_sessions()
+                # Try incremental cleanup first
+                try:
+                    dual_session_manager.incremental_cleanup()
+                    self.logger.info("Incremental cleanup completed successfully")
+                except Exception as inc_error:
+                    self.logger.warning(f"Incremental cleanup failed: {inc_error}")
+                    self.logger.info("Falling back to full session reinitialization...")
+                    dual_session_manager.cleanup_sessions()
             
             # Force garbage collection
             import gc
@@ -423,12 +442,31 @@ class DualSessionManager:
             # Create the session
             providers = [('CoreMLExecutionProvider', coreml_options), 'CPUExecutionProvider']
             
-            # Create ONNX Runtime session
+            # Create ONNX Runtime session with context leak mitigation
+            self.logger.debug("Creating ANE-optimized ONNX Runtime session...")
+            
+            # Pre-session cleanup to minimize context leaks
+            try:
+                from api.model.providers.coreml import startup_context_leak_mitigation
+                startup_context_leak_mitigation()
+            except Exception as cleanup_error:
+                self.logger.debug(f"Pre-ANE session cleanup failed: {cleanup_error}")
+            
             ort_session = ort.InferenceSession(
                 TTSConfig.MODEL_PATH,
                 sess_options=session_options,
                 providers=providers
             )
+            
+            # Post-session cleanup to address any context leaks
+            try:
+                import time
+                time.sleep(0.1)  # Brief pause to allow CoreML to settle
+                from api.model.providers.coreml import startup_context_leak_mitigation
+                startup_context_leak_mitigation()
+                self.logger.debug("Post-ANE session cleanup completed")
+            except Exception as cleanup_error:
+                self.logger.debug(f"Post-ANE session cleanup failed: {cleanup_error}")
             
             # Wrap in Kokoro model to get the .generate() method
             from kokoro_onnx import Kokoro
@@ -458,12 +496,31 @@ class DualSessionManager:
             # Create the session
             providers = [('CoreMLExecutionProvider', coreml_options), 'CPUExecutionProvider']
             
-            # Create ONNX Runtime session
+            # Create ONNX Runtime session with context leak mitigation
+            self.logger.debug("Creating GPU-optimized ONNX Runtime session...")
+            
+            # Pre-session cleanup to minimize context leaks
+            try:
+                from api.model.providers.coreml import startup_context_leak_mitigation
+                startup_context_leak_mitigation()
+            except Exception as cleanup_error:
+                self.logger.debug(f"Pre-GPU session cleanup failed: {cleanup_error}")
+            
             ort_session = ort.InferenceSession(
                 TTSConfig.MODEL_PATH,
                 sess_options=session_options,
                 providers=providers
             )
+            
+            # Post-session cleanup to address any context leaks
+            try:
+                import time
+                time.sleep(0.1)  # Brief pause to allow CoreML to settle
+                from api.model.providers.coreml import startup_context_leak_mitigation
+                startup_context_leak_mitigation()
+                self.logger.debug("Post-GPU session cleanup completed")
+            except Exception as cleanup_error:
+                self.logger.debug(f"Post-GPU session cleanup failed: {cleanup_error}")
             
             # Wrap in Kokoro model to get the .generate() method
             from kokoro_onnx import Kokoro
@@ -707,7 +764,7 @@ class DualSessionManager:
         try:
             # Clear any CoreML temporary files that might be causing context leaks
             from api.model.providers.coreml import cleanup_coreml_contexts
-            cleanup_coreml_contexts()
+            cleanup_coreml_contexts(aggressive=True)  # Use aggressive mode for full cleanup
             self.logger.debug("CoreML context cleanup completed")
         except ImportError:
             self.logger.debug("CoreML context cleanup not available (expected if not using CoreML)")
@@ -738,17 +795,92 @@ class DualSessionManager:
         except Exception as e:
             self.logger.warning(f"Could not reset semaphore: {e}")
         
-        # Step 5: Reinitialize sessions from scratch
+        # Step 5: Reinitialize sessions from scratch with context leak prevention
         self.logger.debug("Step 5: Reinitializing sessions from scratch...")
         try:
+            # Add a small delay to allow CoreML contexts to fully release
+            import time
+            time.sleep(0.5)
+            
+            # Additional pre-initialization cleanup
+            try:
+                from api.model.providers.coreml import cleanup_coreml_contexts
+                cleanup_coreml_contexts(aggressive=True)
+                self.logger.debug("Pre-initialization CoreML cleanup completed")
+            except Exception as pre_cleanup_error:
+                self.logger.debug(f"Pre-initialization cleanup failed: {pre_cleanup_error}")
+            
             self._initialize_sessions()
             self.logger.info("Successfully reinitialized TTS model sessions")
+            
+            # Post-initialization context leak check
+            self.logger.debug("Monitoring for context leaks after reinitialization...")
+            
         except Exception as e:
             self.logger.error(f"Failed to reinitialize sessions: {e}")
             # Even if initialization fails, log the attempt
             self.logger.warning("Session reinitialization failed - sessions will be unavailable until next restart")
         
         self.logger.info("Enhanced session cleanup completed")
+    
+    def incremental_cleanup(self):
+        """
+        Perform incremental cleanup without full session reinitialization.
+        
+        This is a lighter-weight alternative to cleanup_sessions() that performs
+        memory cleanup and context clearing without destroying and recreating sessions.
+        """
+        self.logger.info("Performing incremental session cleanup...")
+        
+        # Reset concurrent counter to prevent session blocking
+        self.utilization.concurrent_segments_active = 0
+        
+        # Step 1: Clear CoreML contexts without destroying sessions
+        self.logger.debug("Step 1: CoreML context cleanup...")
+        try:
+            from api.model.providers.coreml import cleanup_coreml_contexts
+            cleanup_coreml_contexts(aggressive=False)  # Use non-aggressive mode for incremental cleanup
+            self.logger.debug("CoreML context cleanup completed")
+        except ImportError:
+            self.logger.debug("CoreML context cleanup not available")
+        except Exception as e:
+            self.logger.warning(f"CoreML context cleanup failed: {e}")
+        
+        # Step 2: Garbage collection
+        self.logger.debug("Step 2: Memory cleanup...")
+        try:
+            import gc
+            collected = gc.collect()
+            if collected > 0:
+                self.logger.debug(f"Garbage collection freed {collected} objects")
+        except Exception as e:
+            self.logger.warning(f"Garbage collection failed: {e}")
+        
+        # Step 3: Reset synchronization primitives (but keep sessions alive)
+        self.logger.debug("Step 3: Resetting synchronization primitives...")
+        
+        # Force release all session locks
+        for session_type, lock in self.session_locks.items():
+            try:
+                if lock.acquire(blocking=False):
+                    lock.release()
+                    self.logger.debug(f"Released {session_type} session lock")
+            except Exception as e:
+                self.logger.warning(f"Could not release {session_type} lock: {e}")
+        
+        # Reset semaphore
+        try:
+            while self.segment_semaphore.acquire(blocking=False):
+                pass
+            self.segment_semaphore = threading.Semaphore(self.max_concurrent_segments)
+            self.logger.debug("Reset segment semaphore")
+        except Exception as e:
+            self.logger.warning(f"Could not reset semaphore: {e}")
+        
+        # Step 4: Reset session state without destroying sessions
+        self.reset_session_state()
+        
+        self.logger.info("Incremental session cleanup completed")
     
     def reset_session_state(self):
         """Reset session state to prevent blocking between requests."""

@@ -57,6 +57,10 @@ logger = logging.getLogger(__name__)
 _model_cache: Dict[str, Kokoro] = {}
 _model_cache_lock = threading.Lock()
 
+# TTL-aligned refresh tracking (aligns to benchmarking cadence)
+_model_cache_last_refresh: float = time.time()
+_model_cache_refresh_in_progress: bool = False
+
 # Inference result cache (audio -> (samples, ts, provider))
 _inference_cache: Dict[str, Tuple[np.ndarray, float, str]] = {}
 _inference_cache_lock = threading.Lock()
@@ -122,6 +126,16 @@ def get_primer_microcache_stats() -> Dict[str, Any]:
 
 def _get_cached_model(provider: str) -> Kokoro:
     """Thread-safe retrieval/creation of a Kokoro model bound to a provider."""
+    # Trigger background refresh if TTL expired (non-blocking and no cold start)
+    try:
+        ttl_seconds = int(TTSConfig.get_benchmark_cache_duration())
+    except Exception:
+        ttl_seconds = 86400
+    now = time.time()
+    if (now - _model_cache_last_refresh) > max(3600, ttl_seconds):
+        # Avoid spamming refresh attempts
+        _trigger_background_model_cache_refresh()
+
     with _model_cache_lock:
         if provider not in _model_cache:
             logger.warning(f"🔄 PERFORMANCE ISSUE: Creating new Kokoro model for provider: {provider} (cache miss)")
@@ -131,9 +145,103 @@ def _get_cached_model(provider: str) -> Kokoro:
                 voices_path=TTSConfig.VOICES_PATH,
                 providers=[provider],
             )
+            # Initialize last refresh time on first creation
+            _set_model_cache_last_refresh(now)
         else:
             logger.debug(f"✅ Using cached Kokoro model for provider: {provider}")
         return _model_cache[provider]
+
+
+def _set_model_cache_last_refresh(ts: float) -> None:
+    global _model_cache_last_refresh
+    _model_cache_last_refresh = ts
+
+
+def _trigger_background_model_cache_refresh() -> None:
+    """Kick off a non-blocking model cache refresh aligned to benchmark TTL.
+    Does not clear existing cache to avoid cold starts; rebuilt models are hot-swapped when ready.
+    """
+    global _model_cache_refresh_in_progress
+    if _model_cache_refresh_in_progress:
+        return
+
+    def _refresh_worker() -> None:
+        global _model_cache_refresh_in_progress
+        _model_cache_refresh_in_progress = True
+        try:
+            providers: List[str]
+            with _model_cache_lock:
+                providers = list(_model_cache.keys()) or [
+                    "CPUExecutionProvider",
+                    "CoreMLExecutionProvider",
+                ]
+            logger.info(f"🔄 Refreshing model cache in background for providers: {providers}")
+            for p in providers:
+                try:
+                    new_model = Kokoro(
+                        model_path=TTSConfig.MODEL_PATH,
+                        voices_path=TTSConfig.VOICES_PATH,
+                        providers=[p],
+                    )
+                    with _model_cache_lock:
+                        _model_cache[p] = new_model
+                    logger.debug(f"✅ Refreshed model for provider: {p}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Model cache refresh failed for provider {p}: {e}")
+            _set_model_cache_last_refresh(time.time())
+            logger.info("✅ Model cache refresh completed")
+        finally:
+            _model_cache_refresh_in_progress = False
+
+    try:
+        t = threading.Thread(target=_refresh_worker, daemon=True)
+        t.start()
+    except Exception as e:
+        logger.debug(f"⚠️ Could not start background model cache refresh: {e}")
+
+
+def refresh_model_cache_now(providers: Optional[List[str]] = None, non_blocking: bool = True) -> None:
+    """Public API: Refresh model cache now, aligning with benchmark cadence.
+    If non_blocking=True, runs in a background thread; otherwise blocks.
+    """
+    def _run() -> None:
+        try:
+            target_providers: List[str]
+            if providers is not None and len(providers) > 0:
+                target_providers = providers
+            else:
+                with _model_cache_lock:
+                    target_providers = list(_model_cache.keys()) or [
+                        "CPUExecutionProvider",
+                        "CoreMLExecutionProvider",
+                    ]
+            logger.info(f"🔄 Refreshing model cache now for providers: {target_providers}")
+            for p in target_providers:
+                try:
+                    new_model = Kokoro(
+                        model_path=TTSConfig.MODEL_PATH,
+                        voices_path=TTSConfig.VOICES_PATH,
+                        providers=[p],
+                    )
+                    with _model_cache_lock:
+                        _model_cache[p] = new_model
+                    logger.debug(f"✅ Refreshed model for provider: {p}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Model cache refresh failed for provider {p}: {e}")
+            _set_model_cache_last_refresh(time.time())
+            logger.info("✅ Model cache refresh completed")
+        except Exception as e:
+            logger.warning(f"⚠️ Model cache refresh encountered an error: {e}")
+
+    if non_blocking:
+        try:
+            t = threading.Thread(target=_run, daemon=True)
+            t.start()
+        except Exception as e:
+            logger.debug(f"⚠️ Could not start non-blocking model cache refresh: {e}")
+            _run()
+    else:
+        _run()
 
 
 def _create_inference_cache_key(text: str, voice: str, speed: float, lang: str) -> str:

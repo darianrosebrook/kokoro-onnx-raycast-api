@@ -1,0 +1,231 @@
+{
+  "timestamp": 1757458807.60014,
+  "test_config": {
+    "base_url": "http://127.0.0.1:8000",
+    "num_requests": 10,
+    "test_text_length": 65
+  },
+  "model_info": {
+    "model_loaded": true,
+    "onnx_providers": [
+      "CoreMLExecutionProvider",
+      "AzureExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "performance": {
+      "total_inferences": 5,
+      "coreml_inferences": 0,
+      "cpu_inferences": 5,
+      "average_inference_time": 0.5718261083993827,
+      "provider_used": "CPUExecutionProvider",
+      "phonemizer_fallbacks": 0,
+      "phonemizer_fallback_rate": 0.0,
+      "coreml_context_warnings": 0,
+      "memory_cleanup_count": 0,
+      "total_requests": 20,
+      "success_count": 16,
+      "ttfa_average": 1238.5204395002804,
+      "rtf_average": 0.1580506093529127,
+      "efficiency_average": 293.783342850381,
+      "success_rate": 0.8,
+      "ttfa_target": 800,
+      "rtf_target": 1.0,
+      "efficiency_target": 0.9,
+      "fast_path_requests": 0,
+      "fast_path_ttfa_average": 0.0,
+      "fast_path_success_rate": 0.0,
+      "phonemizer_preinitialized": false,
+      "text_processing_method_counts": {
+        "fast_path": 0,
+        "misaki": 0,
+        "phonemizer": 0,
+        "character": 0
+      },
+      "coreml_usage_percent": 0.0,
+      "cpu_usage_percent": 100.0,
+      "session_utilization": {
+        "dual_session_available": true,
+        "total_requests": 49,
+        "ane_requests": 4,
+        "gpu_requests": 6,
+        "cpu_requests": 39,
+        "ane_percentage": 25.487133655847654,
+        "gpu_percentage": 27.050074956011414,
+        "cpu_percentage": 47.46279138814093,
+        "concurrent_segments_active": 0,
+        "max_concurrent_segments": 2,
+        "concurrent_efficiency": 20.408163265306122,
+        "load_balancing_efficiency": 80.0,
+        "sessions_available": {
+          "ane": true,
+          "gpu": true,
+          "cpu": true
+        }
+      },
+      "memory_fragmentation": {
+        "dual_session_available": false,
+        "error": "'MemoryFragmentationWatchdog' object has no attribute '_get_memory_usage'",
+        "memory_cleanup_count": 0,
+        "memory_trend": "unknown",
+        "fragmentation_score": 0,
+        "cleanup_frequency": 0.0,
+        "current_memory_mb": 0.0,
+        "memory_health": "unknown"
+      },
+      "dynamic_memory_optimization": {
+        "dynamic_memory_available": false,
+        "error": "'optimization_factors'",
+        "current_arena_size_mb": 512,
+        "optimization_active": false,
+        "optimization_stats": {},
+        "performance_impact": "unknown",
+        "recommendation": "Error retrieving optimization statistics"
+      }
+    },
+    "patch_status": {
+      "applied": true,
+      "application_time": 1.1249998351559043e-05,
+      "patch_errors": [],
+      "original_functions_stored": 3
+    },
+    "hardware": {
+      "platform": "Darwin arm64",
+      "is_apple_silicon": true,
+      "has_neural_engine": true,
+      "cpu_cores": 14,
+      "memory_gb": 36.0
+    },
+    "warning_suppression": {
+      "active": true,
+      "suppressed_warnings": 0,
+      "total_warnings": 0,
+      "suppression_rate": 0
+    },
+    "tts_processing": {
+      "phoneme_preprocessing_enabled": true,
+      "active_provider": "CPUExecutionProvider",
+      "phoneme_cache": {
+        "cache_size": 14,
+        "max_cache_size": 1000,
+        "cache_hit_rate": 0.0,
+        "hit_rate": 0.0,
+        "efficiency": 0.014,
+        "backend_available": true,
+        "padding_token": "_",
+        "max_phoneme_length": 768
+      },
+      "inference_cache": {
+        "total_entries": 5,
+        "valid_entries": 5,
+        "expired_entries": 0,
+        "cache_size_mb": 0.5,
+        "hits": 20,
+        "misses": 5,
+        "total_requests": 25,
+        "hit_rate": 80.0,
+        "miss_rate": 20.0
+      }
+    },
+    "startup_timings": {
+      "capabilities_detection": 0.04872491700371029,
+      "init_provider_CPUExecutionProvider": 0.23796229200524976,
+      "enhanced_session_warming": 5.671038374995987,
+      "aggressive_session_warming": 0.00036341700615594164
+    },
+    "primer_microcache": {
+      "entries": 0,
+      "ttl_seconds": 300.0,
+      "hits": 0,
+      "misses": 0,
+      "hit_rate_percent": 0.0
+    },
+    "cold_start_warmup": {
+      "completed": true,
+      "warmup_time_ms": 1228.6288738250732,
+      "error": null
+    },
+    "scheduled_benchmark": {
+      "scheduler_active": true,
+      "frequency": "daily",
+      "skip_benchmarking": false,
+      "last_run": "2025-09-09T13:29:53.814612",
+      "results_file": "reports/benchmarks/latest_benchmark_results.json",
+      "time_since_last_hours": 2.502993233333333,
+      "next_scheduled_run": "2025-09-10T13:29:53.814612",
+      "due_for_benchmark": false
+    },
+    "session_utilization": {
+      "dual_session_available": true,
+      "total_requests": 49,
+      "session_distribution": {
+        "ane_requests": 4,
+        "gpu_requests": 6,
+        "cpu_requests": 39,
+        "ane_percentage": 25.487133655847654,
+        "gpu_percentage": 27.050074956011414,
+        "cpu_percentage": 47.46279138814093
+      },
+      "concurrent_processing": {
+        "active_segments": 0,
+        "max_segments": 2,
+        "efficiency": 20.408163265306122,
+        "load_balancing": 80.0
+      },
+      "sessions_available": {
+        "ane": true,
+        "gpu": true,
+        "cpu": true
+      }
+    },
+    "memory_fragmentation": {
+      "watchdog_active": false,
+      "current_memory_mb": 0.0,
+      "memory_trend": "unknown",
+      "fragmentation_score": 0,
+      "memory_health": "unknown",
+      "cleanup_count": 0,
+      "request_count": 0
+    },
+    "dynamic_memory_optimization": {
+      "dynamic_memory_available": false,
+      "error": "'optimization_factors'",
+      "current_arena_size_mb": 512,
+      "optimization_active": false,
+      "optimization_stats": {},
+      "performance_impact": "unknown",
+      "recommendation": "Error retrieving optimization statistics"
+    },
+    "pipeline_warmer": {
+      "warm_up_complete": false,
+      "warm_up_duration": 0.0,
+      "warm_up_results": {},
+      "common_patterns_count": 14,
+      "phoneme_patterns_count": 5,
+      "voice_patterns_count": 8
+    },
+    "real_time_optimization": {
+      "status": "idle",
+      "auto_optimization_enabled": true,
+      "optimization_interval": 300.0,
+      "last_optimization_time": 1757458795.9951859,
+      "optimization_history_size": 1,
+      "trend_analyzer_summary": {
+        "status": "no_analysis_available"
+      },
+      "parameter_tuner_summary": {
+        "parameters_tuned": 0,
+        "total_attempts": 0,
+        "total_improvements": 0,
+        "parameter_details": {}
+      },
+      "performance_metrics_count": 5
+    }
+  },
+  "file_sizes_mb": {
+    "kokoro-v1.0.int8.onnx": 88.0825719833374
+  },
+  "quantized_model_benchmark": {
+    "error": "No successful requests",
+    "errors": 10
+  }
+}
