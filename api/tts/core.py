@@ -559,40 +559,13 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
                 logger.debug(f"[{idx}] Fast path cache hit")
                 return idx, samples, f"{provider} (fast-cached)"
 
-        # Fast dual-session path with corruption detection
-        dsm = get_dual_session_manager()
-        if dsm:
-            start = time.perf_counter()
-            try:
-                result = dsm.process_segment_concurrent(processed_text, voice, speed, lang)
-                samples = result[0] if isinstance(result, tuple) else result
-                
-                # CRITICAL: Validate for corruption
-                validated_samples = _validate_and_handle_audio_corruption(samples, idx, request_id)
-                
-                if validated_samples is not None:
-                    dur = time.perf_counter() - start
-                    provider = "DualSession-Fast"
-                    
-                    if not no_cache:
-                        _cache_inference_result(cache_key, validated_samples, provider)
-                    
-                    logger.info(f"[{idx}] Fast segment in {dur:.4f}s via {provider}")
-                    return idx, validated_samples, provider
-                
-                logger.warning(f"[{idx}] Fast DualSession corrupted, falling back")
-                
-            except Exception as e:
-                logger.warning(f"[{idx}] Fast dual session failed: {e}")
-
-        # Fast single model fallback  
-        from api.model.sessions.manager import get_adaptive_provider
-        provider = get_adaptive_provider(len(processed_text))
+        # Primer-fast path: force CPU provider to minimize TTFA and avoid CoreML startup overhead
+        provider = "CPUExecutionProvider"
         model = _get_cached_model(provider)
         
         start = time.perf_counter()
         
-        # Apply CoreML memory management for fast path inference
+        # Apply memory management if available
         try:
             from api.model.memory.coreml_leak_mitigation import get_memory_manager
             manager = get_memory_manager()
@@ -614,14 +587,13 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
             return idx, None, "Fast generation corrupted"
         
         dur = time.perf_counter() - start
-        fast_provider = f"{provider}-Fast"
-        update_inference_stats(dur, fast_provider)
+        update_inference_stats(dur, provider)
         
         if not no_cache:
-            _cache_inference_result(cache_key, validated_samples, fast_provider)
+            _cache_inference_result(cache_key, validated_samples, provider)
         
-        logger.info(f"[{idx}] Fast segment in {dur:.4f}s via {fast_provider}")
-        return idx, validated_samples, fast_provider, "fast_path"
+        logger.info(f"[{idx}] Fast segment in {dur:.4f}s via {provider}")
+        return idx, validated_samples, provider
 
     except Exception as e:
         logger.error(f"[{idx}] Fast TTS generation failed: {e}", exc_info=True)

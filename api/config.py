@@ -494,10 +494,11 @@ class TTSConfig:
 
     # Primer/segmentation behavior
     # Allow disabling aggressive primer splitting which can cause audible pauses
-    ENABLE_PRIMER_SPLIT = os.environ.get("KOKORO_ENABLE_PRIMER_SPLIT", "false").lower() == "true"
+    ENABLE_PRIMER_SPLIT = os.environ.get("KOKORO_ENABLE_PRIMER_SPLIT", "true").lower() == "true"
     # When primer split is enabled, enforce punctuation-aware boundaries and minimum size
-    FIRST_SEGMENT_MIN_CHARS = int(os.environ.get("KOKORO_FIRST_SEGMENT_MIN_CHARS", "120"))
-    FIRST_SEGMENT_REQUIRE_PUNCT = os.environ.get("KOKORO_FIRST_SEGMENT_REQUIRE_PUNCT", "true").lower() == "true"
+    # Primer split thresholds tuned for faster TTFA: allow smaller first piece and no punctuation requirement
+    FIRST_SEGMENT_MIN_CHARS = int(os.environ.get("KOKORO_FIRST_SEGMENT_MIN_CHARS", "60"))
+    FIRST_SEGMENT_REQUIRE_PUNCT = os.environ.get("KOKORO_FIRST_SEGMENT_REQUIRE_PUNCT", "false").lower() == "true"
 
     # Clause splitting thresholds (punctuation-aware sub-sentence segmentation)
     CLAUSE_MIN_CHARS = int(os.environ.get("KOKORO_CLAUSE_MIN_CHARS", "100"))

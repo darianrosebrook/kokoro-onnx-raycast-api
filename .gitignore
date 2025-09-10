@@ -104,3 +104,4 @@ Thumbs.db
 .cursorignorerules 
 
 .audio-daemon.pid
+.webui_secret_key

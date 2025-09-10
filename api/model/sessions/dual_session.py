@@ -147,8 +147,12 @@ class DualSessionManager:
         self.memory_watchdog = MemoryFragmentationWatchdog()
 
         # Semaphore-based load control to prevent CoreML queue thrashing
-        # Keep concurrency conservative to avoid long waits on session locks
-        self.max_concurrent_segments = 2
+        # Align concurrency with global config for better throughput
+        try:
+            from api.config import TTSConfig
+            self.max_concurrent_segments = max(2, int(getattr(TTSConfig, 'MAX_CONCURRENT_SEGMENTS', 4)))
+        except Exception:
+            self.max_concurrent_segments = 4
         self.segment_semaphore = threading.Semaphore(self.max_concurrent_segments)
 
         self.logger = logging.getLogger(__name__ + ".DualSessionManager")
@@ -369,16 +373,18 @@ class DualSessionManager:
                 return 'gpu'
             else:
                 return 'cpu'
-        elif text_length > 50 or word_count > 10:
-            # Medium text - prefer GPU if available
-            if gpu_available and self.sessions['gpu']:
-                return 'gpu'
+        elif text_length > 80 or word_count > 15:
+            # Medium text - prefer CPU unless ANE is clearly beneficial
+            if cpu_available and self.sessions['cpu']:
+                return 'cpu'
             elif ane_available and self.sessions['ane']:
                 return 'ane'
+            elif gpu_available and self.sessions['gpu']:
+                return 'gpu'
             else:
                 return 'cpu'
         else:
-            # Simple text - any session is fine, prefer least busy
+            # Simple text - force CPU for minimal TTFA
             if cpu_available and self.sessions['cpu']:
                 return 'cpu'
             elif gpu_available and self.sessions['gpu']:

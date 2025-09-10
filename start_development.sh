@@ -94,8 +94,8 @@ export KOKORO_MISAKI_FALLBACK="${KOKORO_MISAKI_FALLBACK:-true}"
 export KOKORO_MISAKI_CACHE_SIZE="${KOKORO_MISAKI_CACHE_SIZE:-1000}"
 export KOKORO_MISAKI_QUALITY_THRESHOLD="${KOKORO_MISAKI_QUALITY_THRESHOLD:-0.8}"
 
-# Provider configuration for development (CPU provider for consistent performance)
-export KOKORO_COREML_COMPUTE_UNITS="${KOKORO_COREML_COMPUTE_UNITS:-CPUOnly}"
+# Provider configuration for development (use ANE by default for low TTFA)
+export KOKORO_COREML_COMPUTE_UNITS="${KOKORO_COREML_COMPUTE_UNITS:-CPUAndNeuralEngine}"
 
 # --- Pre-flight Checks ---
 # Check if .venv exists
