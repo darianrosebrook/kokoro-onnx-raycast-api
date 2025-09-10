@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to remove emojis from files while preserving specific ones (✅, ⛔, ⚠️)
+Script to remove emojis from files while preserving specific ones (✅, ⛔, )
 """
 
 import os
@@ -10,11 +10,11 @@ from pathlib import Path
 
 def remove_emojis_from_text(text):
     """
-    Remove emojis from text while preserving ✅, ⛔, ⚠️
+    Remove emojis from text while preserving ✅, ⛔, 
     """
     # Define emoji ranges and specific emojis to remove
-    # Keep specific emojis: ✅, ⛔, ⚠️
-    keep_emojis = {'✅', '⛔', '⚠️'}
+    # Keep specific emojis: ✅, ⛔, 
+    keep_emojis = {'✅', '⛔', ''}
     
     # Remove all emojis except the ones we want to keep
     cleaned_text = ""
@@ -72,11 +72,11 @@ def process_file(file_path):
             print(f"✅ Processed: {file_path}")
             return True
         else:
-            print(f"⏭️  No changes needed: {file_path}")
+            print(f"⏭  No changes needed: {file_path}")
             return False
             
     except Exception as e:
-        print(f"❌ Error processing {file_path}: {e}")
+        print(f" Error processing {file_path}: {e}")
         return False
 
 def main():
@@ -86,14 +86,28 @@ def main():
     # File extensions to process
     extensions = {'.py', '.ts', '.tsx', '.js', '.jsx', '.md', '.sh', '.json', '.txt'}
     
-    # Directories to skip
-    skip_dirs = {'.git', '__pycache__', 'node_modules', '.next', 'dist', 'build'}
+    # Directories to skip (third-party packages and build artifacts)
+    skip_dirs = {
+        '.git', '__pycache__', 'node_modules', '.next', 'dist', 'build',
+        '.venv', 'venv', 'env', '.env',  # Python virtual environments
+        '.pytest_cache', '.mypy_cache', '.coverage',  # Python tool caches
+        'site-packages',  # Python packages
+        '.tox', '.nox',  # Python testing environments
+        'target', 'Cargo.lock',  # Rust
+        '.gradle', 'build',  # Java/Gradle
+        'vendor',  # Go/Composer
+        '.bundle', 'Gemfile.lock',  # Ruby
+        'bower_components',  # Bower
+        'coverage', '.nyc_output',  # Coverage tools
+        '.DS_Store', 'Thumbs.db',  # OS files
+        'logs', 'tmp', 'temp'  # Temporary directories
+    }
     
     processed_count = 0
     total_files = 0
     
-    print("🧹 Starting emoji removal process...")
-    print(f"📁 Project root: {project_root}")
+    print(" Starting emoji removal process...")
+    print(f" Project root: {project_root}")
     
     for file_path in project_root.rglob('*'):
         # Skip directories
@@ -113,7 +127,7 @@ def main():
         if process_file(file_path):
             processed_count += 1
     
-    print(f"\n📊 Summary:")
+    print(f"\n Summary:")
     print(f"   Total files checked: {total_files}")
     print(f"   Files processed: {processed_count}")
     print(f"   Files unchanged: {total_files - processed_count}")
