@@ -2570,6 +2570,212 @@ async def create_speech_merged(request: Request, tts_request: TTSRequest, config
         )
 
 
+# Add compatibility endpoints for Open WebUI
+@app.post("/audio/speech")
+async def create_speech_compat(request: Request, config: TTSConfig = Depends(get_tts_config)):
+    """Compatibility endpoint for Open WebUI - converts OpenAI format to internal format"""
+    try:
+        # Parse the raw request body to handle OpenAI format
+        body = await request.body()
+        import json
+        openai_request = json.loads(body)
+        
+        # Get the requested voice and map it back to Kokoro format
+        requested_voice = openai_request.get("voice", "alloy")
+        
+        def openai_to_kokoro_name(openai_voice):
+            """Convert OpenAI-style voice name back to Kokoro format"""
+            if not openai_voice:
+                return "af_heart"  # Default fallback
+            
+            # Direct mappings for standard OpenAI voices
+            direct_mappings = {
+                "alloy": "af_alloy",
+                "echo": "am_echo", 
+                "fable": "bm_fable",
+                "onyx": "am_onyx",
+                "nova": "af_nova",
+                "shimmer": "af_bella",
+            }
+            
+            # Check direct mapping first
+            if openai_voice in direct_mappings:
+                return direct_mappings[openai_voice]
+            
+            # Handle descriptive names (e.g., "sarah-female" -> "af_sarah")
+            if '-' in openai_voice:
+                name_part, gender_part = openai_voice.rsplit('-', 1)
+                
+                # Map gender descriptions back to prefixes
+                gender_to_prefix = {
+                    'female': 'af',
+                    'male': 'am',
+                    'deep-male': 'dm',
+                    'deep-female': 'df',
+                    'child-male': 'cm',
+                    'child-female': 'cf'
+                }
+                
+                prefix = gender_to_prefix.get(gender_part, 'af')
+                return f"{prefix}_{name_part}"
+            
+            # If no pattern matches, assume it's a direct name and use female prefix
+            return f"af_{openai_voice}"
+        
+        mapped_voice = openai_to_kokoro_name(requested_voice)
+        
+        logger.info(f"OpenWebUI voice mapping: '{requested_voice}' -> '{mapped_voice}'")
+        
+        # Convert OpenAI format to internal format
+        # OpenAI uses: input, model, voice, response_format, speed
+        # Internal uses: text, voice, speed, format, stream
+        
+        # Enable streaming for better performance monitoring and memory management
+        # but collect the full response for OpenWebUI compatibility
+        internal_request = TTSRequest(
+            text=openai_request.get("input", ""),
+            voice=mapped_voice,
+            speed=openai_request.get("speed", 1.0),
+            format="wav",  # Default to WAV format for better OpenWebUI compatibility
+            stream=True,   # Enable streaming for better performance tracking
+            lang="en-us"
+        )
+        
+        # Get the streaming response but collect it into a single response for OpenWebUI
+        streaming_response = await create_speech(request, internal_request, config)
+        
+        # Collect all streaming chunks into a single response
+        audio_chunks = []
+        async for chunk in streaming_response.body_iterator:
+            audio_chunks.append(chunk)
+        
+        # Combine all chunks
+        complete_audio = b''.join(audio_chunks)
+        
+        # Return as a complete response with proper headers
+        from fastapi.responses import Response
+        return Response(
+            content=complete_audio,
+            media_type=streaming_response.media_type,
+            headers={
+                "Content-Length": str(len(complete_audio)),
+                "X-OpenWebUI-Optimized": "true",
+                "X-Streaming-Collected": "true"
+            }
+        )
+        
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid JSON in request body"
+        )
+    except Exception as e:
+        logger.error(f"OpenAI compatibility conversion error: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Request format conversion failed: {str(e)}"
+        )
+
+@app.get("/audio/voices")
+async def get_voices_compat():
+    """Compatibility endpoint for Open WebUI - returns all available voices with OpenAI-style names"""
+    try:
+        # Get the original voices response
+        original_response = await get_voices()
+        
+        # Convert all Kokoro voices to OpenAI-style names
+        def kokoro_to_openai_name(kokoro_voice):
+            """Convert Kokoro voice name to OpenAI-style name"""
+            if not kokoro_voice or '_' not in kokoro_voice:
+                return kokoro_voice
+            
+            # Split into prefix and name (e.g., "af_alloy" -> "af", "alloy")
+            prefix, name = kokoro_voice.split('_', 1)
+            
+            # Map prefixes to descriptive terms
+            prefix_map = {
+                'af': 'female',
+                'am': 'male', 
+                'bm': 'male',
+                'bf': 'female',
+                'dm': 'deep-male',
+                'df': 'deep-female',
+                'cm': 'child-male',
+                'cf': 'child-female'
+            }
+            
+            # For well-known OpenAI voices, use the original name
+            openai_standard = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
+            if name in openai_standard:
+                return name
+            
+            # Otherwise, create descriptive name
+            prefix_desc = prefix_map.get(prefix, prefix)
+            return f"{name}-{prefix_desc}"
+        
+        # Create OpenAI-compatible voice list
+        openai_voices = []
+        kokoro_voices = original_response.get("voices", [])
+        
+        for kokoro_voice in kokoro_voices:
+            openai_name = kokoro_to_openai_name(kokoro_voice)
+            if openai_name:
+                openai_voices.append(openai_name)
+        
+        # Sort voices for better organization
+        openai_voices.sort()
+        
+        # Ensure we have some voices
+        if not openai_voices:
+            openai_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+        
+        return {
+            "voices": openai_voices,
+            "total_voices": len(openai_voices),
+            "model_loaded": original_response.get("model_loaded", False),
+            "compatibility_mode": "openai",
+            "mapped_from_kokoro": True,
+            "voice_categories": {
+                "total_available": len(openai_voices),
+                "original_kokoro_count": len(kokoro_voices),
+                "mapping_successful": len(openai_voices) > 6
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Voice compatibility endpoint error: {e}")
+        # Fallback to standard OpenAI voices
+        return {
+            "voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+            "total_voices": 6,
+            "model_loaded": False,
+            "compatibility_mode": "openai",
+            "error": str(e)
+        }
+
+@app.get("/audio/models")
+async def get_models_compat():
+    """Compatibility endpoint for Open WebUI - returns model information"""
+    try:
+        if not model_initialization_complete:
+            raise HTTPException(
+                status_code=503,
+                detail="TTS model not loaded. Please wait for initialization to complete."
+            )
+        
+        return {
+            "models": ["kokoro-v1.0"],
+            "default_model": "kokoro-v1.0",
+            "model_loaded": model_initialization_complete
+        }
+    except Exception as e:
+        logger.error(f"Models endpoint error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve model information: {str(e)}"
+        )
+
+
 # Development server entry point
 if __name__ == "__main__":
     import uvicorn
