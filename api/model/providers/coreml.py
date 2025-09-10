@@ -79,10 +79,10 @@ def setup_coreml_temp_directory() -> str:
             f.write("test")
         os.remove(test_file)
         
-        logger.info(f"📁 CoreML temp directory configured: {local_temp_dir}")
+        logger.info(f" CoreML temp directory configured: {local_temp_dir}")
         
     except Exception as e:
-        logger.error(f"❌ CoreML temp directory setup failed: {e}")
+        logger.error(f" CoreML temp directory setup failed: {e}")
         raise
     
     return local_temp_dir
@@ -141,7 +141,7 @@ def _force_onnxruntime_temp_directory(local_temp_dir: str) -> None:
         logger.debug(f"✅ ONNX Runtime temp directory override configured: {local_temp_dir}")
         
     except Exception as e:
-        logger.warning(f"⚠️ Could not fully configure ONNX Runtime temp directory override: {e}")
+        logger.warning(f" Could not fully configure ONNX Runtime temp directory override: {e}")
 
 
 def cleanup_coreml_temp_directory() -> None:
@@ -180,7 +180,7 @@ def cleanup_coreml_temp_directory() -> None:
                 logger.debug(f"Could not clean up {file_path}: {e}")
         
         if files_cleaned > 0:
-            logger.info(f"🧹 Cleaned up {files_cleaned} old CoreML temp files")
+            logger.info(f" Cleaned up {files_cleaned} old CoreML temp files")
             
     except Exception as e:
         logger.debug(f"CoreML temp directory cleanup failed: {e}")
@@ -231,7 +231,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
             
             # Initialize memory management system
             if initialize_coreml_memory_management():
-                logger.debug("🧠 CoreML memory management initialized for provider options")
+                logger.debug(" CoreML memory management initialized for provider options")
             
             # Configure based on system capabilities
             memory_gb = capabilities.get('memory_gb', 8)
@@ -247,9 +247,9 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
             logger.debug(f"✅ Memory management configured: aggressive={aggressive_mode}, threshold={memory_threshold}MB")
         
         except Exception as e:
-            logger.debug(f"⚠️ Could not initialize CoreML memory management: {e}")
+            logger.debug(f" Could not initialize CoreML memory management: {e}")
     else:
-        logger.info("🔧 CoreML memory management disabled via KOKORO_DISABLE_MEMORY_MGMT")
+        logger.info(" CoreML memory management disabled via KOKORO_DISABLE_MEMORY_MGMT")
     
     # Check cache first to avoid duplicate creation and logging
     cache_key = _get_capability_cache_key(capabilities)
@@ -257,7 +257,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
         logger.debug("✅ Using cached CoreML provider options")
         return _provider_options_cache[cache_key].copy()
     
-    logger.info("🔧 Creating optimized CoreML provider options...")
+    logger.info(" Creating optimized CoreML provider options...")
     
     # Extract key capabilities
     neural_engine_cores = capabilities.get('neural_engine_cores', 0)
@@ -273,7 +273,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
     
     # Neural Engine optimizations based on chip family
     if neural_engine_cores >= 32:  # M1 Max / M2 Max
-        logger.info(f"🚀 M1 Max / M2 Max detected with {neural_engine_cores} Neural Engine cores")
+        logger.info(f" M1 Max / M2 Max detected with {neural_engine_cores} Neural Engine cores")
         
         # M1 Max / M2 Max optimization strategy
         coreml_options.update({
@@ -289,7 +289,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
         os.environ['COREML_OPTIMIZE_FOR_APPLE_SILICON'] = '1'
         
     elif neural_engine_cores >= 18:  # M3
-        logger.info(f"🚀 M3 detected with {neural_engine_cores} Neural Engine cores")
+        logger.info(f" M3 detected with {neural_engine_cores} Neural Engine cores")
         
         coreml_options.update({
             'MLComputeUnits': 'CPUAndNeuralEngine',
@@ -298,7 +298,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
         })
         
     elif neural_engine_cores >= 16:  # M1 / M2
-        logger.info(f"🚀 M1/M2 detected with {neural_engine_cores} Neural Engine cores")
+        logger.info(f" M1/M2 detected with {neural_engine_cores} Neural Engine cores")
         
         coreml_options.update({
             'MLComputeUnits': 'CPUAndNeuralEngine',
@@ -306,7 +306,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
         })
         
     else:  # Other Apple Silicon or fallback
-        logger.info("🚀 Apple Silicon detected - using CPU+GPU configuration")
+        logger.info(" Apple Silicon detected - using CPU+GPU configuration")
         
         coreml_options.update({
             'MLComputeUnits': 'CPUAndGPU',
@@ -319,7 +319,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
             # 'SubgraphSelectionCriteria': 'aggressive',  # Removed - not supported in ORT 1.22.1
             # 'MinimumNodesPerSubgraph': '5',  # Removed - not supported in ORT 1.22.1
         })
-        logger.info(f"🚀 High memory system ({memory_gb}GB): Applied large cache optimizations")
+        logger.info(f" High memory system ({memory_gb}GB): Applied large cache optimizations")
         
     elif memory_gb >= 16:  # Standard memory systems
         coreml_options.update({
@@ -327,7 +327,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
             # 'SubgraphSelectionCriteria': 'balanced',  # Removed - not supported in ORT 1.22.1
             # 'MinimumNodesPerSubgraph': '3',  # Removed - not supported in ORT 1.22.1
         })
-        logger.info(f"⚖️ Standard memory system ({memory_gb}GB): Applied balanced cache optimizations")
+        logger.info(f" Standard memory system ({memory_gb}GB): Applied balanced cache optimizations")
         
     else:  # Low memory systems
         coreml_options.update({
@@ -335,7 +335,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
             # 'SubgraphSelectionCriteria': 'minimal',  # Removed - not supported in ORT 1.22.1
             # 'MinimumNodesPerSubgraph': '1',  # Removed - not supported in ORT 1.22.1
         })
-        logger.info(f"💾 Low memory system ({memory_gb}GB): Applied minimal cache optimizations")
+        logger.info(f" Low memory system ({memory_gb}GB): Applied minimal cache optimizations")
     
     # Set environment variable for CoreML temp directory
     from api.config import TTSConfig
@@ -353,7 +353,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
     
     # Cache the result to avoid duplicate creation and logging
     _provider_options_cache[cache_key] = coreml_options.copy()
-    logger.debug(f"💾 Cached CoreML provider options for capability set: {cache_key[:20]}...")
+    logger.debug(f" Cached CoreML provider options for capability set: {cache_key[:20]}...")
     
     return coreml_options
 
@@ -374,7 +374,7 @@ def coreml_memory_managed_session_creation(session_creation_func, *args, **kwarg
     memory_mgmt_disabled = os.environ.get('KOKORO_DISABLE_MEMORY_MGMT', 'false').lower() == 'true'
     
     if memory_mgmt_disabled:
-        logger.debug("🔧 Memory management disabled, using standard session creation")
+        logger.debug(" Memory management disabled, using standard session creation")
         return session_creation_func(*args, **kwargs)
     
     try:
@@ -383,16 +383,16 @@ def coreml_memory_managed_session_creation(session_creation_func, *args, **kwarg
         manager = get_memory_manager()
         
         with manager.managed_operation("coreml_session_creation"):
-            logger.debug("🧠 Creating CoreML session with memory management")
+            logger.debug(" Creating CoreML session with memory management")
             result = session_creation_func(*args, **kwargs)
             logger.debug("✅ CoreML session created successfully with memory management")
             return result
             
     except ImportError:
-        logger.debug("⚠️ Memory management not available, using standard session creation")
+        logger.debug(" Memory management not available, using standard session creation")
         return session_creation_func(*args, **kwargs)
     except Exception as e:
-        logger.debug(f"⚠️ Memory managed session creation failed, falling back: {e}")
+        logger.debug(f" Memory managed session creation failed, falling back: {e}")
         return session_creation_func(*args, **kwargs)
 
 
@@ -438,7 +438,7 @@ def clear_provider_options_cache() -> None:
     """
     global _provider_options_cache
     _provider_options_cache.clear()
-    logger.debug("🧹 Cleared CoreML provider options cache")
+    logger.debug(" Cleared CoreML provider options cache")
 
 
 def test_mlcompute_units_configuration(capabilities: Dict[str, Any]) -> str:
@@ -451,7 +451,7 @@ def test_mlcompute_units_configuration(capabilities: Dict[str, Any]) -> str:
     @param capabilities: Hardware capabilities from detect_apple_silicon_capabilities()
     @returns str: Optimal MLComputeUnits configuration string
     """
-    logger.info("🧪 Testing MLComputeUnits configurations for optimal performance...")
+    logger.info(" Testing MLComputeUnits configurations for optimal performance...")
     
     # Define test configurations based on hardware
     neural_engine_cores = capabilities.get('neural_engine_cores', 0)
@@ -462,7 +462,7 @@ def test_mlcompute_units_configuration(capabilities: Dict[str, Any]) -> str:
             'ALL',                 # Secondary choice
             'CPUAndGPU',          # Fallback
         ]
-        logger.info(f"🚀 M1 Max / M2 Max detected: Testing {len(test_configs)} configurations")
+        logger.info(f" M1 Max / M2 Max detected: Testing {len(test_configs)} configurations")
         
     elif neural_engine_cores >= 16:  # M1 / M2
         test_configs = [
@@ -470,7 +470,7 @@ def test_mlcompute_units_configuration(capabilities: Dict[str, Any]) -> str:
             'ALL',                 # Secondary choice
             'CPUAndGPU',          # Fallback
         ]
-        logger.info(f"🚀 M1 / M2 detected: Testing {len(test_configs)} configurations")
+        logger.info(f" M1 / M2 detected: Testing {len(test_configs)} configurations")
         
     elif capabilities.get('is_apple_silicon', False):  # Other Apple Silicon
         test_configs = [
@@ -478,11 +478,11 @@ def test_mlcompute_units_configuration(capabilities: Dict[str, Any]) -> str:
             'ALL',                # Secondary choice
             'CPUOnly',            # Fallback
         ]
-        logger.info(f"🍎 Apple Silicon detected: Testing {len(test_configs)} configurations")
+        logger.info(f" Apple Silicon detected: Testing {len(test_configs)} configurations")
         
     else:  # Non-Apple Silicon
         test_configs = ['CPUOnly']
-        logger.info("🖥️ Non-Apple Silicon: Using CPU-only configuration")
+        logger.info(" Non-Apple Silicon: Using CPU-only configuration")
     
     # For now, return the first (optimal) configuration
     # In a full implementation, we would actually benchmark each configuration
@@ -516,7 +516,7 @@ def benchmark_mlcompute_units_if_needed(capabilities: Dict[str, Any]) -> str:
         if cache_age < 86400:  # 24 hours cache
             optimal_config = cached_data.get("optimal_config")
             if optimal_config:
-                logger.info(f"💾 Using cached MLComputeUnits configuration: {optimal_config}")
+                logger.info(f" Using cached MLComputeUnits configuration: {optimal_config}")
                 return optimal_config
     
     # Run benchmark test
@@ -533,9 +533,9 @@ def benchmark_mlcompute_units_if_needed(capabilities: Dict[str, Any]) -> str:
                 "is_apple_silicon": capabilities.get('is_apple_silicon', False)
             }
         })
-        logger.info(f"💾 Cached MLComputeUnits configuration: {optimal_config}")
+        logger.info(f" Cached MLComputeUnits configuration: {optimal_config}")
     except Exception as e:
-        logger.warning(f"⚠️ Failed to cache MLComputeUnits configuration: {e}")
+        logger.warning(f" Failed to cache MLComputeUnits configuration: {e}")
     
     return optimal_config
 

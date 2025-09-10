@@ -577,7 +577,7 @@ def main():
         logger.info("✅ Optimization pipeline completed successfully!")
         return 0
     else:
-        logger.error("❌ Optimization pipeline failed!")
+        logger.error(" Optimization pipeline failed!")
         return 1
 
 

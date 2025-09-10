@@ -146,7 +146,7 @@ class MemoryFragmentationWatchdog:
         cleanup_start = time.time()
         memory_before = self._get_memory_usage()
         
-        self.logger.info("🧹 Performing memory fragmentation cleanup...")
+        self.logger.info(" Performing memory fragmentation cleanup...")
         
         cleanup_results = {
             'cleanup_performed': True,
@@ -307,7 +307,7 @@ class MemoryFragmentationWatchdog:
             self.fragmentation_threshold = max(0.3, min(0.9, fragmentation_threshold))
         
         self.logger.info(
-            f"🔧 Watchdog configured: interval={self.cleanup_interval}s, "
+            f" Watchdog configured: interval={self.cleanup_interval}s, "
             f"memory_threshold={self.memory_pressure_threshold:.1%}, "
             f"fragmentation_threshold={self.fragmentation_threshold:.1%}"
         )
@@ -319,4 +319,4 @@ class MemoryFragmentationWatchdog:
         self.last_cleanup_duration = 0.0
         self.consecutive_pressure_checks = 0
         
-        self.logger.info("🔄 Watchdog statistics reset")
+        self.logger.info(" Watchdog statistics reset")

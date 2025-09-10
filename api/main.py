@@ -451,7 +451,7 @@ def validate_dependencies():
             __import__(import_name)
             logger.debug(f"✅ {package_name} available (optional)")
         except ImportError:
-            logger.warning(f"⚠️ {package_name} not found (optional)")
+            logger.warning(f" {package_name} not found (optional)")
 
     # Check eSpeak installation
     try:
@@ -461,9 +461,9 @@ def validate_dependencies():
         if result.returncode == 0:
             logger.debug("✅ eSpeak-ng found in system PATH")
         else:
-            logger.warning("⚠️ eSpeak-ng not found in system PATH")
+            logger.warning(" eSpeak-ng not found in system PATH")
     except Exception as e:
-        logger.warning(f"⚠️ Could not check eSpeak-ng installation: {e}")
+        logger.warning(f" Could not check eSpeak-ng installation: {e}")
 
     # Report results
     if missing_deps:
@@ -475,7 +475,7 @@ def validate_dependencies():
 
     if version_issues:
         logger.warning(
-            f"⚠️ Version compatibility issues: {', '.join(version_issues)}")
+            f" Version compatibility issues: {', '.join(version_issues)}")
 
     logger.info("✅ All application dependencies validated successfully")
 
@@ -554,7 +554,7 @@ def validate_environment():
     required_env_vars = ['PYTHONPATH']
     for env_var in required_env_vars:
         if not os.environ.get(env_var):
-            logger.warning(f"⚠️ Environment variable {env_var} not set")
+            logger.warning(f" Environment variable {env_var} not set")
 
     logger.info("✅ Environment configuration validated successfully")
 
@@ -579,7 +579,7 @@ def validate_patch_status():
 
         if patch_status['patch_errors']:
             logger.warning(
-                f"⚠️ Patch errors detected: {patch_status['patch_errors']}")
+                f" Patch errors detected: {patch_status['patch_errors']}")
 
         logger.info(
             f"✅ Patches applied successfully in {patch_status['application_time']:.3f}s")
@@ -602,7 +602,7 @@ setup_application_logging()
 logger = logging.getLogger(__name__)
 
 # Log the start of application initialization immediately
-logger.info("🚀 Application initialization starting...")
+logger.info(" Application initialization starting...")
 
 # Initialize warning handlers for various noise sources
 # This must be called before any ONNX Runtime operations
@@ -702,7 +702,7 @@ async def initialize_model():
     global kokoro_model, model_initialization_complete, model_initialization_started
 
     if model_initialization_started:
-        logger.info("ℹ️ Model initialization already started, waiting for completion...")
+        logger.info("ℹ Model initialization already started, waiting for completion...")
         # Wait for existing initialization to complete
         while not model_initialization_complete:
             await asyncio.sleep(0.5)
@@ -712,7 +712,7 @@ async def initialize_model():
     startup_progress["started_at"] = time.time()
 
     try:
-        logger.info("🔧 Preparing model initialization environment...")
+        logger.info(" Preparing model initialization environment...")
         
         # Set TMPDIR to local cache to avoid CoreML permission issues
         local_cache_dir = os.path.abspath(".cache")
@@ -728,7 +728,7 @@ async def initialize_model():
             else:
                 logger.debug(f"Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
         except Exception as e:
-            logger.warning(f"⚠️ Cache cleanup failed: {e}")
+            logger.warning(f" Cache cleanup failed: {e}")
 
         # Clean up any existing CoreML temp files that might cause permission issues
         try:
@@ -751,7 +751,7 @@ async def initialize_model():
                                     f" Cleaned up CoreML temp directory: {temp_dir}")
                             except Exception as e:
                                 logger.debug(
-                                    f"⚠️ Could not clean up {temp_dir}: {e}")
+                                    f" Could not clean up {temp_dir}: {e}")
                 else:
                     # Handle direct paths
                     if os.path.exists(temp_pattern):
@@ -790,9 +790,9 @@ async def initialize_model():
                                     f" Cleaned up CoreML temp directory: {temp_pattern}")
                         except Exception as e:
                             logger.debug(
-                                f"⚠️ Could not clean up {temp_pattern}: {e}")
+                                f" Could not clean up {temp_pattern}: {e}")
         except Exception as e:
-            logger.debug(f"⚠️ CoreML temp cleanup failed: {e}")
+            logger.debug(f" CoreML temp cleanup failed: {e}")
 
         # Ensure CoreML temp directory exists with proper setup after cleanup
         try:
@@ -814,10 +814,10 @@ async def initialize_model():
             
             logger.debug(f"✅ CoreML temp directory configured: {local_temp_dir}")
         except Exception as e:
-            logger.warning(f"⚠️ Could not setup CoreML temp directory: {e}")
+            logger.warning(f" Could not setup CoreML temp directory: {e}")
 
         update_startup_progress(30, "Initializing model with hardware acceleration...")
-        logger.info("🚀 Starting model initialization with hardware acceleration...")
+        logger.info(" Starting model initialization with hardware acceleration...")
 
         start_time = time.time()
 
@@ -846,7 +846,7 @@ async def initialize_model():
             else:
                 model_initialization_complete = False  # Ensure flag is set
                 update_startup_progress(100, "Model initialization failed.", "error")
-                logger.error("❌ Model initialization failed - model not available")
+                logger.error(" Model initialization failed - model not available")
 
         except Exception as e:
             logger.error(f"Model initialization failed: {e}", exc_info=True)
@@ -968,10 +968,10 @@ async def lifespan(app: FastAPI):
     Application lifespan management with coordinated startup sequence
     """
     # Startup sequence - execute in logical order for better log flow
-    logger.info("📋 Starting application startup sequence...")
+    logger.info(" Starting application startup sequence...")
     
     # Step 1: Validate environment and dependencies first
-    logger.info("🔍 Step 1/4: Validating environment and dependencies...")
+    logger.info(" Step 1/4: Validating environment and dependencies...")
     validate_dependencies()
     validate_model_files()
     validate_environment()
@@ -981,7 +981,7 @@ async def lifespan(app: FastAPI):
     validate_patch_status()
 
     # Step 2: Initialize model (blocks until model is ready)
-    logger.info("🤖 Step 2/4: Initializing TTS model...")
+    logger.info(" Step 2/4: Initializing TTS model...")
     await initialize_model()
 
     # Step 3: Start background services after model is ready
@@ -996,12 +996,12 @@ async def lifespan(app: FastAPI):
             start_benchmark_scheduler()
             logger.info("✅ Scheduled benchmark scheduler started")
         else:
-            logger.info("ℹ️ Scheduled benchmark scheduler already running")
+            logger.info("ℹ Scheduled benchmark scheduler already running")
     except Exception as e:
         logger.warning(f"Could not start benchmark scheduler: {e}")
 
     # Step 4: Start warm-up processes
-    logger.info("🔥 Step 4/4: Starting warm-up processes...")
+    logger.info(" Step 4/4: Starting warm-up processes...")
     asyncio.create_task(delayed_cold_start_warmup())
     
     logger.info("✅ Application startup sequence completed successfully")
@@ -1009,7 +1009,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("🛑 Application shutting down...")
+    logger.info(" Application shutting down...")
 
 # Determine if running in production
 is_production = os.environ.get("KOKORO_PRODUCTION", "false").lower() == "true"
@@ -2080,7 +2080,7 @@ async def get_status():
                 "original_functions_stored": patch_status['original_functions_stored']
             }
         except Exception as e:
-            logger.warning(f"⚠️ Could not get patch status: {e}")
+            logger.warning(f" Could not get patch status: {e}")
             status["patch_status"] = {"error": str(e)}
 
         # Add hardware information (use cached capabilities)
@@ -2094,7 +2094,7 @@ async def get_status():
                 "memory_gb": capabilities['memory_gb']
             }
         except Exception as e:
-            logger.warning(f"⚠️ Could not get hardware info: {e}")
+            logger.warning(f" Could not get hardware info: {e}")
             status["hardware"] = {"error": str(e)}
 
         # Add warning suppression information
@@ -2108,7 +2108,7 @@ async def get_status():
                 "suppression_rate": warning_stats.get("suppression_rate", 0)
             }
         except Exception as e:
-            logger.warning(f"⚠️ Could not get warning suppression info: {e}")
+            logger.warning(f" Could not get warning suppression info: {e}")
             status["warning_suppression"] = {"error": str(e)}
 
         # Add TTS processing statistics including phoneme cache performance
@@ -2121,7 +2121,7 @@ async def get_status():
                 "inference_cache": tts_stats.get("inference_cache", {})
             }
         except Exception as e:
-            logger.warning(f"⚠️ Could not get TTS processing stats: {e}")
+            logger.warning(f" Could not get TTS processing stats: {e}")
             status["tts_processing"] = {"error": str(e)}
 
         # Startup step timings (compact, high-signal)
@@ -2191,7 +2191,7 @@ async def get_status():
             }
             
         except Exception as e:
-            logger.warning(f"⚠️ Could not get session utilization stats: {e}")
+            logger.warning(f" Could not get session utilization stats: {e}")
             status["session_utilization"] = {"error": str(e)}
             status["memory_fragmentation"] = {"error": str(e)}
 

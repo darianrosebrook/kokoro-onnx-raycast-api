@@ -76,7 +76,7 @@ export async function getValidatedVoice(
     }
 
     // Find a suitable fallback voice
-    console.warn(`⚠️ Requested voice '${requestedVoice}' not available`);
+    console.warn(` Requested voice '${requestedVoice}' not available`);
 
     // Try to find a similar voice (same gender/category if possible)
     const requestedPrefix = requestedVoice.split("_")[0];

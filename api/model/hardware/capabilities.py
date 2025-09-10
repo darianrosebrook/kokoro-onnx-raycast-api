@@ -28,7 +28,7 @@ def clear_capabilities_cache() -> None:
     detection._capabilities_cache = None
     
     logger = logging.getLogger(__name__)
-    logger.debug("🗑️ Cleared hardware capabilities cache")
+    logger.debug(" Cleared hardware capabilities cache")
 
 
 def refresh_capabilities_cache() -> Dict[str, Any]:

@@ -109,7 +109,7 @@ def generate_benchmark_insights(benchmark_results: Dict[str, float], optimal_pro
         str: Detailed insights and recommendations
     """
     if not benchmark_results or len(benchmark_results) < 2:
-        return "⚠️ Insufficient benchmark data for detailed analysis"
+        return " Insufficient benchmark data for detailed analysis"
     
     # Sort providers by performance
     sorted_results = sorted(benchmark_results.items(), key=lambda x: x[1])
@@ -131,7 +131,7 @@ def generate_benchmark_insights(benchmark_results: Dict[str, float], optimal_pro
     if optimal_provider == fastest_provider:
         insights.append("✅ **Optimal Configuration**: Currently using the fastest available provider")
     else:
-        insights.append(f"⚠️ **Performance Opportunity**: {fastest_provider} is {improvement_percent:.1f}% faster than current selection")
+        insights.append(f" **Performance Opportunity**: {fastest_provider} is {improvement_percent:.1f}% faster than current selection")
     
     insights.append("")
     
@@ -279,7 +279,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                 elif relative_perf < 1.5:
                     status = "✅ **Good**"
                 else:
-                    status = "⚠️ **Slower**"
+                    status = " **Slower**"
             
             md_content += f"| {provider} | {time_taken:.3f}s | {performance_indicator} | {status} |\n"
         
@@ -302,7 +302,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             if optimal_provider == sorted_results[0][0]:
                 md_content += f"✅ **Recommendation**: Using fastest provider (`{optimal_provider}`)\n\n"
             else:
-                md_content += f"⚠️ **Recommendation**: Using `{optimal_provider}` despite `{sorted_results[0][0]}` being {improvement_percent:.1f}% faster\n\n"
+                md_content += f" **Recommendation**: Using `{optimal_provider}` despite `{sorted_results[0][0]}` being {improvement_percent:.1f}% faster\n\n"
         else:
             md_content += f" **Recommendation**: Consider using `{sorted_results[0][0]}` for best performance\n\n"
         
@@ -323,7 +323,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     else:
         # Handle case where no benchmark results are available
         md_content += """### Benchmark Results
-⚠️ No benchmark results available (benchmarking may be disabled or failed)
+ No benchmark results available (benchmarking may be disabled or failed)
 
 """
     
@@ -462,7 +462,7 @@ def save_benchmark_report(
         return output_file
         
     except Exception as e:
-        logger.warning(f"⚠️ Could not save benchmark report: {e}")
+        logger.warning(f" Could not save benchmark report: {e}")
         return None
 
 

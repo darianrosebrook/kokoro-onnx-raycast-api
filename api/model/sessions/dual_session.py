@@ -259,7 +259,7 @@ class DualSessionManager:
                             self._recent_coreml_errors = {}
                         self._recent_coreml_errors[session_type] = time.time()
                         
-                        self.logger.info(f"🔄 Switching to CPU fallback due to: {error_analysis.get('reason')}")
+                        self.logger.info(f" Switching to CPU fallback due to: {error_analysis.get('reason')}")
                         cpu_session = self._get_session('cpu')
                         if cpu_session:
                             with self.session_locks['cpu']:
@@ -277,7 +277,7 @@ class DualSessionManager:
                     
                     elif error_analysis.get('cleanup_performed'):
                         # Retry with CoreML after cleanup
-                        self.logger.info("🔄 Retrying with CoreML after cleanup...")
+                        self.logger.info(" Retrying with CoreML after cleanup...")
                         try:
                             result = session.create(text, voice, speed, lang)
                             if isinstance(result, tuple) and len(result) >= 2:

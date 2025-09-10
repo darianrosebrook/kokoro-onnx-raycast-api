@@ -85,7 +85,7 @@ def post_fork(server, worker):
         
     except Exception as e:
         worker.log.critical(
-            "❌ Failed to initialize model in Gunicorn worker: %s", e, exc_info=True
+            " Failed to initialize model in Gunicorn worker: %s", e, exc_info=True
         )
         # Exit the worker process if model initialization fails.
         # Gunicorn will automatically restart it.

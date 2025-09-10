@@ -67,7 +67,7 @@ def get_adaptive_provider(text_length: int = 0) -> str:
     if text_length < 200:
         # Force CPU for short text to avoid CoreML context leak issues
         selected = "CPUExecutionProvider"
-        logger.info(f"🎯 Adaptive provider: text_len={text_length} → {selected} (short text optimization)")
+        logger.info(f" Adaptive provider: text_len={text_length} → {selected} (short text optimization)")
         return selected
     
     # Medium text (200-1000 chars): Use current provider but avoid CoreML ALL
@@ -76,17 +76,17 @@ def get_adaptive_provider(text_length: int = 0) -> str:
         # This prevents context leaks while maintaining reasonable performance
         if current == "CoreMLExecutionProvider" and compute_units == 'ALL':
             selected = "CPUExecutionProvider"
-            logger.info(f"🎯 Adaptive provider: text_len={text_length} → {selected} (avoiding CoreML ALL)")
+            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (avoiding CoreML ALL)")
         else:
             selected = current if current else "CPUExecutionProvider"
-            logger.info(f"🎯 Adaptive provider: text_len={text_length} → {selected} (medium text)")
+            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (medium text)")
         return selected
     
     # Long text (>1000 chars): All providers show degradation, use current
     # TODO: Investigate long text performance issues across all providers
     else:
         selected = current if current else "CPUExecutionProvider"
-        logger.info(f"🎯 Adaptive provider: text_len={text_length} → {selected} (long text - degraded performance expected)")
+        logger.info(f" Adaptive provider: text_len={text_length} → {selected} (long text - degraded performance expected)")
         return selected
 
 

@@ -964,7 +964,7 @@ class AudioProcessor extends EventEmitter {
       return;
     }
     this._audioLoopActive = true;
-    console.log(`[${this.instanceId}] 🚀 NEW ROBUST AUDIO LOOP STARTED`);
+    console.log(`[${this.instanceId}]  NEW ROBUST AUDIO LOOP STARTED`);
 
     // Record playback start time
     if (this.stats.playbackStartTime === 0) {
@@ -976,7 +976,7 @@ class AudioProcessor extends EventEmitter {
     }
 
     if (!this.audioProcess) {
-      console.log(`[${this.instanceId}] ❌ No audio process available`);
+      console.log(`[${this.instanceId}]  No audio process available`);
       this._audioLoopActive = false;
       return;
     }
@@ -997,7 +997,7 @@ class AudioProcessor extends EventEmitter {
     const processChunk = () => {
       // NEW: Only stop if explicitly told to stop
       if (this.isStopped) {
-        console.log(`[${this.instanceId}] 🛑 Explicitly stopped - ending audio loop`);
+        console.log(`[${this.instanceId}]  Explicitly stopped - ending audio loop`);
         this._audioLoopActive = false;
         return;
       }
@@ -1005,7 +1005,7 @@ class AudioProcessor extends EventEmitter {
       // NEW: Check if we should end stream (only when explicitly requested)
       if (this.isEndingStream && this.ringBuffer.size === 0) {
         console.log(
-          `[${this.instanceId}] 🎯 End stream requested and buffer empty - completing naturally`
+          `[${this.instanceId}]  End stream requested and buffer empty - completing naturally`
         );
         this._completePlaybackSession();
         return;
@@ -1013,7 +1013,7 @@ class AudioProcessor extends EventEmitter {
 
       // NEW: Check if audio process is still alive
       if (!this.audioProcess || this.audioProcess.killed || this.audioProcess.exitCode !== null) {
-        console.log(`[${this.instanceId}] ⚠️ Audio process died, attempting recovery...`);
+        console.log(`[${this.instanceId}]  Audio process died, attempting recovery...`);
         if (this.ringBuffer.size > 0) {
           console.log(
             `[${this.instanceId}] Buffer has ${this.ringBuffer.size} bytes remaining, restarting process...`
@@ -1092,7 +1092,7 @@ class AudioProcessor extends EventEmitter {
           const timeSinceLastChunk = Date.now() - lastChunkReceived;
           if (timeSinceLastChunk > MAX_WAIT_TIME_MS) {
             console.log(
-              `[${this.instanceId}] ⚠️ No new data for ${timeSinceLastChunk}ms - ending audio loop`
+              `[${this.instanceId}]  No new data for ${timeSinceLastChunk}ms - ending audio loop`
             );
             this._audioLoopActive = false;
             return;
@@ -1117,7 +1117,7 @@ class AudioProcessor extends EventEmitter {
       this.stats.playbackEndTime = performance.now();
       this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
 
-      console.log(`[${this.instanceId}] 🎯 Playback session completed:`, {
+      console.log(`[${this.instanceId}]  Playback session completed:`, {
         startTime: this.stats.playbackStartTime.toFixed(2) + "ms",
         endTime: this.stats.playbackEndTime.toFixed(2) + "ms",
         actualDuration: this.stats.actualDuration.toFixed(2) + "ms",
@@ -1320,7 +1320,7 @@ class AudioProcessor extends EventEmitter {
 
       // Auto-start playback when first chunk arrives
       if (!this.isPlaying) {
-        console.log(`[${this.instanceId}] 🎵 Auto-starting playback on first chunk`);
+        console.log(`[${this.instanceId}]  Auto-starting playback on first chunk`);
         await this.start();
       }
     }

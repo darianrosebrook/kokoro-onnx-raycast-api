@@ -70,7 +70,7 @@ Examples:
             if args.json:
                 print(json.dumps(cache_info, indent=2))
             else:
-                print("\n🗂️  Cache Statistics:")
+                print("\n  Cache Statistics:")
                 print(f"   Total Size: {cache_info.get('total_size_mb', 0):.1f} MB")
                 print(f"   File Count: {cache_info.get('file_count', 0):,}")
                 print(f"   Directory Count: {cache_info.get('dir_count', 0):,}")
@@ -79,7 +79,7 @@ Examples:
                 print(f"   Needs Cleanup: {'Yes' if cache_info.get('needs_cleanup', False) else 'No'}")
                 
                 if cache_info.get('needs_cleanup', False):
-                    print(f"\n⚠️  Cleanup recommended!")
+                    print(f"\n  Cleanup recommended!")
                     print(f"   Run: python scripts/cleanup_cache.py")
                 else:
                     print(f"\n✅ Cache size is within acceptable limits")

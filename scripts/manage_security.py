@@ -35,19 +35,19 @@ def get_security_status(
 
 def display_security_status(status: Dict[str, Any]):
     """Display security status in a readable format."""
-    print("🔒 Security Status")
+    print(" Security Status")
     print("=" * 50)
 
     if not status.get("security_enabled", False):
-        print("❌ Security middleware is not enabled")
+        print(" Security middleware is not enabled")
         return
 
     print(f"✅ Security middleware: ENABLED")
-    print(f"🌐 Localhost only: {status.get('localhost_only', 'Unknown')}")
-    print(f"📅 Last updated: {status.get('timestamp', 'Unknown')}")
+    print(f" Localhost only: {status.get('localhost_only', 'Unknown')}")
+    print(f" Last updated: {status.get('timestamp', 'Unknown')}")
 
     stats = status.get("statistics", {})
-    print("\n📊 Security Statistics:")
+    print("\n Security Statistics:")
     print(f"   • Blocked requests: {stats.get('blocked_requests', 0)}")
     print(f"   • Suspicious IPs: {stats.get('suspicious_ips', 0)}")
     print(f"   • Currently blocked IPs: {stats.get('currently_blocked_ips', 0)}")
@@ -56,28 +56,28 @@ def display_security_status(status: Dict[str, Any]):
     # Display blacklisted IPs
     blacklisted = stats.get("blacklisted_ips", [])
     if blacklisted:
-        print(f"\n🚫 Blacklisted IPs ({len(blacklisted)}):")
+        print(f"\n Blacklisted IPs ({len(blacklisted)}):")
         for ip in blacklisted:
             print(f"   • {ip}")
 
     # Display suspicious IPs
     suspicious = stats.get("suspicious_ips_list", [])
     if suspicious:
-        print(f"\n⚠️  Suspicious IPs ({len(suspicious)}):")
+        print(f"\n  Suspicious IPs ({len(suspicious)}):")
         for ip in suspicious:
             print(f"   • {ip}")
 
     # Display currently blocked IPs
     blocked = stats.get("blocked_ips_list", [])
     if blocked:
-        print(f"\n🔒 Currently Blocked IPs ({len(blocked)}):")
+        print(f"\n Currently Blocked IPs ({len(blocked)}):")
         for ip in blocked:
             print(f"   • {ip}")
 
 
 def test_local_connection(api_url: str = "http://127.0.0.1:8000"):
     """Test if local connection to API works."""
-    print("🔍 Testing local connection...")
+    print(" Testing local connection...")
 
     try:
         # Test health endpoint
@@ -88,11 +88,11 @@ def test_local_connection(api_url: str = "http://127.0.0.1:8000"):
             print(f"   • Status: {health.get('status', 'Unknown')}")
             print(f"   • Model ready: {health.get('model_ready', 'Unknown')}")
         else:
-            print(f"❌ Health check failed: {response.status_code}")
+            print(f" Health check failed: {response.status_code}")
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Local connection failed: {e}")
-        print("💡 Make sure the API server is running on localhost:8000")
+        print(f" Local connection failed: {e}")
+        print(" Make sure the API server is running on localhost:8000")
 
 
 def main():
@@ -117,7 +117,7 @@ def main():
     status = get_security_status(args.api_url)
 
     if status is None:
-        print("❌ Failed to get security status")
+        print(" Failed to get security status")
         sys.exit(1)
 
     if args.json:

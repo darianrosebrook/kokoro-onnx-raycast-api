@@ -5,7 +5,7 @@
 **Status:** In Progress  
 **Priority:** P0 (Critical)
 
-## 🚨 **Current Problems Identified**
+##  **Current Problems Identified**
 
 ### **1. Misleading Metrics**
 - **TTFA calculation is wrong**: Measuring from chunk processing start, not request start
@@ -25,7 +25,7 @@
 - **0% cache hit rate**: Caching system completely ineffective
 - **Broken performance validation**: System can't validate its own metrics
 
-## 🎯 **New Performance Logging Architecture**
+##  **New Performance Logging Architecture**
 
 ### **Phase 1: Core Request Flow Tracking**
 
@@ -176,7 +176,7 @@ const efficiency = audioDuration / (streamingTime / 1000); // 25.2%
 - Provider performance comparison
 - Cache effectiveness analysis
 
-## 🔧 **Implementation Steps**
+##  **Implementation Steps**
 
 ### **Step 1: Deploy New Tracking Systems**
 1. ✅ Create `performance-tracker.ts` (client-side)
@@ -208,7 +208,7 @@ const efficiency = audioDuration / (streamingTime / 1000); // 25.2%
 3. Analyze performance data
 4. Identify remaining issues
 
-## 📊 **Expected Outcomes**
+##  **Expected Outcomes**
 
 ### **Immediate Benefits:**
 - **Accurate TTFA measurement**: Will show real 1841ms instead of 0ms
@@ -222,7 +222,7 @@ const efficiency = audioDuration / (streamingTime / 1000); // 25.2%
 - **Bottleneck identification**: Clear data on where time is spent
 - **Provider comparison**: Accurate data on CoreML vs CPU performance
 
-## 🚨 **Risk Mitigation**
+##  **Risk Mitigation**
 
 ### **Rollback Plan:**
 1. Keep old logging systems during transition
@@ -236,7 +236,7 @@ const efficiency = audioDuration / (streamingTime / 1000); // 25.2%
 3. Configurable log levels
 4. Memory management for completed flows
 
-## 📋 **Success Criteria**
+##  **Success Criteria**
 
 ### **Phase 1 Success:**
 - [ ] New tracking systems deployed and functional
@@ -256,7 +256,7 @@ const efficiency = audioDuration / (streamingTime / 1000); // 25.2%
 - [ ] Historical analysis capabilities
 - [ ] Clear bottleneck identification
 
-## 🎯 **Next Steps**
+##  **Next Steps**
 
 1. **Immediate**: Deploy new tracking systems
 2. **Week 1**: Integrate with core components

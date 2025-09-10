@@ -6,9 +6,9 @@
 # Check if temp files need cleanup (runs weekly)
 CLEANUP_MARKER=".last_cleanup_check"
 if [[ ! -f "$CLEANUP_MARKER" ]] || [[ $(find "$CLEANUP_MARKER" -mtime +7 2>/dev/null) ]]; then
-    echo "🧹 Checking for old temporary files..."
+    echo " Checking for old temporary files..."
     if python3 scripts/cleanup_temp_files.py --dry-run --force 2>/dev/null | grep -q "Would remove"; then
-        echo "💡 Hint: Run 'python3 scripts/cleanup_temp_files.py' to clean up old temp files"
+        echo " Hint: Run 'python3 scripts/cleanup_temp_files.py' to clean up old temp files"
     fi
     touch "$CLEANUP_MARKER"
 fi
@@ -67,14 +67,14 @@ export ML_TEMP_DIR="${COREML_TEMP_DIR}"
 export PYTHONTEMPDIR="${COREML_TEMP_DIR}"
 export PYTHON_TEMP="${COREML_TEMP_DIR}"
 
-echo "📁 Configured temp directories:"
+echo " Configured temp directories:"
 echo "   TMPDIR: ${TMPDIR}"
 echo "   COREML_TEMP_DIR: ${COREML_TEMP_DIR}"
 echo "   ONNXRUNTIME_TEMP_DIR: ${ONNXRUNTIME_TEMP_DIR}"
 
 # Verify environment variables are set
 if [ "$TMPDIR" != "$COREML_TEMP_DIR" ]; then
-    echo "❌ ERROR: TMPDIR not set correctly!"
+    echo " ERROR: TMPDIR not set correctly!"
     echo "   Expected: $COREML_TEMP_DIR"
     echo "   Actual: $TMPDIR"
     exit 1
@@ -110,7 +110,7 @@ source .venv/bin/activate
 
 # --- Audio Dependencies Check ---
 check_audio_dependencies() {
-    echo "🔊 Checking audio dependencies..."
+    echo " Checking audio dependencies..."
     
     local missing_deps=()
     
@@ -126,22 +126,22 @@ check_audio_dependencies() {
     
     # afplay is built into macOS, but check anyway
     if ! command -v afplay &> /dev/null; then
-        echo "⚠️  Warning: afplay not found (unusual for macOS)"
+        echo "  Warning: afplay not found (unusual for macOS)"
     fi
     
     if [ ${#missing_deps[@]} -gt 0 ]; then
-        echo "⚠️  Missing audio dependencies: ${missing_deps[*]}"
+        echo "  Missing audio dependencies: ${missing_deps[*]}"
         
         # Check if we have brew available
         if command -v brew &> /dev/null; then
-            echo "📦 Installing missing audio dependencies with Homebrew..."
+            echo " Installing missing audio dependencies with Homebrew..."
             for dep in "${missing_deps[@]}"; do
                 echo "   Installing $dep..."
-                brew install "$dep" || echo "❌ Failed to install $dep"
+                brew install "$dep" || echo " Failed to install $dep"
             done
             echo "✅ Audio dependency installation complete"
         else
-            echo "❌ Homebrew not found. Please install the following manually:"
+            echo " Homebrew not found. Please install the following manually:"
             echo "   brew install ${missing_deps[*]}"
             echo "   Or install Homebrew first: https://brew.sh"
             echo ""
@@ -158,7 +158,7 @@ check_audio_dependencies
 
 # Check for ORT model and inform user about first-time conversion
 if [[ "$(uname -m)" == "arm64" ]] && [ ! -f ".cache/ort/kokoro-v1.0.int8.ort" ]; then
-    echo "⚙️  First-time ORT conversion may be triggered on startup..."
+    echo "  First-time ORT conversion may be triggered on startup..."
     echo "This can take ~15s. Subsequent startups will be faster."
 fi
 
@@ -195,11 +195,11 @@ fi
 # Function to start persistent audio daemon
 start_persistent_audio_daemon() {
     if [ "$AUDIO_DAEMON_DISABLED" = "true" ]; then
-        echo "⚠️  Audio daemon disabled (Node.js not available)"
+        echo "  Audio daemon disabled (Node.js not available)"
         return
     fi
 
-    echo "🎵 Starting Persistent Audio Daemon on port ${AUDIO_DAEMON_PORT}..."
+    echo " Starting Persistent Audio Daemon on port ${AUDIO_DAEMON_PORT}..."
     echo "   This daemon will stay running for the entire development session."
     echo "   Raycast extension will connect to this daemon instead of spawning its own."
     
@@ -223,10 +223,10 @@ start_persistent_audio_daemon() {
         if curl -s http://localhost:${AUDIO_DAEMON_PORT}/health >/dev/null 2>&1; then
             echo "✅ Health endpoint responding"
         else
-            echo "⚠️  Health endpoint not responding yet (may take a moment)"
+            echo "  Health endpoint not responding yet (may take a moment)"
         fi
     else
-        echo "❌ Audio daemon failed to start"
+        echo " Audio daemon failed to start"
         echo "   Check logs/audio-daemon.log for details"
     fi
 }
@@ -234,7 +234,7 @@ start_persistent_audio_daemon() {
 # Function to cleanup on exit
 cleanup() {
     echo ""
-    echo "🛑 Shutting down services..."
+    echo " Shutting down services..."
     
     # Kill TTS API server
     if [ ! -z "$TTS_PID" ]; then
@@ -262,7 +262,7 @@ echo "Starting development server on http://${HOST}:${PORT}"
 echo " LOG_LEVEL is set to ${LOG_LEVEL}"
 [ "$UVICORN_RELOAD" = "1" ] && echo " Hot-reloading is enabled."
 echo ""
-echo "ℹ️  Development mode features:"
+echo "ℹ  Development mode features:"
 echo "   • API documentation: http://${HOST}:${PORT}/docs"
 echo "   • Standard JSON serialization (not ORJSON)"
 echo "   • No security headers or compression"
@@ -273,19 +273,19 @@ if [ "$AUDIO_DAEMON_DISABLED" != "true" ]; then
     echo "   • WebSocket endpoint: ws://${HOST}:${AUDIO_DAEMON_PORT}"
 fi
 echo ""
-echo "📊 Performance profiles available:"
+echo " Performance profiles available:"
 echo "   • minimal: CPU-only, fastest startup (KOKORO_DEV_PERFORMANCE_PROFILE=minimal)"
 echo "   • stable: CoreML + conservative settings (current: default)"
 echo "   • optimized: Full optimization testing"
 echo "   • benchmark: All optimizations + benchmarking"
 echo ""
-echo "💡 For production optimizations, use: ./start_production.sh"
+echo " For production optimizations, use: ./start_production.sh"
 
 # Start persistent audio daemon first
 start_persistent_audio_daemon
 
 # Start TTS API server
-echo "🚀 Starting TTS API server on http://${HOST}:${PORT}..."
+echo " Starting TTS API server on http://${HOST}:${PORT}..."
 
 # Use uvicorn directly without exec so we can handle both processes (reload is disabled by default) due to memory usage
 if [ "$UVICORN_RELOAD" = "1" ]; then

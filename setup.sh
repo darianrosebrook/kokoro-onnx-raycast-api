@@ -24,16 +24,16 @@ function print_success() {
 }
 
 function print_warning() {
-  echo "⚠️  $1"
+  echo "  $1"
 }
 
 function print_error() {
-  echo "❌ Error: $1"
+  echo " Error: $1"
   exit 1
 }
 
 function print_info() {
-  echo "ℹ️  $1"
+  echo "ℹ  $1"
 }
 
 function print_progress() {
@@ -386,7 +386,7 @@ if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
     fi
   fi
 else
-  print_info "ℹ️  Non-Apple Silicon system detected."
+  print_info "ℹ  Non-Apple Silicon system detected."
   echo "   • Standard ONNX models will be used"
   echo "   • CPU execution will be optimized automatically"
   echo "   • Performance will still be excellent for TTS generation"
@@ -492,7 +492,7 @@ echo "   • OpenAI-compatible API endpoints"
 echo "   • Intelligent text processing and segmentation"
 echo "   • Enhanced phonemization with automatic fallback"
 echo ""
-echo "🛠️  System Features:"
+echo "  System Features:"
 echo "   •  Comprehensive diagnostic and troubleshooting tools"
 echo "   •  Automatic performance monitoring and optimization"
 echo "   •  Production-ready error handling and fallbacks"
@@ -568,7 +568,7 @@ echo "You can now start the development server by running:"
 echo "  ./start_development.sh"
 if [[ "$(uname -m)" == "arm64" ]]; then
     echo ""
-    echo "⚙️  NOTE: On first run, the server will perform a one-time optimization"
+    echo "  NOTE: On first run, the server will perform a one-time optimization"
     echo "    for Apple Silicon (ORT conversion), which may take ~15 seconds."
     echo "    Subsequent startups will be much faster."
 fi

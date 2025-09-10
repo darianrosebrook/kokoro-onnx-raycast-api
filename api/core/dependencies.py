@@ -174,6 +174,6 @@ def validate_dependencies():
         logger.info("✅ All dependencies validated successfully")
         
     except Exception as e:
-        logger.error(f"❌ Dependency validation failed: {e}")
+        logger.error(f" Dependency validation failed: {e}")
         raise
 

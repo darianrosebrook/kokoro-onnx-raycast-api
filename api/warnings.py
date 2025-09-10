@@ -210,7 +210,7 @@ class StderrInterceptor:
             try:
                 handle_coreml_context_warning()
             except Exception as e:
-                logger.debug(f"⚠️ Could not track warning in performance system: {e}")
+                logger.debug(f" Could not track warning in performance system: {e}")
             return
         
         # Pass through to original stderr
@@ -218,7 +218,7 @@ class StderrInterceptor:
             self.original_stderr.write(line + '\n')
             self.original_stderr.flush()
         except Exception as e:
-            logger.debug(f"⚠️ Error writing to original stderr: {e}")
+            logger.debug(f" Error writing to original stderr: {e}")
     
     def flush(self):
         """Flush the buffer and the original stderr stream."""
@@ -265,7 +265,7 @@ def activate_stderr_interceptor():
         logger.debug(" Will suppress CoreML context leaks and msgtracer warnings")
         
     except Exception as e:
-        logger.warning(f"⚠️ Failed to activate stderr interceptor: {e}")
+        logger.warning(f" Failed to activate stderr interceptor: {e}")
 
 
 def setup_comprehensive_logging_filter():
@@ -300,12 +300,12 @@ def setup_comprehensive_logging_filter():
                 specific_logger.setLevel(logging.ERROR)
                 logger.debug(f" Logger '{logger_name}' set to ERROR level")
             except Exception as e:
-                logger.debug(f"⚠️ Could not configure logger '{logger_name}': {e}")
+                logger.debug(f" Could not configure logger '{logger_name}': {e}")
         
         logger.debug(" Comprehensive logging filter setup complete")
         
     except Exception as e:
-        logger.warning(f"⚠️ Failed to setup comprehensive logging filter: {e}")
+        logger.warning(f" Failed to setup comprehensive logging filter: {e}")
 
 
 class ONNXRuntimeWarningFilter(logging.Filter):
@@ -433,7 +433,7 @@ def configure_onnx_runtime_logging():
         logger.debug(" ONNX Runtime logging configured for minimal noise")
         
     except Exception as e:
-        logger.debug(f"⚠️ Could not configure ONNX Runtime logging: {e}")
+        logger.debug(f" Could not configure ONNX Runtime logging: {e}")
 
 
 def suppress_phonemizer_warnings():
@@ -466,7 +466,7 @@ def suppress_phonemizer_warnings():
         logger.debug(" Phonemizer, espeak, and ONNX Runtime logging set to error-only")
         logger.debug(" Custom warning filter added to root logger")
     except Exception as e:
-        logger.debug(f"⚠️ Could not configure phonemizer logging: {e}")
+        logger.debug(f" Could not configure phonemizer logging: {e}")
 
 
 def setup_coreml_warning_handler():
@@ -664,7 +664,7 @@ def setup_coreml_warning_handler():
         except Exception as e:
             # Error in warning handler - log and fallback to default behavior
             # This ensures that warning handler failures don't break the application
-            logger.debug(f"⚠️ Error in custom warning handler: {e}")
+            logger.debug(f" Error in custom warning handler: {e}")
             
             # Fallback to original warning handler
             try:
@@ -704,7 +704,7 @@ def setup_coreml_warning_handler():
             os.environ['ORT_LOGGING_SEVERITY'] = '3'  # Error level only
             logger.debug(" ONNX Runtime environment logging level set to error-only")
         except Exception as e:
-            logger.debug(f"⚠️ Could not set ONNX Runtime environment logging: {e}")
+            logger.debug(f" Could not set ONNX Runtime environment logging: {e}")
         
         # Suppress specific ONNX Runtime warnings about node assignment
         # These are normal and expected with CoreML provider
@@ -720,7 +720,7 @@ def setup_coreml_warning_handler():
         warnings.filterwarnings("ignore", message=".*context.*leak.*detected.*")
         logger.debug(" ONNX Runtime node assignment and context leak warnings suppressed")
     except Exception as e:
-        logger.debug(f"⚠️ Could not configure ONNX Runtime logging: {e}")
+        logger.debug(f" Could not configure ONNX Runtime logging: {e}")
 
 
 def get_warning_suppression_stats():
@@ -745,7 +745,7 @@ def get_warning_suppression_stats():
                 "suppression_rate": 0
             }
     except Exception as e:
-        logger.debug(f"⚠️ Could not get warning suppression stats: {e}")
+        logger.debug(f" Could not get warning suppression stats: {e}")
         return {"error": str(e)}
 
 
@@ -876,13 +876,13 @@ def suppress_coreml_context_leaks_aggressively():
             globals()['_context_leak_suppressor'] = context_leak_suppressor
             logger.debug("✅ Global context leak suppressor installed")
         except Exception as e:
-            logger.debug(f"⚠️ Could not install global context leak suppressor: {e}")
+            logger.debug(f" Could not install global context leak suppressor: {e}")
         
         logger.debug("✅ Aggressive CoreML context leak suppression configured")
         return True
         
     except Exception as e:
-        logger.debug(f"⚠️ Could not configure aggressive context leak suppression: {e}")
+        logger.debug(f" Could not configure aggressive context leak suppression: {e}")
         return False
 
 

@@ -45,7 +45,7 @@ def analyze_python_environment():
         print(f"✅ Virtual Environment: {venv_path}")
     else:
         analysis['issues'].append("Not in virtual environment")
-        print("⚠️  System Python (not in virtual environment)")
+        print("  System Python (not in virtual environment)")
     
     # Check for externally managed environment
     try:
@@ -62,7 +62,7 @@ def analyze_python_environment():
     
     print(f" Python: {sys.version}")
     print(f" Path: {sys.executable}")
-    print(f"🏗️  Platform: {platform.platform()}")
+    print(f"  Platform: {platform.platform()}")
     print(f" Architecture: {platform.machine()}")
     print()
     
@@ -113,7 +113,7 @@ def check_required_packages():
             print(f"✅ {pip_name}: {version} (optional)")
         except ImportError:
             package_status[pip_name] = {'installed': False, 'version': None, 'required': False}
-            print(f"ℹ️  {pip_name}: Missing (optional)")
+            print(f"ℹ  {pip_name}: Missing (optional)")
     
     # Check ONNX Runtime providers if available
     try:
@@ -123,11 +123,11 @@ def check_required_packages():
         
         print(f"\n ONNX Runtime Providers:")
         for provider in providers:
-            marker = "✅" if provider == 'CoreMLExecutionProvider' else "⚠️"
+            marker = "✅" if provider == 'CoreMLExecutionProvider' else ""
             print(f"   {marker} {provider}")
         
         if 'CoreMLExecutionProvider' not in providers:
-            print("   ⚠️  CoreMLExecutionProvider not available")
+            print("     CoreMLExecutionProvider not available")
     except ImportError:
         print(" ONNX Runtime: Not installed")
     
@@ -150,7 +150,7 @@ def check_system_compatibility():
     
     if not compatibility['is_macos']:
         compatibility['issues'].append("CoreML requires macOS")
-        print(f"⚠️  Platform: {sys.platform} (CoreML requires macOS)")
+        print(f"  Platform: {sys.platform} (CoreML requires macOS)")
         return compatibility
     
     # Check Apple Silicon
@@ -222,7 +222,7 @@ def provide_installation_recommendations(analysis, missing_packages, package_sta
         print(f"   pip3 install --user {' '.join(missing_packages)}")
         print()
         
-        print("⚠️  Not recommended: Override system protection")
+        print("  Not recommended: Override system protection")
         print(f"   pip3 install --break-system-packages {' '.join(missing_packages)}")
     
     elif analysis['virtual_env']:
@@ -264,7 +264,7 @@ def check_project_structure():
             missing_files.append(file_path)
     
     if missing_files:
-        print(f"\n⚠️  Missing files: {', '.join(missing_files)}")
+        print(f"\n  Missing files: {', '.join(missing_files)}")
         print("   Make sure you're in the correct project directory")
     
     print()
@@ -322,7 +322,7 @@ def main():
             print("✅ Environment is ready!")
             print("   You can now run: ./start_development.sh")
         else:
-            print("⚠️  Environment needs attention:")
+            print("  Environment needs attention:")
             if missing_packages:
                 print(f"   1. Install missing packages: {', '.join(missing_packages)}")
             if missing_files:

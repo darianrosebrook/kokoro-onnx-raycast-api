@@ -69,7 +69,7 @@ class DynamicMemoryManager:
         # Initialize with hardware-optimized base size
         self.current_arena_size_mb = self._calculate_hardware_base_size()
 
-        self.logger.info(f"🧠 Dynamic memory manager initialized with {self.current_arena_size_mb}MB base arena size")
+        self.logger.info(f" Dynamic memory manager initialized with {self.current_arena_size_mb}MB base arena size")
 
     def _calculate_hardware_base_size(self) -> int:
         """Calculate hardware-optimized base memory arena size."""
@@ -214,7 +214,7 @@ class DynamicMemoryManager:
             older_avg = sum(self.performance_history[-20:-10]) / 10
             
             if recent_avg > older_avg * 1.2:  # 20% degradation
-                self.logger.info("🔧 Performance degradation detected, triggering optimization")
+                self.logger.info(" Performance degradation detected, triggering optimization")
                 return True
 
         return True
@@ -240,7 +240,7 @@ class DynamicMemoryManager:
         self.last_optimization_time = time.time()
 
         self.logger.info(
-            f"🧠 Optimized memory arena: {old_size}MB → {new_size}MB "
+            f" Optimized memory arena: {old_size}MB → {new_size}MB "
             f"({'+' if new_size > old_size else ''}{new_size - old_size}MB)"
         )
 
@@ -282,7 +282,7 @@ class DynamicMemoryManager:
 
             if recent_avg > older_avg * 1.3:  # 30% performance degradation
                 self.logger.warning(
-                    f"⚠️ Performance degradation detected: {older_avg:.3f}s → {recent_avg:.3f}s "
+                    f" Performance degradation detected: {older_avg:.3f}s → {recent_avg:.3f}s "
                     f"({(recent_avg - older_avg) / older_avg:.1%} increase)"
                 )
                 # Force optimization on next check
@@ -306,7 +306,7 @@ class DynamicMemoryManager:
     def reset_performance_history(self):
         """Reset performance history for fresh analysis."""
         self.performance_history.clear()
-        self.logger.info("🔄 Performance history reset")
+        self.logger.info(" Performance history reset")
 
 
 def get_dynamic_memory_manager() -> Optional[DynamicMemoryManager]:
@@ -321,7 +321,7 @@ def initialize_dynamic_memory_manager(capabilities: Optional[Dict[str, Any]] = N
 
     if dynamic_memory_manager is None:
         logger = logging.getLogger(__name__)
-        logger.info("🧠 Initializing dynamic memory manager for adaptive memory sizing")
+        logger.info(" Initializing dynamic memory manager for adaptive memory sizing")
         dynamic_memory_manager = DynamicMemoryManager(capabilities=capabilities)
         logger.debug("✅ Dynamic memory manager initialized")
     else:

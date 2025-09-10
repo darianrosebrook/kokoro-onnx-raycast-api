@@ -1,6 +1,6 @@
 # CRITICAL: Concurrent Request Handling Issue
 
-> **Status:** 🚨 **CRITICAL BUG** - Second request takes 26.8s vs 3.8s for first request
+> **Status:**  **CRITICAL BUG** - Second request takes 26.8s vs 3.8s for first request
 > 
 > **Impact:** System unusable for concurrent/sequential requests
 
@@ -28,21 +28,21 @@ Request 2: Time to first byte: 26.814007s (7x slower!)
 
 ## Root Cause Analysis
 
-### 1. Session Contention Issue ⚠️
+### 1. Session Contention Issue 
 **Hypothesis:** Dual session manager has resource contention
 **Evidence:**
 - First request uses sessions normally
 - Second request waits for session availability
 - 26.8s delay suggests timeout or retry behavior
 
-### 2. Model Session Locking 🔒
+### 2. Model Session Locking 
 **Hypothesis:** Model sessions not properly released
 **Evidence:**
 - Huge delay between requests
 - Only one request tracked in monitoring
 - Suggests session blocking/deadlock
 
-### 3. Memory/Resource Exhaustion 💾  
+### 3. Memory/Resource Exhaustion   
 **Hypothesis:** First request exhausts system resources
 **Evidence:**
 - Different audio duration (25.6s vs 15.0s)
@@ -201,18 +201,18 @@ curl http://localhost:8000/status
 
 ### Immediate (Critical)
 - ✅ Fix text coverage loss
-- 🎯 Sequential requests should have consistent TTFA (<5s difference)
-- 🎯 All requests should be tracked in monitoring
-- 🎯 Audio quality consistent between requests
+-  Sequential requests should have consistent TTFA (<5s difference)
+-  All requests should be tracked in monitoring
+-  Audio quality consistent between requests
 
 ### Medium Term
-- 🎯 TTFA should improve, not degrade, on subsequent requests (caching benefit)
-- 🎯 Concurrent requests should work without blocking
-- 🎯 Memory usage stable across multiple requests
+-  TTFA should improve, not degrade, on subsequent requests (caching benefit)
+-  Concurrent requests should work without blocking
+-  Memory usage stable across multiple requests
 
 ## Risk Assessment
 
-### High Risk 🔴
+### High Risk 
 - **System unusable for real usage** - 26s delay makes system impractical
 - **Data loss** - Missing text characters affect audio quality
 - **Resource exhaustion** - May lead to system crashes under load

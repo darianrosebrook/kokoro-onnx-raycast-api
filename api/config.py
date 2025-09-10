@@ -618,7 +618,7 @@ class TTSConfig:
         # Verify chunk size calculation
         if cls.CHUNK_SIZE_BYTES != expected_bytes:
             logger.warning(
-                f"⚠️ CHUNK_SIZE_BYTES mismatch! Expected {expected_bytes}, got {cls.CHUNK_SIZE_BYTES}"
+                f" CHUNK_SIZE_BYTES mismatch! Expected {expected_bytes}, got {cls.CHUNK_SIZE_BYTES}"
             )
             logger.info(f" Correcting chunk size calculation...")
             
@@ -629,24 +629,24 @@ class TTSConfig:
         
         # Validate performance parameters
         if cls.MAX_CONCURRENT_SEGMENTS < 1:
-            logger.warning("⚠️ MAX_CONCURRENT_SEGMENTS must be at least 1, correcting to 1")
+            logger.warning(" MAX_CONCURRENT_SEGMENTS must be at least 1, correcting to 1")
             cls.MAX_CONCURRENT_SEGMENTS = 1
         elif cls.MAX_CONCURRENT_SEGMENTS > 8:
-            logger.warning(f"⚠️ MAX_CONCURRENT_SEGMENTS ({cls.MAX_CONCURRENT_SEGMENTS}) may cause resource exhaustion")
+            logger.warning(f" MAX_CONCURRENT_SEGMENTS ({cls.MAX_CONCURRENT_SEGMENTS}) may cause resource exhaustion")
         
         # Validate timeout parameters
         if cls.SEGMENT_INFERENCE_TIMEOUT_SECONDS < 5:
-            logger.warning("⚠️ SEGMENT_INFERENCE_TIMEOUT_SECONDS too low, may cause premature timeouts")
+            logger.warning(" SEGMENT_INFERENCE_TIMEOUT_SECONDS too low, may cause premature timeouts")
         
         if cls.STREAM_IDLE_TIMEOUT_SECONDS < 10:
-            logger.warning("⚠️ STREAM_IDLE_TIMEOUT_SECONDS too low, may disconnect active clients")
+            logger.warning(" STREAM_IDLE_TIMEOUT_SECONDS too low, may disconnect active clients")
         
         # Validate text processing limits
         if cls.MAX_TEXT_LENGTH > 2000:
-            logger.warning(f"⚠️ MAX_TEXT_LENGTH ({cls.MAX_TEXT_LENGTH}) exceeds OpenAI API limit")
+            logger.warning(f" MAX_TEXT_LENGTH ({cls.MAX_TEXT_LENGTH}) exceeds OpenAI API limit")
         
         if cls.MAX_SEGMENT_LENGTH > cls.MAX_TEXT_LENGTH:
-            logger.warning("⚠️ MAX_SEGMENT_LENGTH cannot exceed MAX_TEXT_LENGTH")
+            logger.warning(" MAX_SEGMENT_LENGTH cannot exceed MAX_TEXT_LENGTH")
             cls.MAX_SEGMENT_LENGTH = min(cls.MAX_SEGMENT_LENGTH, cls.MAX_TEXT_LENGTH)
         
         # Validate Enhanced Phonemizer Configuration
@@ -655,21 +655,21 @@ class TTSConfig:
         # Validate phonemizer backend
         valid_backends = ["espeak", "espeak-ng", "festival", "flite"]
         if cls.PHONEMIZER_BACKEND not in valid_backends:
-            logger.warning(f"⚠️ PHONEMIZER_BACKEND '{cls.PHONEMIZER_BACKEND}' not in valid backends, using 'espeak'")
+            logger.warning(f" PHONEMIZER_BACKEND '{cls.PHONEMIZER_BACKEND}' not in valid backends, using 'espeak'")
             cls.PHONEMIZER_BACKEND = "espeak"
         
         # Validate phonemizer language
         valid_languages = ["en-us", "en-gb", "en", "ja", "zh", "ko", "vi", "es", "fr", "hi", "it", "pt"]
         if cls.PHONEMIZER_LANGUAGE not in valid_languages:
-            logger.warning(f"⚠️ PHONEMIZER_LANGUAGE '{cls.PHONEMIZER_LANGUAGE}' not supported, using 'en-us'")
+            logger.warning(f" PHONEMIZER_LANGUAGE '{cls.PHONEMIZER_LANGUAGE}' not supported, using 'en-us'")
             cls.PHONEMIZER_LANGUAGE = "en-us"
         
         # Validate error tolerance
         if cls.PHONEMIZER_ERROR_TOLERANCE < 0.0:
-            logger.warning("⚠️ PHONEMIZER_ERROR_TOLERANCE cannot be negative, setting to 0.0")
+            logger.warning(" PHONEMIZER_ERROR_TOLERANCE cannot be negative, setting to 0.0")
             cls.PHONEMIZER_ERROR_TOLERANCE = 0.0
         elif cls.PHONEMIZER_ERROR_TOLERANCE > 1.0:
-            logger.warning("⚠️ PHONEMIZER_ERROR_TOLERANCE too high, setting to 1.0")
+            logger.warning(" PHONEMIZER_ERROR_TOLERANCE too high, setting to 1.0")
             cls.PHONEMIZER_ERROR_TOLERANCE = 1.0
         
         logger.info(f"✅ Enhanced Phonemizer configuration validated")
@@ -686,25 +686,25 @@ class TTSConfig:
             
             # Validate language configuration
             if cls.MISAKI_DEFAULT_LANG not in cls.MISAKI_SUPPORTED_LANGUAGES:
-                logger.warning(f"⚠️ MISAKI_DEFAULT_LANG '{cls.MISAKI_DEFAULT_LANG}' not supported, using 'en'")
+                logger.warning(f" MISAKI_DEFAULT_LANG '{cls.MISAKI_DEFAULT_LANG}' not supported, using 'en'")
                 cls.MISAKI_DEFAULT_LANG = "en"
             
             # Validate cache size
             if cls.MISAKI_CACHE_SIZE < 100:
-                logger.warning("⚠️ MISAKI_CACHE_SIZE too small, may impact performance")
+                logger.warning(" MISAKI_CACHE_SIZE too small, may impact performance")
             elif cls.MISAKI_CACHE_SIZE > 10000:
-                logger.warning(f"⚠️ MISAKI_CACHE_SIZE ({cls.MISAKI_CACHE_SIZE}) may consume excessive memory")
+                logger.warning(f" MISAKI_CACHE_SIZE ({cls.MISAKI_CACHE_SIZE}) may consume excessive memory")
             
             # Validate quality threshold
             if cls.MISAKI_QUALITY_THRESHOLD < 0.5:
-                logger.warning("⚠️ MISAKI_QUALITY_THRESHOLD too low, may reduce phonemization quality")
+                logger.warning(" MISAKI_QUALITY_THRESHOLD too low, may reduce phonemization quality")
             elif cls.MISAKI_QUALITY_THRESHOLD > 1.0:
-                logger.warning("⚠️ MISAKI_QUALITY_THRESHOLD too high, correcting to 1.0")
+                logger.warning(" MISAKI_QUALITY_THRESHOLD too high, correcting to 1.0")
                 cls.MISAKI_QUALITY_THRESHOLD = 1.0
             
             # Check fallback configuration
             if not cls.MISAKI_FALLBACK_ENABLED:
-                logger.warning("⚠️ MISAKI_FALLBACK_ENABLED is False, may cause failures for unsupported text")
+                logger.warning(" MISAKI_FALLBACK_ENABLED is False, may cause failures for unsupported text")
             
             logger.info(f"✅ Misaki G2P configuration validated")
             logger.info(f"   - Default language: {cls.MISAKI_DEFAULT_LANG}")

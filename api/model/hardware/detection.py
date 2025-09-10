@@ -92,13 +92,13 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
     }
 
     if not is_apple_silicon:
-        logger.info("🖥️ Non-Apple Silicon system detected - using CPU provider")
+        logger.info(" Non-Apple Silicon system detected - using CPU provider")
         capabilities['provider_priority'] = ['CPUExecutionProvider']
         # Cache the result before returning
         _capabilities_cache = capabilities
         return capabilities
 
-    logger.info("🍎 Apple Silicon system detected - analyzing capabilities...")
+    logger.info(" Apple Silicon system detected - analyzing capabilities...")
 
     # Enhanced Apple Silicon detection
     try:
@@ -107,7 +107,7 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
                                 capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             cpu_info = result.stdout.strip()
-            logger.debug(f"🔍 CPU: {cpu_info}")
+            logger.debug(f" CPU: {cpu_info}")
 
             # Detect specific Apple Silicon variants
             if 'M1' in cpu_info:
@@ -128,7 +128,7 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
                 capabilities['has_neural_engine'] = True
 
     except Exception as e:
-        logger.warning(f"⚠️ Could not detect specific chip variant: {e}")
+        logger.warning(f" Could not detect specific chip variant: {e}")
         capabilities['chip_family'] = 'Apple Silicon (Unknown)'
         capabilities['has_neural_engine'] = True  # Conservative assumption
 
@@ -138,9 +138,9 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
                                 capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             capabilities['cpu_cores'] = int(result.stdout.strip())
-            logger.debug(f"🔧 CPU Cores: {capabilities['cpu_cores']}")
+            logger.debug(f" CPU Cores: {capabilities['cpu_cores']}")
     except Exception as e:
-        logger.warning(f"⚠️ Could not detect CPU cores: {e}")
+        logger.warning(f" Could not detect CPU cores: {e}")
         capabilities['cpu_cores'] = 8  # Conservative default
 
     # Get memory information
@@ -150,16 +150,16 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
         if result.returncode == 0:
             mem_bytes = int(result.stdout.strip())
             capabilities['memory_gb'] = round(mem_bytes / (1024**3), 1)
-            logger.debug(f"💾 Memory: {capabilities['memory_gb']}GB")
+            logger.debug(f" Memory: {capabilities['memory_gb']}GB")
     except Exception as e:
-        logger.warning(f"⚠️ Could not detect memory size: {e}")
+        logger.warning(f" Could not detect memory size: {e}")
         capabilities['memory_gb'] = 8  # Conservative default
 
     # Validate ONNX Runtime providers
     try:
         import onnxruntime as ort
         available_providers = ort.get_available_providers()
-        logger.debug(f"⚙️ Available ONNX providers: {available_providers}")
+        logger.debug(f" Available ONNX providers: {available_providers}")
 
         # Build provider priority list based on capabilities
         provider_priority = []
@@ -170,11 +170,11 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
             logger.debug("✅ CoreML provider available and recommended")
         else:
             if 'CoreMLExecutionProvider' not in available_providers:
-                logger.warning("⚠️ CoreML provider not available")
+                logger.warning(" CoreML provider not available")
                 capabilities['hardware_issues'].append(
                     'CoreML provider unavailable')
             if not capabilities['has_neural_engine']:
-                logger.warning("⚠️ Neural Engine not detected")
+                logger.warning(" Neural Engine not detected")
                 capabilities['hardware_issues'].append(
                     'Neural Engine not available')
 
@@ -183,7 +183,7 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
             provider_priority.append('CPUExecutionProvider')
             logger.debug("✅ CPU provider available")
         else:
-            logger.error("❌ CPU provider not available - critical error")
+            logger.error(" CPU provider not available - critical error")
             capabilities['hardware_issues'].append('CPU provider unavailable')
 
         capabilities['provider_priority'] = provider_priority
@@ -193,14 +193,14 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
         if provider_priority:
             capabilities['recommended_provider'] = provider_priority[0]
             logger.info(
-                f"🎯 Recommended provider: {capabilities['recommended_provider']}")
+                f" Recommended provider: {capabilities['recommended_provider']}")
         else:
-            logger.error("❌ No suitable providers available")
+            logger.error(" No suitable providers available")
             capabilities['hardware_issues'].append(
                 'No suitable providers available')
 
     except Exception as e:
-        logger.error(f"❌ Could not validate ONNX providers: {e}")
+        logger.error(f" Could not validate ONNX providers: {e}")
         capabilities['hardware_issues'].append(
             f'Provider validation failed: {e}')
         capabilities['provider_priority'] = ['CPUExecutionProvider']
@@ -208,11 +208,11 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
 
     # Log key capabilities (condensed for cleaner output)
     logger.info(
-        f"📊 Hardware: {capabilities.get('chip_family', 'Unknown')} | Neural Engine: {'✅' if capabilities['has_neural_engine'] else '❌'} | Provider: {capabilities['recommended_provider']}")
+        f" Hardware: {capabilities.get('chip_family', 'Unknown')} | Neural Engine: {'✅' if capabilities['has_neural_engine'] else ''} | Provider: {capabilities['recommended_provider']}")
 
     if capabilities['hardware_issues']:
         logger.warning(
-            f"⚠️ Hardware issues detected: {capabilities['hardware_issues']}")
+            f" Hardware issues detected: {capabilities['hardware_issues']}")
 
     # Cache the result before returning
     _capabilities_cache = capabilities
@@ -225,7 +225,7 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
         fp = compute_system_fingerprint(TTSConfig.MODEL_PATH, TTSConfig.VOICES_PATH)
         cache_name = f"capabilities_{fp}.json"
         save_json_cache_atomic(cache_name, capabilities)
-        logger.debug(f"💾 Saved hardware capabilities to cache: {fp[:8]}...")
+        logger.debug(f" Saved hardware capabilities to cache: {fp[:8]}...")
     except Exception as e:
         logger.debug(f"Could not save persistent capabilities cache: {e}")
     
@@ -241,7 +241,7 @@ def clear_hardware_capabilities_cache() -> None:
     """
     global _capabilities_cache
     _capabilities_cache = None
-    logging.getLogger(__name__).debug("🧹 Cleared hardware capabilities cache")
+    logging.getLogger(__name__).debug(" Cleared hardware capabilities cache")
 
 
 @lru_cache(maxsize=8)

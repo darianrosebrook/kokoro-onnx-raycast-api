@@ -104,7 +104,7 @@ class DebugModeManager {
     this.debugMode = !explicitlyDisabled && !isProduction;
 
     if (this.debugMode) {
-      console.log("🔧 Debug mode enabled via:", {
+      console.log(" Debug mode enabled via:", {
         hasDebugFlag,
         envDebug,
         nodeEnvDebug,
@@ -114,7 +114,7 @@ class DebugModeManager {
         defaultEnabled: !isProduction && !explicitlyDisabled,
       });
     } else {
-      console.log("ℹ️ Debug mode disabled. Enable with KOKORO_DEBUG=1 or --debug flag");
+      console.log("ℹ Debug mode disabled. Enable with KOKORO_DEBUG=1 or --debug flag");
     }
   }
 

@@ -408,7 +408,7 @@ export function PerformanceChart({
                   d.p95Value > threshold ? "#ef4444" : "#22c55e"
                 };">
                   ${
-                    d.p95Value > threshold ? "⚠️ Above" : "✅ Within"
+                    d.p95Value > threshold ? " Above" : "✅ Within"
                   } threshold (${threshold}${getThresholdUnit(metric)})
                 </span>
                </div>`
@@ -425,10 +425,10 @@ export function PerformanceChart({
               };">
                 ${
                   trendDirection === "increasing"
-                    ? "📈"
+                    ? ""
                     : trendDirection === "decreasing"
-                    ? "📉"
-                    : "➡️"
+                    ? ""
+                    : ""
                 } ${trendDirection}</span></div>
               <div>Config: ${d.benchmark.config.preset} | ${
             d.benchmark.config.stream ? "streaming" : "non-streaming"

@@ -140,14 +140,14 @@ def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
             # Smoke test the backend
             test_result = _misaki_backend("hello")
             if test_result is None or not hasattr(test_result, '__iter__') or len(test_result) < 2:
-                logger.error(f"❌ Misaki backend test failed: returned {test_result}")
+                logger.error(f" Misaki backend test failed: returned {test_result}")
                 _misaki_backend = None
                 _misaki_available = False
                 return None
 
             phonemes, _tokens = test_result[:2]
             if phonemes is None or not isinstance(phonemes, str):
-                logger.error(f"❌ Misaki backend test failed: invalid phonemes {phonemes}")
+                logger.error(f" Misaki backend test failed: invalid phonemes {phonemes}")
                 _misaki_backend = None
                 _misaki_available = False
                 return None
@@ -157,11 +157,11 @@ def _initialize_misaki_backend(lang: str = 'en') -> Optional[Any]:
             return _misaki_backend
 
         except ImportError as e:
-            logger.warning(f"⚠️ Misaki G2P not available: {e}")
+            logger.warning(f" Misaki G2P not available: {e}")
             _misaki_available = False
             return None
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Misaki G2P: {e}")
+            logger.error(f" Failed to initialize Misaki G2P: {e}")
             _misaki_available = False
             return None
 
@@ -267,7 +267,7 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
             if result is None or not hasattr(result, '__iter__') or len(result) < 2:
                 # Demote to debug unless verbose requested
                 if _VERBOSE_LOGS:
-                    logger.warning(f"⚠️ Misaki returned invalid result format for '{text[:30]}...': {result}")
+                    logger.warning(f" Misaki returned invalid result format for '{text[:30]}...': {result}")
                 else:
                     logger.debug(f"Misaki returned invalid result format for '{text[:30]}...': {result}")
                 raise ValueError("Invalid misaki result format")
@@ -280,14 +280,14 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
             # Validate phonemes are not None and can be processed
             if phonemes is None:
                 if _VERBOSE_LOGS:
-                    logger.warning(f"⚠️ Misaki returned None phonemes for '{text[:30]}...'")
+                    logger.warning(f" Misaki returned None phonemes for '{text[:30]}...'")
                 else:
                     logger.debug(f"Misaki returned None phonemes for '{text[:30]}...'")
                 raise ValueError("Misaki returned None phonemes")
                 
             if not isinstance(phonemes, str):
                 if _VERBOSE_LOGS:
-                    logger.warning(f"⚠️ Misaki returned non-string phonemes for '{text[:30]}...': {type(phonemes)}")
+                    logger.warning(f" Misaki returned non-string phonemes for '{text[:30]}...': {type(phonemes)}")
                 else:
                     logger.debug(f"Misaki returned non-string phonemes for '{text[:30]}...': {type(phonemes)}")
                 raise ValueError("Misaki returned invalid phoneme type")
@@ -305,7 +305,7 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
             
             # Validate we have actual phoneme content
             if not phoneme_list:
-                logger.warning(f"⚠️ Misaki produced empty phoneme list for '{text[:30]}...'")
+                logger.warning(f" Misaki produced empty phoneme list for '{text[:30]}...'")
                 raise ValueError("Empty phoneme result")
             
             # Update success statistics
@@ -330,7 +330,7 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
         except Exception as e:
             # Demote to debug unless verbose requested
             if _VERBOSE_LOGS:
-                logger.warning(f"⚠️ Misaki phonemization failed for '{text[:30]}...': {e}\n ")
+                logger.warning(f" Misaki phonemization failed for '{text[:30]}...': {e}\n ")
             else:
                 logger.debug(f"Misaki phonemization failed for '{text[:30]}...': {e}")
             # Fall through to fallback
@@ -361,12 +361,12 @@ def text_to_phonemes_misaki(text: str, lang: str = 'en') -> List[str]:
             return phonemes
             
         except Exception as e:
-            logger.error(f"❌ Both Misaki and fallback phonemization failed: {e}")
+            logger.error(f" Both Misaki and fallback phonemization failed: {e}")
             # Ultimate fallback: character-level tokenization
             return list(text.replace(' ', ''))
     
     else:
-        logger.error("❌ No fallback phonemization available")
+        logger.error(" No fallback phonemization available")
         return list(text.replace(' ', ''))
 
 

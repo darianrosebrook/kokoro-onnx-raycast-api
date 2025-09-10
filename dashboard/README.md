@@ -4,7 +4,7 @@ A comprehensive dashboard for monitoring and testing Kokoro TTS performance with
 
 ## Features
 
-### 🎵 Live Audio Streaming
+###  Live Audio Streaming
 - **Real-time TTS Testing**: Type text and hear it spoken instantly with visual feedback
 - **Audio Waveform Visualization**: See the audio stream in real-time with amplitude visualization
 - **Performance Metrics**: Track TTFA (Time to First Audio), chunk delivery, and streaming efficiency
@@ -12,7 +12,7 @@ A comprehensive dashboard for monitoring and testing Kokoro TTS performance with
 - **Speed Control**: Adjust speech speed from 0.5x to 2.0x
 - **WebSocket Integration**: Direct connection to the audio daemon for low-latency streaming
 
-### 📊 Benchmark Analysis
+###  Benchmark Analysis
 - **Historical Performance Data**: Analyze past benchmark runs
 - **Interactive Charts**: Visualize TTFA, RTF, and memory usage trends
 - **Filtering & Search**: Filter by preset, streaming mode, and voice

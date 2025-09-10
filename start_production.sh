@@ -13,7 +13,7 @@ WORKER_CLASS=${WORKER_CLASS:-"uvicorn.workers.UvicornWorker"}
 # --- Worker Calculation ---
 if [[ "$(uname -m)" == "arm64" ]]; then
     WORKERS=1
-    echo "⚠️  Apple Silicon detected—running a single Gunicorn worker to ensure CoreML stability."
+    echo "  Apple Silicon detected—running a single Gunicorn worker to ensure CoreML stability."
 else
     # Default to the number of CPU cores if `nproc` is available
     if command -v nproc >/dev/null 2>&1; then
@@ -21,7 +21,7 @@ else
     else
         WORKERS=2 # Fallback for systems without nproc
     fi
-    echo "⚙️  Automatically configuring $WORKERS Gunicorn workers based on CPU cores."
+    echo "  Automatically configuring $WORKERS Gunicorn workers based on CPU cores."
 fi
 
 # --- Pre-flight Checks ---
@@ -37,7 +37,7 @@ source .venv/bin/activate
 
 # --- Audio Dependencies Check ---
 check_audio_dependencies() {
-    echo "🔊 Checking audio dependencies..."
+    echo " Checking audio dependencies..."
     
     local missing_deps=()
     
@@ -53,22 +53,22 @@ check_audio_dependencies() {
     
     # afplay is built into macOS, but check anyway
     if ! command -v afplay &> /dev/null; then
-        echo "⚠️  Warning: afplay not found (unusual for macOS)"
+        echo "  Warning: afplay not found (unusual for macOS)"
     fi
     
     if [ ${#missing_deps[@]} -gt 0 ]; then
-        echo "⚠️  Missing audio dependencies: ${missing_deps[*]}"
+        echo "  Missing audio dependencies: ${missing_deps[*]}"
         
         # Check if we have brew available
         if command -v brew &> /dev/null; then
-            echo "📦 Installing missing audio dependencies with Homebrew..."
+            echo " Installing missing audio dependencies with Homebrew..."
             for dep in "${missing_deps[@]}"; do
                 echo "   Installing $dep..."
-                brew install "$dep" || echo "❌ Failed to install $dep"
+                brew install "$dep" || echo " Failed to install $dep"
             done
             echo "✅ Audio dependency installation complete"
         else
-            echo "❌ Homebrew not found. Please install the following manually:"
+            echo " Homebrew not found. Please install the following manually:"
             echo "   brew install ${missing_deps[*]}"
             echo "   Or install Homebrew first: https://brew.sh"
             echo ""
@@ -111,7 +111,7 @@ export ONNXRUNTIME_TEMP_DIR="${COREML_TEMP_DIR}"
 export ONNXRUNTIME_TEMP="${COREML_TEMP_DIR}"
 export ONNXRUNTIME_CACHE_DIR="${COREML_TEMP_DIR}"
 
-echo "📁 Configured temp directories:"
+echo " Configured temp directories:"
 echo "   TMPDIR: ${TMPDIR}"
 echo "   COREML_TEMP_DIR: ${COREML_TEMP_DIR}"
 echo "   ONNXRUNTIME_TEMP_DIR: ${ONNXRUNTIME_TEMP_DIR}"
@@ -183,11 +183,11 @@ fi
 # Function to start persistent audio daemon
 start_persistent_audio_daemon() {
     if [ "$AUDIO_DAEMON_DISABLED" = "true" ]; then
-        echo "⚠️  Audio daemon disabled (Node.js not available)"
+        echo "  Audio daemon disabled (Node.js not available)"
         return
     fi
 
-    echo "🎵 Starting Persistent Audio Daemon on port ${AUDIO_DAEMON_PORT}..."
+    echo " Starting Persistent Audio Daemon on port ${AUDIO_DAEMON_PORT}..."
     echo "   This daemon will stay running for the entire production session."
     echo "   Raycast extension will connect to this daemon instead of spawning its own."
     
@@ -211,10 +211,10 @@ start_persistent_audio_daemon() {
         if curl -s http://localhost:${AUDIO_DAEMON_PORT}/health >/dev/null 2>&1; then
             echo "✅ Health endpoint responding"
         else
-            echo "⚠️  Health endpoint not responding yet (may take a moment)"
+            echo "  Health endpoint not responding yet (may take a moment)"
         fi
     else
-        echo "❌ Audio daemon failed to start"
+        echo " Audio daemon failed to start"
         echo "   Check logs/audio-daemon.log for details"
     fi
 }
@@ -222,7 +222,7 @@ start_persistent_audio_daemon() {
 # Function to cleanup on exit
 cleanup() {
     echo ""
-    echo "🛑 Shutting down services..."
+    echo " Shutting down services..."
     
     # Kill audio daemon
     if [ -f ".audio-daemon.pid" ]; then

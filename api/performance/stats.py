@@ -455,9 +455,9 @@ def handle_coreml_context_warning():
                 cleanup_result = force_coreml_memory_cleanup()
                 freed_mb = cleanup_result.get('memory_freed_mb', 0)
                 if freed_mb > 0:
-                    logger.debug(f"🧠 Advanced memory cleanup freed {freed_mb:.1f}MB")
+                    logger.debug(f" Advanced memory cleanup freed {freed_mb:.1f}MB")
             except Exception as cleanup_e:
-                logger.debug(f"⚠️ Could not trigger advanced memory cleanup: {cleanup_e}")
+                logger.debug(f" Could not trigger advanced memory cleanup: {cleanup_e}")
             
     except Exception as e:
         logger.debug(f"Error handling CoreML context warning: {e}")
@@ -1242,7 +1242,7 @@ def update_fast_path_performance_stats(
                 logger.info(f"  ✅ TTFA Improvement: {improvement:.1f}% better than target")
             else:
                 shortfall = ((avg_ttfa - target) / target) * 100
-                logger.warning(f"  ⚠️ TTFA Shortfall: {shortfall:.1f}% above target")
+                logger.warning(f"   TTFA Shortfall: {shortfall:.1f}% above target")
         
         # Log warnings for performance issues
         if processing_method == 'fast_path' and ttfa_ms > 200:

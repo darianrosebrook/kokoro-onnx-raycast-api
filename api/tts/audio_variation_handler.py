@@ -127,7 +127,7 @@ class AudioVariationHandler:
         
         # Reduce log noise: only log inconsistencies at INFO, full result at DEBUG
         if not result.get('is_consistent', True):
-            logger.info(f"🎯 Audio size variation detected: {result}")
+            logger.info(f" Audio size variation detected: {result}")
         else:
             logger.debug(f"Audio variation analysis: {result}")
         return result
@@ -301,7 +301,7 @@ class AudioVariationHandler:
             if new_threshold != self._variation_threshold:
                 self._variation_threshold = new_threshold
                 optimization_action = "increased"
-                logger.info(f"🔧 Threshold increased due to low success rate: {old_threshold:.1f}% -> {new_threshold:.1f}%")
+                logger.info(f" Threshold increased due to low success rate: {old_threshold:.1f}% -> {new_threshold:.1f}%")
         
         elif current_success_rate > 0.98 and self._variation_threshold > self._min_threshold:
             # Very high success rate, we can be more strict
@@ -309,7 +309,7 @@ class AudioVariationHandler:
             if new_threshold != self._variation_threshold:
                 self._variation_threshold = new_threshold
                 optimization_action = "decreased"
-                logger.info(f"🔧 Threshold decreased due to high success rate: {old_threshold:.1f}% -> {new_threshold:.1f}%")
+                logger.info(f" Threshold decreased due to high success rate: {old_threshold:.1f}% -> {new_threshold:.1f}%")
         
         # Update statistics
         if optimization_action != "none":
@@ -337,7 +337,7 @@ class AudioVariationHandler:
         
         This would typically be run in a background task
         """
-        logger.info(f"🧪 Starting soak test: {duration_minutes} minutes, {test_interval_seconds}s intervals")
+        logger.info(f" Starting soak test: {duration_minutes} minutes, {test_interval_seconds}s intervals")
         
         start_time = time.time()
         end_time = start_time + (duration_minutes * 60)
@@ -358,7 +358,7 @@ class AudioVariationHandler:
                 'health_records': len([r for health_list in self._stream_health.values() for r in health_list])
             })
             
-            logger.info(f"🔍 Soak test checkpoint: threshold={self._variation_threshold:.1f}%, "
+            logger.info(f" Soak test checkpoint: threshold={self._variation_threshold:.1f}%, "
                        f"success_rate={optimization_result.get('success_rate', 0):.2f}")
         
         # Generate soak test summary
@@ -408,7 +408,7 @@ class AudioVariationHandler:
     def enable_optimization(self, enabled: bool = True) -> None:
         """Enable or disable adaptive threshold optimization"""
         self._optimization_enabled = enabled
-        logger.info(f"🔧 Adaptive optimization {'enabled' if enabled else 'disabled'}")
+        logger.info(f" Adaptive optimization {'enabled' if enabled else 'disabled'}")
     
     def set_threshold_bounds(self, min_threshold: float, max_threshold: float) -> None:
         """Set the bounds for adaptive threshold optimization"""
@@ -421,7 +421,7 @@ class AudioVariationHandler:
         # Ensure current threshold is within bounds
         self._variation_threshold = max(min_threshold, min(self._variation_threshold, max_threshold))
         
-        logger.info(f"🎯 Threshold bounds set: {min_threshold:.1f}% - {max_threshold:.1f}%")
+        logger.info(f" Threshold bounds set: {min_threshold:.1f}% - {max_threshold:.1f}%")
     
     def get_statistics(self) -> Dict:
         """Get variation handling statistics"""

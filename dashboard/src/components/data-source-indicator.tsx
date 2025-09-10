@@ -49,7 +49,7 @@ export function DataSourceIndicator() {
           dataSource === "real" ? "bg-green-600 hover:bg-green-700" : ""
         }
       >
-        {dataSource === "real" ? "✅ Real Data" : "⚠️ Mock Data"}
+        {dataSource === "real" ? "✅ Real Data" : " Mock Data"}
       </Badge>
       <span className="text-sm text-muted-foreground">
         {benchmarkCount} benchmark{benchmarkCount !== 1 ? "s" : ""}

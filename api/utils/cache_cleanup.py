@@ -243,7 +243,7 @@ class CacheCleanupManager:
                 current_size -= file_size / (1024 * 1024)
                 
             except Exception as e:
-                logger.warning(f"⚠️ Error removing file {file_path}: {e}")
+                logger.warning(f" Error removing file {file_path}: {e}")
                 continue
         
         logger.info(f" Size cleanup: removed {removed_files} files, freed {freed_space/1024/1024:.1f}MB")
@@ -360,7 +360,7 @@ class CacheCleanupManager:
                     pass
                     
         except Exception as e:
-            logger.debug(f"⚠️ Error during empty dir cleanup: {e}")
+            logger.debug(f" Error during empty dir cleanup: {e}")
 
 # Global instance for easy access
 cache_manager = CacheCleanupManager()

@@ -1,6 +1,6 @@
 # TTFA Optimization Progress Update
 
-> **Status:** 🚀 **SIGNIFICANT PROGRESS** - TTFA improved from 8371ms to 2188ms (3.8x improvement)
+> **Status:**  **SIGNIFICANT PROGRESS** - TTFA improved from 8371ms to 2188ms (3.8x improvement)
 > 
 > **Current State:** No streaming errors, consistent operation, aggressive optimizations applied
 
@@ -24,7 +24,7 @@
    - Smaller segment sizes for complex text
    - Extended fast processing for first two segments
 
-### 📊 **Current Performance Analysis**
+###  **Current Performance Analysis**
 
 **Test Results from Latest Run:**
 ```
@@ -118,7 +118,7 @@ use_fast_processing = (i in fast_indices) or (i <= 1)
 - Proper chunk delivery
 - Monitoring system active
 
-### ⚠️ **Areas for Investigation**
+###  **Areas for Investigation**
 - Provider selection logic (why CPU vs CoreML?)
 - Second segment performance degradation (12.9s)
 - Memory usage during long text processing
@@ -194,7 +194,7 @@ use_fast_processing = (i in fast_indices) or (i <= 1)
 
 ## Conclusion
 
-**🎉 Major Progress Achieved**
+** Major Progress Achieved**
 
 We've successfully:
 - ✅ Eliminated all streaming errors
@@ -202,7 +202,7 @@ We've successfully:
 - ✅ Applied aggressive optimizations for further gains
 - ✅ Established comprehensive monitoring
 
-**🎯 Path to Target Clear**
+** Path to Target Clear**
 
 The remaining 2.7x improvement to reach 800ms is achievable through:
 1. **Model inference optimization** (primary bottleneck)

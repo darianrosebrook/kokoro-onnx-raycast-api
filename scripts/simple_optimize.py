@@ -139,7 +139,7 @@ def main():
         logger.info(f"Size reduction: {reduction:.1f}% ({input_size:.1f}MB -> {output_size:.1f}MB)")
         
     else:
-        logger.error("❌ Optimization failed")
+        logger.error(" Optimization failed")
         return 1
     
     return 0

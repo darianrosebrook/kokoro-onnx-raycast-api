@@ -636,10 +636,10 @@ export class AudioTimingBenchmark {
       );
       console.log(`  Daemon Lifetime: ${metric.daemonLifetimeMs.toFixed(1)}ms`);
       console.log(
-        `  End-of-Stream: ${metric.endOfStreamDetected ? "✅" : "❌"} (${metric.endOfStreamDelayMs.toFixed(1)}ms delay)`
+        `  End-of-Stream: ${metric.endOfStreamDetected ? "✅" : ""} (${metric.endOfStreamDelayMs.toFixed(1)}ms delay)`
       );
-      console.log(`  Premature Termination: ${metric.prematureTermination ? "❌" : "✅"}`);
-      console.log(`  Success: ${metric.success ? "✅" : "❌"}`);
+      console.log(`  Premature Termination: ${metric.prematureTermination ? "" : "✅"}`);
+      console.log(`  Success: ${metric.success ? "✅" : ""}`);
     }
 
     const summary = this.generateReport();

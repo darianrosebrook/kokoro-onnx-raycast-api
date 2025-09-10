@@ -3,7 +3,7 @@
 **Author**: @darianrosebrook  
 **Status**: Production-ready with optimized configuration
 
-## 🚀 **Production Configuration Summary**
+##  **Production Configuration Summary**
 
 ### **✅ Optimized Settings (Based on Investigation Results)**
 
@@ -14,7 +14,7 @@
 | `KOKORO_MEMORY_ARENA_SIZE_MB` | `3072` | Provides excellent memory efficiency (4-5MB RSS range) |
 | `KOKORO_DEFER_BACKGROUND_INIT` | `true` | Eliminates background task interference |
 
-### **📊 Performance Targets (Achieved)**
+### ** Performance Targets (Achieved)**
 
 | Metric | Target | Achieved | Status |
 |--------|--------|----------|--------|
@@ -24,7 +24,7 @@
 | Memory (long) | <300MB | 4.4-5.0MB | ✅ **Excellent** |
 | Concurrent (2 req) | <500ms | 9.1ms | ✅ **Excellent** |
 
-## 🛠 **Deployment Steps**
+##  **Deployment Steps**
 
 ### **1. Environment Setup**
 
@@ -93,7 +93,7 @@ grep "TTFA target missed" logs/server.log
 grep "cold start" logs/server.log
 ```
 
-## 🔧 **Configuration Options**
+##  **Configuration Options**
 
 ### **Environment Variables**
 
@@ -116,7 +116,7 @@ grep "cold start" logs/server.log
 | `optimized` | 50ms | Same as stable |
 | `benchmark` | 40ms | Testing only (more underruns) |
 
-## 📈 **Performance Optimization**
+##  **Performance Optimization**
 
 ### **Cold Start Mitigation**
 
@@ -153,7 +153,7 @@ python scripts/run_bench.py --preset=short --stream --trials=3 --concurrency=2
 ps aux | grep python | grep kokoro
 ```
 
-## 🚨 **Troubleshooting**
+##  **Troubleshooting**
 
 ### **Common Issues**
 
@@ -198,7 +198,7 @@ python scripts/run_bench.py --preset=short --stream --trials=5 --verbose
 curl http://localhost:8000/performance/status | jq
 ```
 
-## 🔒 **Security Considerations**
+##  **Security Considerations**
 
 ### **Network Security**
 - ✅ **Localhost Binding**: Default `127.0.0.1` binding
@@ -210,7 +210,7 @@ curl http://localhost:8000/performance/status | jq
 - **CPU**: Moderate usage during synthesis
 - **Network**: Streaming audio chunks
 
-## 📋 **Deployment Checklist**
+##  **Deployment Checklist**
 
 ### **Pre-Deployment**
 - [ ] Environment setup completed
@@ -230,7 +230,7 @@ curl http://localhost:8000/performance/status | jq
 - [ ] Cold start mitigation implemented
 - [ ] Concurrency limits enforced
 
-## 🎯 **Best Practices**
+##  **Best Practices**
 
 ### **1. Provider Selection**
 - **Always use CPU provider**: `KOKORO_COREML_COMPUTE_UNITS=CPUOnly`
@@ -253,7 +253,7 @@ curl http://localhost:8000/performance/status | jq
 - **Monitor memory**: Should be <50MB RSS
 - **Check logs**: Look for performance warnings
 
-## 📞 **Support**
+##  **Support**
 
 For issues or questions:
 1. Check the troubleshooting section above

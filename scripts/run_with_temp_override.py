@@ -87,7 +87,7 @@ def setup_aggressive_temp_override():
     tempfile.NamedTemporaryFile = override_NamedTemporaryFile
     
     print(f"✅ Aggressive temp override applied: {local_temp_str}")
-    print(f"🔧 Overrode {len(temp_vars)} env vars + 4 tempfile functions")
+    print(f" Overrode {len(temp_vars)} env vars + 4 tempfile functions")
     
     return local_temp_str
 
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     project_root = Path(__file__).parent.parent
     os.chdir(project_root)
     
-    print(f"🚀 Running {script_path} with temp override...")
+    print(f" Running {script_path} with temp override...")
     
     # Import and run the target script
     sys.argv = [script_path] + script_args

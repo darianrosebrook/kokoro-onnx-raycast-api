@@ -127,26 +127,26 @@ class ProductionMonitor:
         
         # TTFA alerts
         if metrics.get('ttfa_ms', 0) > self.alert_thresholds['ttfa_ms']:
-            alerts.append(f"⚠️  High TTFA: {metrics['ttfa_ms']:.1f}ms > {self.alert_thresholds['ttfa_ms']}ms")
+            alerts.append(f"  High TTFA: {metrics['ttfa_ms']:.1f}ms > {self.alert_thresholds['ttfa_ms']}ms")
         
         # Memory alerts
         if metrics.get('rss_mb', 0) > self.alert_thresholds['memory_mb']:
-            alerts.append(f"⚠️  High memory: {metrics['rss_mb']:.1f}MB > {self.alert_thresholds['memory_mb']}MB")
+            alerts.append(f"  High memory: {metrics['rss_mb']:.1f}MB > {self.alert_thresholds['memory_mb']}MB")
         
         # Cold start alerts
         if metrics.get('is_cold_start', False):
-            alerts.append(f"⚠️  Cold start detected: {metrics['ttfa_ms']:.1f}ms")
+            alerts.append(f"  Cold start detected: {metrics['ttfa_ms']:.1f}ms")
         
         # Provider alerts
         if metrics.get('active_provider') != 'CPUExecutionProvider':
-            alerts.append(f"⚠️  Non-optimal provider: {metrics.get('active_provider', 'unknown')}")
+            alerts.append(f"  Non-optimal provider: {metrics.get('active_provider', 'unknown')}")
         
         return alerts
     
     def format_metrics(self, metrics: Dict) -> str:
         """Format metrics for display."""
         lines = [
-            f"📊 Performance Metrics ({datetime.now().strftime('%H:%M:%S')})",
+            f" Performance Metrics ({datetime.now().strftime('%H:%M:%S')})",
             f"   TTFA: {metrics.get('ttfa_ms', 'N/A'):.1f}ms",
             f"   Memory: {metrics.get('rss_mb', 'N/A'):.1f}MB",
             f"   Provider: {metrics.get('active_provider', 'N/A')}",
@@ -155,7 +155,7 @@ class ProductionMonitor:
         ]
         
         if metrics.get('is_cold_start'):
-            lines.append(f"   🥶 Cold Start: {metrics['ttfa_ms']:.1f}ms")
+            lines.append(f"    Cold Start: {metrics['ttfa_ms']:.1f}ms")
         
         return "\n".join(lines)
     
@@ -207,16 +207,16 @@ class ProductionMonitor:
     
     async def monitor_continuously(self):
         """Run continuous monitoring."""
-        logger.info(f"🚀 Starting production monitoring for {self.base_url}")
-        logger.info(f"📊 Monitoring interval: {self.interval} seconds")
-        logger.info(f"🎯 Alert thresholds: TTFA<{self.alert_thresholds['ttfa_ms']}ms, Memory<{self.alert_thresholds['memory_mb']}MB")
+        logger.info(f" Starting production monitoring for {self.base_url}")
+        logger.info(f" Monitoring interval: {self.interval} seconds")
+        logger.info(f" Alert thresholds: TTFA<{self.alert_thresholds['ttfa_ms']}ms, Memory<{self.alert_thresholds['memory_mb']}MB")
         
         cycle_count = 0
         
         while True:
             try:
                 cycle_count += 1
-                logger.info(f"🔄 Monitoring cycle {cycle_count}")
+                logger.info(f" Monitoring cycle {cycle_count}")
                 
                 metrics = await self.run_monitoring_cycle()
                 
@@ -226,7 +226,7 @@ class ProductionMonitor:
                 
                 # Display alerts
                 if metrics['alerts']:
-                    print("\n🚨 ALERTS:")
+                    print("\n ALERTS:")
                     for alert in metrics['alerts']:
                         print(f"   {alert}")
                 
@@ -234,7 +234,7 @@ class ProductionMonitor:
                 if cycle_count > 1:
                     avg_ttfa = sum(m['ttfa_ms'] for m in self.metrics_history[-10:] if m['ttfa_ms'] != float('inf')) / len([m for m in self.metrics_history[-10:] if m['ttfa_ms'] != float('inf')])
                     avg_memory = sum(m['rss_mb'] for m in self.metrics_history[-10:]) / len(self.metrics_history[-10:])
-                    print(f"\n📈 Last 10 cycles average: TTFA={avg_ttfa:.1f}ms, Memory={avg_memory:.1f}MB")
+                    print(f"\n Last 10 cycles average: TTFA={avg_ttfa:.1f}ms, Memory={avg_memory:.1f}MB")
                 
                 print("="*60)
                 
@@ -242,10 +242,10 @@ class ProductionMonitor:
                 await asyncio.sleep(self.interval)
                 
             except KeyboardInterrupt:
-                logger.info("🛑 Monitoring stopped by user")
+                logger.info(" Monitoring stopped by user")
                 break
             except Exception as e:
-                logger.error(f"❌ Monitoring cycle failed: {e}")
+                logger.error(f" Monitoring cycle failed: {e}")
                 await asyncio.sleep(self.interval)
     
     def save_metrics_report(self, filename: str = None):
@@ -271,7 +271,7 @@ class ProductionMonitor:
         with open(filename, 'w') as f:
             json.dump(report, f, indent=2)
         
-        logger.info(f"📄 Metrics report saved: {filename}")
+        logger.info(f" Metrics report saved: {filename}")
         return filename
     
     def calculate_summary(self) -> Dict:
@@ -318,11 +318,11 @@ async def main():
         try:
             await monitor.monitor_continuously()
         except KeyboardInterrupt:
-            logger.info("🛑 Monitoring stopped")
+            logger.info(" Monitoring stopped")
         
         if args.save_report:
             report_file = monitor.save_metrics_report()
-            print(f"\n📄 Metrics report saved: {report_file}")
+            print(f"\n Metrics report saved: {report_file}")
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -95,7 +95,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       errorCount: 0,
     };
 
-    logger.info(`🎵 AdaptiveAudioDaemon initialized: ${this.instanceId}`, {
+    logger.info(` AdaptiveAudioDaemon initialized: ${this.instanceId}`, {
       component: this.name,
       method: "constructor",
       bufferConfig: this.bufferConfig,
@@ -113,7 +113,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       this.optimizeConfiguration();
     }, intervalMs);
 
-    logger.info(`🔧 Started adaptive optimization (${intervalMs}ms interval)`, {
+    logger.info(` Started adaptive optimization (${intervalMs}ms interval)`, {
       component: this.name,
       method: "startOptimization",
     });
@@ -131,7 +131,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       this.optimizationInterval = undefined;
     }
 
-    logger.info(`⏹️ Stopped adaptive optimization`, {
+    logger.info(`⏹ Stopped adaptive optimization`, {
       component: this.name,
       method: "stopOptimization",
     });
@@ -169,7 +169,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       // Check for buffer overrun
       if (this.currentBufferSize + chunk.length > this.bufferConfig.maxBufferSize) {
         this.healthMetrics.bufferOverruns++;
-        logger.warn(`⚠️ Buffer overrun detected`, {
+        logger.warn(` Buffer overrun detected`, {
           component: this.name,
           method: "writeChunk",
           currentSize: this.currentBufferSize,
@@ -201,7 +201,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       this.adaptBufferSize(chunkMeta);
 
       const processingTime = performance.now() - startTime;
-      logger.debug(`📝 Chunk written: ${chunk.length} bytes (${processingTime.toFixed(2)}ms)`, {
+      logger.debug(` Chunk written: ${chunk.length} bytes (${processingTime.toFixed(2)}ms)`, {
         component: this.name,
         method: "writeChunk",
         bufferSize: this.currentBufferSize,
@@ -212,7 +212,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       this.healthMetrics.errorCount++;
       this.healthMetrics.lastError = error instanceof Error ? error.message : String(error);
 
-      logger.error(`❌ Chunk write failed: ${this.healthMetrics.lastError}`, {
+      logger.error(` Chunk write failed: ${this.healthMetrics.lastError}`, {
         component: this.name,
         method: "writeChunk",
         error,
@@ -226,7 +226,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
    * Signal end of stream
    */
   async endStream(): Promise<void> {
-    logger.info(`🏁 Stream ending`, {
+    logger.info(` Stream ending`, {
       component: this.name,
       method: "endStream",
       remainingChunks: this.audioBuffer.length,
@@ -268,7 +268,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
     this.isPlaying = true;
     this.playbackStartTime = performance.now();
 
-    logger.info(`▶️ Starting adaptive playback`, {
+    logger.info(`▶ Starting adaptive playback`, {
       component: this.name,
       method: "startPlayback",
       bufferSize: this.currentBufferSize,
@@ -293,7 +293,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
           this.audioBuffer.length > 0
         ) {
           this.healthMetrics.bufferUnderruns++;
-          logger.warn(`⚠️ Buffer underrun detected`, {
+          logger.warn(` Buffer underrun detected`, {
             component: this.name,
             method: "playbackLoop",
             currentSize: this.currentBufferSize,
@@ -307,7 +307,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       } catch (error) {
-        logger.error(`❌ Playback error: ${error}`, {
+        logger.error(` Playback error: ${error}`, {
           component: this.name,
           method: "playbackLoop",
           error,
@@ -340,7 +340,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
 
     this.lastChunkTime = performance.now();
 
-    logger.debug(`🎵 Chunk played: ${chunk.length} bytes (${playbackTime.toFixed(2)}ms)`, {
+    logger.debug(` Chunk played: ${chunk.length} bytes (${playbackTime.toFixed(2)}ms)`, {
       component: this.name,
       method: "playNextChunk",
       remainingBuffer: this.currentBufferSize,
@@ -399,7 +399,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       );
 
       if (newTargetSize !== this.targetBufferSize) {
-        logger.info(`📈 Increasing buffer size due to chunk variation`, {
+        logger.info(` Increasing buffer size due to chunk variation`, {
           component: this.name,
           method: "adaptBufferSize",
           oldTarget: this.targetBufferSize,
@@ -420,7 +420,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       );
 
       if (newTargetSize !== this.targetBufferSize) {
-        logger.info(`📉 Decreasing buffer size due to consistent chunks`, {
+        logger.info(` Decreasing buffer size due to consistent chunks`, {
           component: this.name,
           method: "adaptBufferSize",
           oldTarget: this.targetBufferSize,
@@ -458,7 +458,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
   private optimizeConfiguration(): void {
     const health = this.getStreamHealth();
 
-    logger.info(`🔍 Optimizing configuration based on performance`, {
+    logger.info(` Optimizing configuration based on performance`, {
       component: this.name,
       method: "optimizeConfiguration",
       health,
@@ -569,7 +569,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
     this.chunkHistory = [];
     this.performanceBaseline = undefined;
 
-    logger.info(`🔄 Metrics reset for new optimization cycle`, {
+    logger.info(` Metrics reset for new optimization cycle`, {
       component: this.name,
       method: "resetMetrics",
     });

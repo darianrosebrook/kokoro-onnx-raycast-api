@@ -55,22 +55,22 @@ def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.Sessio
         if neural_engine_cores >= 32:  # M1 Max / M2 Max
             session_options.intra_op_num_threads = 8
             session_options.inter_op_num_threads = 4
-            logger.debug("🚀 M1 Max/M2 Max: Using 8 intra-op, 4 inter-op threads")
+            logger.debug(" M1 Max/M2 Max: Using 8 intra-op, 4 inter-op threads")
             
         elif neural_engine_cores >= 16:  # M1 / M2
             session_options.intra_op_num_threads = 6
             session_options.inter_op_num_threads = 2
-            logger.debug("🚀 M1/M2: Using 6 intra-op, 2 inter-op threads")
+            logger.debug(" M1/M2: Using 6 intra-op, 2 inter-op threads")
             
         else:  # Other Apple Silicon
             session_options.intra_op_num_threads = 4
             session_options.inter_op_num_threads = 2
-            logger.debug("🍎 Apple Silicon: Using 4 intra-op, 2 inter-op threads")
+            logger.debug(" Apple Silicon: Using 4 intra-op, 2 inter-op threads")
     else:
         # Conservative settings for non-Apple Silicon
         session_options.intra_op_num_threads = 2
         session_options.inter_op_num_threads = 1
-        logger.debug("🖥️ Non-Apple Silicon: Using 2 intra-op, 1 inter-op threads")
+        logger.debug(" Non-Apple Silicon: Using 2 intra-op, 1 inter-op threads")
     
     # Dynamic memory arena sizing
     try:
@@ -81,7 +81,7 @@ def create_optimized_session_options(capabilities: Dict[str, Any]) -> ort.Sessio
             optimal_mb = dynamic_memory_manager.calculate_optimal_arena_size()
             session_options.add_session_config_entry("arena_extend_strategy", "kSameAsRequested")
             session_options.add_session_config_entry("session.dynamic_arena_initial", str(optimal_mb))
-            logger.debug(f"💾 Dynamic arena size: {optimal_mb}MB")
+            logger.debug(f" Dynamic arena size: {optimal_mb}MB")
     except Exception as e:
         logger.debug(f"Could not configure dynamic memory arena: {e}")
     
@@ -145,11 +145,11 @@ def get_cached_provider_options(provider_name: str, capabilities: Dict[str, Any]
                 "cpu_mem_arena_max_chunk_size": "67108864",      # 64MB
             })
         
-        logger.debug(f"🖥️ CPU provider: {cpu_cores} cores, {memory_gb}GB RAM")
+        logger.debug(f" CPU provider: {cpu_cores} cores, {memory_gb}GB RAM")
         
     else:
         # Default empty options for unknown providers
-        logger.debug(f"❓ Unknown provider {provider_name}: using default options")
+        logger.debug(f" Unknown provider {provider_name}: using default options")
     
     # Cache the options
     _provider_options_cache[provider_name] = provider_options
@@ -204,18 +204,18 @@ def configure_ort_providers(capabilities: Optional[Dict[str, Any]] = None) -> Li
     if capabilities.get('is_apple_silicon', False) and capabilities.get('has_neural_engine', False):
         if 'CoreMLExecutionProvider' in capabilities.get('available_providers', []):
             providers.append('CoreMLExecutionProvider')
-            logger.info("🚀 CoreML provider configured for Apple Silicon")
+            logger.info(" CoreML provider configured for Apple Silicon")
     
     # Always include CPU as fallback
     if 'CPUExecutionProvider' in capabilities.get('available_providers', []):
         providers.append('CPUExecutionProvider')
-        logger.info("🖥️ CPU provider configured as fallback")
+        logger.info(" CPU provider configured as fallback")
     
     if not providers:
-        logger.warning("⚠️ No suitable ONNX Runtime providers available")
+        logger.warning(" No suitable ONNX Runtime providers available")
         providers = ['CPUExecutionProvider']  # Force CPU as last resort
     
-    logger.info(f"📋 Provider priority: {' → '.join(providers)}")
+    logger.info(f" Provider priority: {' → '.join(providers)}")
     return providers
 
 
@@ -230,7 +230,7 @@ def clear_provider_cache() -> None:
     _session_options_cache = None
     _provider_options_cache.clear()
     
-    logger.debug("🗑️ Cleared ONNX Runtime provider cache")
+    logger.debug(" Cleared ONNX Runtime provider cache")
 
 
 def get_provider_info(provider_name: str) -> Dict[str, Any]:

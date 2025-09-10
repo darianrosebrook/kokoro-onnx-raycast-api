@@ -82,7 +82,7 @@ def _initialize_session_for_provider(provider_name: str, capabilities: Dict[str,
             logger.debug("✅ CoreML session created with memory management")
             
         except ImportError:
-            logger.debug("⚠️ CoreML memory management not available, using standard creation")
+            logger.debug(" CoreML memory management not available, using standard creation")
             session = ort.InferenceSession(
                 TTSConfig.MODEL_PATH,
                 sess_options=session_options,
@@ -158,7 +158,7 @@ def _initialize_heavy_components_async(capabilities: Dict[str, Any]) -> None:
                     
                     # Pre-warm dual sessions to eliminate cold start penalty
                     try:
-                        logger.info("🔥 Pre-warming dual sessions...")
+                        logger.info(" Pre-warming dual sessions...")
                         warming_start = time.perf_counter()
                         
                         # Test each session type with progressively complex text
@@ -184,9 +184,9 @@ def _initialize_heavy_components_async(capabilities: Dict[str, Any]) -> None:
                         logger.debug(f"Dual session pre-warming failed: {warming_e}")
                         
                 else:
-                    logger.error("❌ Dual session manager initialization returned None")
+                    logger.error(" Dual session manager initialization returned None")
             except Exception as e:
-                logger.error(f"❌ Dual session init error: {e}", exc_info=True)
+                logger.error(f" Dual session init error: {e}", exc_info=True)
 
             try:
                 logger.info("Initializing dynamic memory manager for adaptive memory sizing...")
@@ -236,7 +236,7 @@ def _benchmark_and_hotswap_async(capabilities: Dict[str, Any]) -> None:
     )
     
     if force_cpu or disable_benchmarking:
-        logger.info("🔧 CPU provider locked via environment variables - skipping hot-swap")
+        logger.info(" CPU provider locked via environment variables - skipping hot-swap")
         return
     
     def _run():
@@ -291,7 +291,7 @@ def initialize_model_fast():
     if force_cpu or cpu_only_env:
         initial_provider = "CPUExecutionProvider"
         reason = "development mode" if force_cpu else "CPU-only configuration"
-        logger.info(f"🔧 {reason}: forcing CPU provider for consistent performance")
+        logger.info(f" {reason}: forcing CPU provider for consistent performance")
     elif not initial_provider:
         # Safe default
         initial_provider = "CoreMLExecutionProvider" if capabilities.get("is_apple_silicon") else "CPUExecutionProvider"
@@ -342,7 +342,7 @@ def initialize_model_fast():
                 # This prevents 2+ second cache misses when streaming switches providers
                 try:
                     from api.tts.core import _get_cached_model
-                    logger.info("🔥 Pre-warming model cache for adaptive provider scenarios...")
+                    logger.info(" Pre-warming model cache for adaptive provider scenarios...")
                     adaptive_start = time.perf_counter()
                     
                     # Get the current active provider (already initialized)
@@ -350,13 +350,13 @@ def initialize_model_fast():
                     logger.debug(f"Current provider: {current_provider}")
                     
                     # ALWAYS pre-warm CPU model (for short text < 200 chars via adaptive provider)
-                    logger.info("🔥 Pre-warming CPU model for short text...")
+                    logger.info(" Pre-warming CPU model for short text...")
                     cpu_model = _get_cached_model("CPUExecutionProvider")
                     cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
                     logger.debug("✅ CPU model cache ready")
                     
                     # ALWAYS pre-warm CoreML model (for medium/long text > 200 chars via adaptive provider)
-                    logger.info("🔥 Pre-warming CoreML model for medium/long text...")
+                    logger.info(" Pre-warming CoreML model for medium/long text...")
                     coreml_model = _get_cached_model("CoreMLExecutionProvider")
                     coreml_model.create("This is a longer test to warm up CoreML", "af_heart", 1.0, "en-us")
                     logger.debug("✅ CoreML model cache ready")
@@ -374,7 +374,7 @@ def initialize_model_fast():
     if aggressive_warming:
         try:
             with step_timer("aggressive_session_warming"):
-                logger.info("🔥 Starting aggressive session warming to eliminate cold start...")
+                logger.info(" Starting aggressive session warming to eliminate cold start...")
                 from api.model.pipeline import get_pipeline_warmer, initialize_pipeline_warmer
                 
                 # Initialize and trigger pipeline warmer immediately
@@ -412,18 +412,18 @@ def initialize_model_fast():
     # Always initialize dual session manager unless explicitly disabled
     if not disable_dual_sessions:
         if defer_background_init:
-            logger.info("🔧 Dual session manager initialization deferred for fast startup")
-            logger.info("🔧 Use KOKORO_DEFER_BACKGROUND_INIT=false to enable background initialization")
+            logger.info(" Dual session manager initialization deferred for fast startup")
+            logger.info(" Use KOKORO_DEFER_BACKGROUND_INIT=false to enable background initialization")
         else:
-            logger.info(f"🔧 Starting dual session manager initialization (disable_dual_sessions={disable_dual_sessions})")
+            logger.info(f" Starting dual session manager initialization (disable_dual_sessions={disable_dual_sessions})")
             _initialize_heavy_components_async(capabilities)
     else:
-        logger.info(f"🔧 Dual session manager initialization skipped (disable_dual_sessions={disable_dual_sessions})")
+        logger.info(f" Dual session manager initialization skipped (disable_dual_sessions={disable_dual_sessions})")
     
     # Only skip benchmarking if configured to do so
     if not skip_background:
         _benchmark_and_hotswap_async(capabilities)
     else:
         profile_name = getattr(TTSConfig, 'DEV_PERFORMANCE_PROFILE', 'unknown')
-        logger.info(f"🔧 Skipping background benchmarking in {profile_name} development mode")
+        logger.info(f" Skipping background benchmarking in {profile_name} development mode")
 

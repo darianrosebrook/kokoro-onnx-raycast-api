@@ -19,7 +19,7 @@ export interface VoiceConfig {
 export const VOICES: Record<VoiceOption, VoiceConfig> = {
   af_heart: {
     name: "af_heart",
-    traits: "❤️",
+    traits: "",
     targetQuality: "A",
     trainingDuration: "",
     overallGrade: "",

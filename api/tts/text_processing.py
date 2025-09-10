@@ -330,7 +330,7 @@ def _get_phonemizer_backend():
                 )
                 logger.info("✅ Enhanced fallback phonemizer backend initialized with word count mismatch reduction")
             except ImportError:
-                logger.warning("⚠️ Phonemizer not available, phoneme processing will be disabled")
+                logger.warning(" Phonemizer not available, phoneme processing will be disabled")
                 _phonemizer_backend = None
     
     return _phonemizer_backend
@@ -485,7 +485,7 @@ def text_to_phonemes(text: str, lang: str = 'en') -> tuple[List[str], str]:
                     return phonemes, processing_method
                 
             except Exception as e:
-                logger.warning(f"⚠️ Misaki phonemization failed for '{text[:30]}...': {e}")
+                logger.warning(f" Misaki phonemization failed for '{text[:30]}...': {e}")
                 # Continue to fallback methods
     except ImportError:
         logger.debug("Misaki configuration not available, using fallback methods")
@@ -1265,6 +1265,6 @@ def segment_text(text: str, max_len: int) -> List[str]:
     if final_coverage == original_length:
         logger.debug(f"✅ Full text coverage validated: {original_length} chars → {len(segments)} segments")
     else:
-        logger.warning(f"⚠️ Partial text coverage: {original_length} chars → {final_coverage} chars in {len(segments)} segments")
+        logger.warning(f" Partial text coverage: {original_length} chars → {final_coverage} chars in {len(segments)} segments")
     
     return segments 

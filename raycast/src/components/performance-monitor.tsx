@@ -333,7 +333,7 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
           </Text>
           {onClose && (
             <Text style={styles.closeButton} onClick={onClose}>
-              ✕
+              
             </Text>
           )}
         </View>

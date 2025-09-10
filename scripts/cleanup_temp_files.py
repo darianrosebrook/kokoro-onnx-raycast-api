@@ -38,7 +38,7 @@ def setup_temp_directories():
     for temp_dir in temp_dirs:
         dir_path = base_dir / temp_dir
         dir_path.mkdir(parents=True, exist_ok=True)
-        print(f"✓ Ensured directory exists: {temp_dir}")
+        print(f" Ensured directory exists: {temp_dir}")
 
 
 def cleanup_old_files(directory, pattern, max_files=None, max_age_days=None, dry_run=False):
@@ -53,12 +53,12 @@ def cleanup_old_files(directory, pattern, max_files=None, max_age_days=None, dry
         dry_run (bool): If True, only show what would be removed
     """
     if not directory.exists():
-        print(f"⚠️  Directory does not exist: {directory}")
+        print(f"  Directory does not exist: {directory}")
         return
     
     files = list(directory.glob(pattern))
     if not files:
-        print(f"📁 No files found matching {pattern} in {directory}")
+        print(f" No files found matching {pattern} in {directory}")
         return
     
     # Sort by modification time (newest first)
@@ -69,7 +69,7 @@ def cleanup_old_files(directory, pattern, max_files=None, max_age_days=None, dry
     # Apply max_files limit
     if max_files and len(files) > max_files:
         to_remove.extend(files[max_files:])
-        print(f"📋 Found {len(files)} files, keeping newest {max_files}")
+        print(f" Found {len(files)} files, keeping newest {max_files}")
     
     # Apply age limit
     if max_age_days:
@@ -86,7 +86,7 @@ def cleanup_old_files(directory, pattern, max_files=None, max_age_days=None, dry
         return
     
     total_size = sum(f.stat().st_size for f in to_remove)
-    print(f"🗑️  Would remove {len(to_remove)} files ({total_size / 1024 / 1024:.1f} MB)")
+    print(f"  Would remove {len(to_remove)} files ({total_size / 1024 / 1024:.1f} MB)")
     
     for file_path in to_remove:
         file_age = datetime.fromtimestamp(file_path.stat().st_mtime)
@@ -97,9 +97,9 @@ def cleanup_old_files(directory, pattern, max_files=None, max_age_days=None, dry
         else:
             try:
                 file_path.unlink()
-                print(f"   ✓ Removed: {file_path.name} ({file_size:.1f} KB)")
+                print(f"    Removed: {file_path.name} ({file_size:.1f} KB)")
             except Exception as e:
-                print(f"   ❌ Failed to remove {file_path.name}: {e}")
+                print(f"    Failed to remove {file_path.name}: {e}")
 
 
 def move_loose_files_to_temp():
@@ -133,15 +133,15 @@ def move_loose_files_to_temp():
                         target_file = target_path / f"{stem}_{timestamp}{suffix}"
                     
                     shutil.move(str(file_path), str(target_file))
-                    print(f"📦 Moved: {file_path.name} → {target_dir}")
+                    print(f" Moved: {file_path.name} → {target_dir}")
                     moved_count += 1
                 except Exception as e:
-                    print(f"❌ Failed to move {file_path.name}: {e}")
+                    print(f" Failed to move {file_path.name}: {e}")
     
     if moved_count == 0:
         print("✅ No loose temporary files found to move")
     else:
-        print(f"📦 Moved {moved_count} files to temp directories")
+        print(f" Moved {moved_count} files to temp directories")
 
 
 def main():
@@ -154,7 +154,7 @@ def main():
     
     args = parser.parse_args()
     
-    print("🧹 Kokoro TTS Temporary Files Cleanup")
+    print(" Kokoro TTS Temporary Files Cleanup")
     print("=" * 40)
     
     # Setup directories
@@ -162,7 +162,7 @@ def main():
     print()
     
     # Move loose files first
-    print("📦 Moving loose temporary files...")
+    print(" Moving loose temporary files...")
     move_loose_files_to_temp()
     print()
     
@@ -202,9 +202,9 @@ def main():
     ]
     
     # Show what will be cleaned
-    print("🔍 Cleanup plan:")
+    print(" Cleanup plan:")
     for rule in cleanup_rules:
-        print(f"   📁 {rule['description']} in {rule['directory']}")
+        print(f"    {rule['description']} in {rule['directory']}")
         if rule.get('max_files'):
             print(f"      • Keep newest {rule['max_files']} files")
         if rule.get('max_age_days'):
@@ -219,9 +219,9 @@ def main():
             return
     
     # Perform cleanup
-    print("🧹 Starting cleanup...")
+    print(" Starting cleanup...")
     for rule in cleanup_rules:
-        print(f"\n📂 Cleaning {rule['description']}...")
+        print(f"\n Cleaning {rule['description']}...")
         cleanup_old_files(
             directory=rule["directory"],
             pattern=rule["pattern"],
@@ -233,7 +233,7 @@ def main():
     print("\n✅ Cleanup completed!")
     
     if args.dry_run:
-        print("🔍 This was a dry run. Run without --dry-run to actually remove files.")
+        print(" This was a dry run. Run without --dry-run to actually remove files.")
 
 
 if __name__ == "__main__":

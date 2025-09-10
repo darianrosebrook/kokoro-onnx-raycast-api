@@ -21,7 +21,7 @@ with self.segment_semaphore:
     try:
         # ... processing ...
         return samples, metadata
-    # ❌ MISSING: No decrement in finally block
+    #  MISSING: No decrement in finally block
 ```
 
 **The `concurrent_segments_active` counter was incremented but never decremented**, causing:
@@ -84,7 +84,7 @@ def reset_session_state(self):
 ### **Before Fix**
 ```
 First request:  ✅ Works (produces audio)
-Second request: ❌ Fails (produces no audio)
+Second request:  Fails (produces no audio)
 Session state:  concurrent_segments_active = 2 (stuck)
 ```
 
@@ -196,7 +196,7 @@ curl -X POST http://localhost:8000/session-reset
 
 ## Summary
 
-**🎉 CRITICAL PRODUCTION ISSUE RESOLVED**
+** CRITICAL PRODUCTION ISSUE RESOLVED**
 
 The session resource leak that caused **complete system failure after the first request** has been fixed through proper resource cleanup in the DualSessionManager.
 

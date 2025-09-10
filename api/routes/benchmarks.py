@@ -285,11 +285,11 @@ def _get_quick_recommendation(ttfa_ms: float, bottleneck: str) -> str:
     elif ttfa_ms <= 800:
         return "✅ Good TTFA performance, meeting target"
     elif ttfa_ms <= 1200:
-        return f"⚠️ TTFA above target. Primary bottleneck: {bottleneck}. Enable streaming optimization."
+        return f" TTFA above target. Primary bottleneck: {bottleneck}. Enable streaming optimization."
     elif ttfa_ms <= 2000:
-        return f"🔴 Poor TTFA performance. Bottleneck: {bottleneck}. Review model inference and chunking."
+        return f" Poor TTFA performance. Bottleneck: {bottleneck}. Review model inference and chunking."
     else:
-        return f"🔴 Critical TTFA issues. Bottleneck: {bottleneck}. Immediate optimization required."
+        return f" Critical TTFA issues. Bottleneck: {bottleneck}. Immediate optimization required."
 
 def _get_optimization_recommendations(stats: Dict[str, Any]) -> List[str]:
     """Generate optimization recommendations based on current stats"""

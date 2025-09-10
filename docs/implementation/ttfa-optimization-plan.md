@@ -12,7 +12,7 @@
 
 From the terminal output analysis:
 ```
-[req-df9708c2] TTFA: 2047.45ms - ⚠️ TARGET MISSED (Target: 800.0ms)
+[req-df9708c2] TTFA: 2047.45ms -  TARGET MISSED (Target: 800.0ms)
 Bottlenecks identified: chunk_delivery (2047ms)
 ```
 

@@ -33,7 +33,7 @@ const TEST_CONFIG = {
  * Test TTS server directly without daemon
  */
 async function testTTSServerDirectly() {
-  console.log("🧪 Testing TTS server directly...");
+  console.log(" Testing TTS server directly...");
 
   const testText = "Hello, this is a direct server test.";
   const url = `${TEST_CONFIG.serverUrl}/v1/audio/speech`;
@@ -55,7 +55,7 @@ async function testTTSServerDirectly() {
       }),
     });
 
-    console.log("📡 Server response:", {
+    console.log(" Server response:", {
       status: response.status,
       statusText: response.statusText,
       ok: response.ok,
@@ -73,7 +73,7 @@ async function testTTSServerDirectly() {
     console.log("✅ Server test successful - streaming supported");
     return true;
   } catch (error) {
-    console.error("❌ Server test failed:", error);
+    console.error(" Server test failed:", error);
     return false;
   }
 }
@@ -120,7 +120,7 @@ describe("TTS Integration", () => {
       try {
         await processor.stop();
       } catch (error) {
-        console.warn("⚠️ Error during cleanup:", error);
+        console.warn(" Error during cleanup:", error);
       }
     }
   });
@@ -128,7 +128,7 @@ describe("TTS Integration", () => {
   it(
     "should test TTS server connectivity",
     async () => {
-      console.log("🔍 Testing TTS server connectivity...");
+      console.log(" Testing TTS server connectivity...");
       const serverTestPassed = await testTTSServerDirectly();
       expect(serverTestPassed).toBe(true);
     },
@@ -138,11 +138,11 @@ describe("TTS Integration", () => {
   it(
     "should create TTS processor and process text",
     async () => {
-      console.log("🔍 Creating TTS processor...");
+      console.log(" Creating TTS processor...");
 
       // Skip this test in CI/test environment since it requires the actual daemon
       if (process.env.NODE_ENV === "test" || process.env.CI) {
-        console.log("⏭️ Skipping daemon-dependent test in test environment");
+        console.log("⏭ Skipping daemon-dependent test in test environment");
         expect(true).toBe(true); // Dummy assertion
         return;
       }
@@ -155,7 +155,7 @@ describe("TTS Integration", () => {
         useStreaming: TEST_CONFIG.useStreaming,
         developmentMode: TEST_CONFIG.developmentMode,
         onStatusUpdate: (status) => {
-          console.log("📊 Status:", status.message);
+          console.log(" Status:", status.message);
         },
       });
 
@@ -166,8 +166,8 @@ describe("TTS Integration", () => {
       const testText =
         "Hello, this is a test of the audio daemon integration. Can you hear this audio playing through the daemon?";
 
-      console.log(`📝 Processing text: "${testText}"`);
-      console.log(`🎵 Voice: ${TEST_CONFIG.voice}, Speed: ${TEST_CONFIG.speed}`);
+      console.log(` Processing text: "${testText}"`);
+      console.log(` Voice: ${TEST_CONFIG.voice}, Speed: ${TEST_CONFIG.speed}`);
 
       // Create a promise that resolves when processing completes
       const processingPromise = processor.speak(testText);
@@ -183,7 +183,7 @@ describe("TTS Integration", () => {
       await Promise.race([processingPromise, timeoutPromise]);
 
       console.log("✅ Text processing completed");
-      console.log("🔊 Audio should be playing through the daemon now!");
+      console.log(" Audio should be playing through the daemon now!");
 
       // Wait a bit for audio to finish playing
       console.log("⏳ Waiting for audio playback to complete...");

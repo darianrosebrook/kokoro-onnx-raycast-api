@@ -375,7 +375,7 @@ def _apply_espeak_wrapper_patch():
         
     except Exception as e:
         error_msg = f"EspeakWrapper patch failed: {e}"
-        logger.warning(f"⚠️ {error_msg}")
+        logger.warning(f" {error_msg}")
         _patch_state['patch_errors'].append(error_msg)
         # Don't re-raise - this is a non-critical patch
 
@@ -488,12 +488,12 @@ def _apply_tokenizer_espeak_patch():
         
         # Validate Homebrew paths and fallback if needed
         if not os.path.exists(espeak_config.data_path):
-            logger.warning(f"⚠️ Homebrew eSpeak data not found at {espeak_config.data_path}")
+            logger.warning(f" Homebrew eSpeak data not found at {espeak_config.data_path}")
             logger.info(" Falling back to espeakng-loader for data path")
             espeak_config.data_path = espeakng_loader.get_data_path()
             
         if not os.path.exists(espeak_config.lib_path):
-            logger.warning(f"⚠️ Homebrew eSpeak library not found at {espeak_config.lib_path}")
+            logger.warning(f" Homebrew eSpeak library not found at {espeak_config.lib_path}")
             logger.info(" Falling back to espeakng-loader for library path")
             espeak_config.lib_path = espeakng_loader.get_library_path()
         
@@ -503,7 +503,7 @@ def _apply_tokenizer_espeak_patch():
             ctypes.cdll.LoadLibrary(espeak_config.lib_path)
             logger.debug("✅ eSpeak library loaded successfully")
         except Exception as e:
-            logger.warning(f"⚠️ Failed to load eSpeak library: {e}")
+            logger.warning(f" Failed to load eSpeak library: {e}")
             logger.info(" Attempting system library search...")
             
             # Final fallback: system library search
@@ -532,9 +532,9 @@ def _apply_tokenizer_espeak_patch():
                 EspeakWrapper.set_library(espeak_config.lib_path)
             else:
                 # Fallback for newer versions that don't have set_library
-                logger.debug("⚠️ EspeakWrapper.set_library not available, using default library")
+                logger.debug(" EspeakWrapper.set_library not available, using default library")
         except Exception as e:
-            logger.warning(f"⚠️ Could not configure EspeakWrapper: {e}")
+            logger.warning(f" Could not configure EspeakWrapper: {e}")
             logger.debug(" Continuing with default eSpeak configuration")
         
         logger.debug("✅ eSpeak integration patch applied successfully")

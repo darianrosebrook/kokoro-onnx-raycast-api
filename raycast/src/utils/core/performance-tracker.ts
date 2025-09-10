@@ -224,7 +224,7 @@ export class PerformanceTracker {
    * Log final performance summary
    */
   private logFinalSummary(requestId: string, metrics: PerformanceMetrics): void {
-    const status = metrics.totalTimeToFirstAudio <= 800 ? "✅ PASS" : "❌ FAIL";
+    const status = metrics.totalTimeToFirstAudio <= 800 ? "✅ PASS" : " FAIL";
 
     console.log(`[PERF:${requestId}] FINAL_SUMMARY`, {
       timestamp: new Date().toISOString(),

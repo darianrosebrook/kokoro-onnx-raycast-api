@@ -9,8 +9,8 @@
 ### What We've Discovered
 - ✅ **Streaming infrastructure works perfectly** - delivers exactly what the model generates
 - ✅ **Non-streaming requests work** - first requests always succeed (43KB+ audio)
-- ❌ **Model corruption after first use** - subsequent requests generate silent audio (2 bytes of zeros)
-- ❌ **Affects both streaming and non-streaming** - the issue is model-level, not pipeline-level
+-  **Model corruption after first use** - subsequent requests generate silent audio (2 bytes of zeros)
+-  **Affects both streaming and non-streaming** - the issue is model-level, not pipeline-level
 
 ### Evidence
 - **Working**: Non-streaming WAV (88KB), Non-streaming PCM (43KB), First streaming request (55KB)

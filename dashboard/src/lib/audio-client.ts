@@ -167,7 +167,7 @@ export class AudioClient extends BrowserEventEmitter {
         };
 
         this.ws.onerror = (error) => {
-          console.error("[AudioClient] ❌ WebSocket error:", error);
+          console.error("[AudioClient]  WebSocket error:", error);
           console.error("[AudioClient] Connection URL was:", this.url);
           console.error("[AudioClient] Error details:", {
             type: error.type,

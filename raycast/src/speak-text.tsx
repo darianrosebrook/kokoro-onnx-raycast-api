@@ -436,7 +436,7 @@ export default function SpeakTextSimple() {
   };
 
   const handlePause = () => {
-    logger.consoleInfo(" [SPEAK-TEXT] ⏸️ User requested pause");
+    logger.consoleInfo(" [SPEAK-TEXT] ⏸ User requested pause");
     if (processorRef.current?.playing && !processorRef.current?.paused) {
       logger.consoleDebug(" [SPEAK-TEXT] Pausing processor");
       processorRef.current.pause();
@@ -448,7 +448,7 @@ export default function SpeakTextSimple() {
   };
 
   const handleResume = () => {
-    logger.consoleInfo(" [SPEAK-TEXT] ▶️ User requested resume");
+    logger.consoleInfo(" [SPEAK-TEXT] ▶ User requested resume");
     if (processorRef.current?.paused) {
       logger.consoleDebug(" [SPEAK-TEXT] Resuming processor");
       processorRef.current.resume();

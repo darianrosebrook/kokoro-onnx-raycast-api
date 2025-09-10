@@ -481,7 +481,7 @@ export class AudioStreamer implements IAudioStreamer {
       console.log(` [${this.instanceID}]  Caching WAV audio for future requests`);
       cacheManager.cacheTTSResponse(request, combinedAudio.buffer);
     } else {
-      console.warn(` [${this.instanceID}] ⚠️ No audio data to cache`);
+      console.warn(` [${this.instanceID}]  No audio data to cache`);
     }
 
     // Update streaming stats

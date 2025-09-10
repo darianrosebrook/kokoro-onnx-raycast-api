@@ -203,7 +203,7 @@ class TTFAMonitor:
                 self.stats.target_achieved_count += 1
         
         # Log result
-        status = "✅ TARGET ACHIEVED" if measurement.achieved_target else "⚠️ TARGET MISSED"
+        status = "✅ TARGET ACHIEVED" if measurement.achieved_target else " TARGET MISSED"
         logger.info(
             f"[{measurement.request_id}] TTFA: {total_ttfa_ms:.2f}ms - {status} "
             f"(Target: {measurement.target_ttfa}ms)"

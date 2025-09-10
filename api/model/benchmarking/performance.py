@@ -32,7 +32,7 @@ def benchmark_providers(capabilities: Optional[Dict[str, Any]] = None) -> Tuple[
     )
     
     if force_cpu:
-        logger.info("🔧 CPU provider forced via environment variables - skipping benchmarking")
+        logger.info(" CPU provider forced via environment variables - skipping benchmarking")
         return "CPUExecutionProvider", {"CPUExecutionProvider": {"forced": True}}
     
     # Check if benchmarking is disabled
@@ -42,7 +42,7 @@ def benchmark_providers(capabilities: Optional[Dict[str, Any]] = None) -> Tuple[
     )
     
     if disable_benchmarking:
-        logger.info("🔧 Provider benchmarking disabled via environment variables - using CPU provider")
+        logger.info(" Provider benchmarking disabled via environment variables - using CPU provider")
         return "CPUExecutionProvider", {"CPUExecutionProvider": {"disabled": True}}
     
     logger.info("Starting provider benchmarking...")

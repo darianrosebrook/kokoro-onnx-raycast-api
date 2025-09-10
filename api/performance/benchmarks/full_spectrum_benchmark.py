@@ -478,12 +478,12 @@ class BenchmarkRunner:
 ### TTFA Performance
 - **Average**: {summary['avg_ttfa_ms']:.1f}ms
 - **Target Achievement**: {summary['ttfa_success_rate']:.1%}
-- **Status**: {'✅ MEETING TARGET' if summary['avg_ttfa_ms'] <= summary['ttfa_target_ms'] else '⚠️ ABOVE TARGET'}
+- **Status**: {'✅ MEETING TARGET' if summary['avg_ttfa_ms'] <= summary['ttfa_target_ms'] else ' ABOVE TARGET'}
 
 ### Streaming Performance  
 - **Efficiency**: {summary['avg_streaming_efficiency']:.1%}
 - **Consistency**: {summary['streaming_success_rate']:.1%}
-- **Status**: {'✅ OPTIMAL' if summary['avg_streaming_efficiency'] >= 0.9 else '⚠️ NEEDS OPTIMIZATION'}
+- **Status**: {'✅ OPTIMAL' if summary['avg_streaming_efficiency'] >= 0.9 else ' NEEDS OPTIMIZATION'}
 
 ### System Resources
 - **Peak Memory**: {summary['peak_memory_mb']:.1f}MB
@@ -502,7 +502,7 @@ class BenchmarkRunner:
             report += f"{i}. {rec}\n"
         
         if summary['critical_issues']:
-            report += "\n## ⚠️ Critical Issues\n"
+            report += "\n##  Critical Issues\n"
             for issue in summary['critical_issues']:
                 report += f"- {issue}\n"
         

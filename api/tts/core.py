@@ -138,8 +138,8 @@ def _get_cached_model(provider: str) -> Kokoro:
 
     with _model_cache_lock:
         if provider not in _model_cache:
-            logger.warning(f"🔄 PERFORMANCE ISSUE: Creating new Kokoro model for provider: {provider} (cache miss)")
-            logger.warning(f"🔄 Current cache contents: {list(_model_cache.keys())}")
+            logger.warning(f" PERFORMANCE ISSUE: Creating new Kokoro model for provider: {provider} (cache miss)")
+            logger.warning(f" Current cache contents: {list(_model_cache.keys())}")
             _model_cache[provider] = Kokoro(
                 model_path=TTSConfig.MODEL_PATH,
                 voices_path=TTSConfig.VOICES_PATH,
@@ -175,7 +175,7 @@ def _trigger_background_model_cache_refresh() -> None:
                     "CPUExecutionProvider",
                     "CoreMLExecutionProvider",
                 ]
-            logger.info(f"🔄 Refreshing model cache in background for providers: {providers}")
+            logger.info(f" Refreshing model cache in background for providers: {providers}")
             for p in providers:
                 try:
                     new_model = Kokoro(
@@ -187,7 +187,7 @@ def _trigger_background_model_cache_refresh() -> None:
                         _model_cache[p] = new_model
                     logger.debug(f"✅ Refreshed model for provider: {p}")
                 except Exception as e:
-                    logger.warning(f"⚠️ Model cache refresh failed for provider {p}: {e}")
+                    logger.warning(f" Model cache refresh failed for provider {p}: {e}")
             _set_model_cache_last_refresh(time.time())
             logger.info("✅ Model cache refresh completed")
         finally:
@@ -197,7 +197,7 @@ def _trigger_background_model_cache_refresh() -> None:
         t = threading.Thread(target=_refresh_worker, daemon=True)
         t.start()
     except Exception as e:
-        logger.debug(f"⚠️ Could not start background model cache refresh: {e}")
+        logger.debug(f" Could not start background model cache refresh: {e}")
 
 
 def refresh_model_cache_now(providers: Optional[List[str]] = None, non_blocking: bool = True) -> None:
@@ -215,7 +215,7 @@ def refresh_model_cache_now(providers: Optional[List[str]] = None, non_blocking:
                         "CPUExecutionProvider",
                         "CoreMLExecutionProvider",
                     ]
-            logger.info(f"🔄 Refreshing model cache now for providers: {target_providers}")
+            logger.info(f" Refreshing model cache now for providers: {target_providers}")
             for p in target_providers:
                 try:
                     new_model = Kokoro(
@@ -227,18 +227,18 @@ def refresh_model_cache_now(providers: Optional[List[str]] = None, non_blocking:
                         _model_cache[p] = new_model
                     logger.debug(f"✅ Refreshed model for provider: {p}")
                 except Exception as e:
-                    logger.warning(f"⚠️ Model cache refresh failed for provider {p}: {e}")
+                    logger.warning(f" Model cache refresh failed for provider {p}: {e}")
             _set_model_cache_last_refresh(time.time())
             logger.info("✅ Model cache refresh completed")
         except Exception as e:
-            logger.warning(f"⚠️ Model cache refresh encountered an error: {e}")
+            logger.warning(f" Model cache refresh encountered an error: {e}")
 
     if non_blocking:
         try:
             t = threading.Thread(target=_run, daemon=True)
             t.start()
         except Exception as e:
-            logger.debug(f"⚠️ Could not start non-blocking model cache refresh: {e}")
+            logger.debug(f" Could not start non-blocking model cache refresh: {e}")
             _run()
     else:
         _run()
@@ -845,7 +845,7 @@ async def stream_tts_audio(
                     
                     if not variation_analysis['is_consistent']:
                         logger.info(
-                            f"[{request_id}] 🎯 Audio size variation detected: {variation_analysis['variation_pct']:.1f}% "
+                            f"[{request_id}]  Audio size variation detected: {variation_analysis['variation_pct']:.1f}% "
                             f"(current: {total_audio_bytes}, baseline: {variation_analysis['baseline_size']}, "
                             f"threshold: {variation_analysis['threshold_used']:.1f}%)"
                         )

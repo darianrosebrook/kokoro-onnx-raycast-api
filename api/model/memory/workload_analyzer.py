@@ -406,7 +406,7 @@ class WorkloadAnalyzer:
         self.total_processing_time = 0.0
         self.analysis_start_time = time.time()
         
-        self.logger.info("🔄 Workload analysis data reset")
+        self.logger.info(" Workload analysis data reset")
 
     def export_analysis_data(self) -> Dict[str, Any]:
         """Export raw analysis data for external processing."""

@@ -310,10 +310,10 @@ class BenchmarkRunner:
             if cleared_count > 0:
                 self.logger.debug(f"✅ Cleared {cleared_count} cache files")
             else:
-                self.logger.debug("ℹ️  No cache files found to clear")
+                self.logger.debug("ℹ  No cache files found to clear")
                 
         except Exception as e:
-            self.logger.warning(f"⚠️  Cache clearing failed: {e}")
+            self.logger.warning(f"  Cache clearing failed: {e}")
 
     def _gate(self, key: str, value: float) -> Tuple[bool, Optional[float]]:
         """
@@ -697,7 +697,7 @@ Examples:
         results = await runner.run()
         # Pretty summary
         log.info("=" * 64)
-        log.info("📊 BENCHMARK SUMMARY")
+        log.info(" BENCHMARK SUMMARY")
         log.info("=" * 64)
         s = results["summary"]
         if args.stream and s.get("ttfa"):
@@ -722,7 +722,7 @@ Examples:
         log.info("=" * 64)
         return 0
     except Exception as e:
-        log.error(f"❌ Benchmark failed: {e}", exc_info=args.verbose)
+        log.error(f" Benchmark failed: {e}", exc_info=args.verbose)
         return 1
 
 if __name__ == "__main__":

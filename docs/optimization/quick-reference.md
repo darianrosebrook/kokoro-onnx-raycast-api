@@ -3,7 +3,7 @@
 > **Current Status:** TTFA 5.5-6.9ms → Target 800ms (145x better than target!)
 > **Last Updated:** Dec 2024
 
-## 🚀 Quick Actions (Ready to Deploy)
+##  Quick Actions (Ready to Deploy)
 
 ### **✅ OPTIMAL CONFIGURATION (Already Applied)**
 ```bash
@@ -16,11 +16,11 @@ export KOKORO_COREML_SPECIALIZATION=FastPrediction
 # Results: TTFA 5.5ms, RTF 0.000, Memory 70.9MB (short text)
 ```
 
-### **🚨 CRITICAL DISCOVERY - Provider Performance**
+### ** CRITICAL DISCOVERY - Provider Performance**
 ```bash
 # CPU Provider dramatically outperforms CoreML
 # CPU: 152ms TTFA p95 ✅ (target ≤500ms) - 70% better than target
-# CoreML: 4178ms TTFA p95 ❌ (target ≤500ms) - 8.4x worse than target
+# CoreML: 4178ms TTFA p95  (target ≤500ms) - 8.4x worse than target
 # CoreML ALL/CPUAndGPU: Complete failure (503 errors, server crashes)
 # Recommendation: Use CPU provider for production
 
@@ -28,7 +28,7 @@ export KOKORO_COREML_SPECIALIZATION=FastPrediction
 export KOKORO_COREML_COMPUTE_UNITS=CPUOnly
 ```
 
-### **🔍 CoreML Investigation Results (2025-08-17)**
+### ** CoreML Investigation Results (2025-08-17)**
 ```bash
 # CoreML ALL: Complete failure - 503 Service Unavailable, server hangs/crashes
 # CoreML CPUAndGPU: Complete failure - 503 Service Unavailable, server crashes  
@@ -39,12 +39,12 @@ export KOKORO_COREML_COMPUTE_UNITS=CPUOnly
 # Recommendation: Use CPU provider for production (152ms TTFA p95 vs 500ms target)
 ```
 
-### **🔍 Provider Selection Heuristic Investigation Results (2025-08-17)**
+### ** Provider Selection Heuristic Investigation Results (2025-08-17)**
 ```bash
 # Provider selection logic working correctly across all text lengths:
 # Short text (<200 chars): 152ms TTFA p95 ✅ (CPU provider)
-# Medium text (142 chars): 7718.9ms TTFA p95 ❌ (one slow trial, others good)
-# Long text (>1000 chars): 3497.3ms TTFA p95 ❌ (cold start, then 2-3ms)
+# Medium text (142 chars): 7718.9ms TTFA p95  (one slow trial, others good)
+# Long text (>1000 chars): 3497.3ms TTFA p95  (cold start, then 2-3ms)
 
 # Cold start pattern: Consistent ~3-4 second penalty across all text lengths
 # Steady state performance: 2-5ms TTFA after warmup (excellent)
@@ -67,12 +67,12 @@ KOKORO_COREML_COMPUTE_UNITS=CPUOnly python scripts/run_bench.py --preset=short -
 python scripts/run_bench.py --preset=long --memory --trials=3 --verbose
 ```
 
-### **🔍 Audio Chunk Timing Investigation Results (2025-08-17)**
+### ** Audio Chunk Timing Investigation Results (2025-08-17)**
 ```bash
 # Tested different chunk sizes via performance profiles:
 # 50ms chunks (stable): 152ms TTFA p95 ✅ (best performance)
-# 40ms chunks (benchmark): 4671.8ms TTFA p95 ❌ (worse, more underruns)
-# 100ms chunks (safe): 3943.4ms TTFA p95 ❌ (worse cold start, good steady state)
+# 40ms chunks (benchmark): 4671.8ms TTFA p95  (worse, more underruns)
+# 100ms chunks (safe): 3943.4ms TTFA p95  (worse cold start, good steady state)
 
 # Chunk generation timing: Excellent across all sizes (0.003-0.005ms median gaps)
 # Cold start penalty: Consistent across all chunk sizes (~4 seconds first request)
@@ -88,7 +88,7 @@ python scripts/run_bench.py --preset=long --memory --trials=3 --verbose
 curl http://localhost:8000/status | jq '.tts_processing.phoneme_cache'
 ```
 
-### **🔍 Memory Optimization Investigation Results (2025-08-17)**
+### ** Memory Optimization Investigation Results (2025-08-17)**
 ```bash
 # Memory issue RESOLVED through recent optimizations:
 # Long text now uses only 4.4-5.0MB RSS range ✅ (vs 300MB target)
@@ -104,11 +104,11 @@ curl http://localhost:8000/status | jq '.tts_processing.phoneme_cache'
 # Recommendation: Current memory usage is optimal, no further optimization needed
 ```
 
-### **🔍 Streaming Robustness Investigation Results (2025-08-17)**
+### ** Streaming Robustness Investigation Results (2025-08-17)**
 ```bash
 # Concurrent streaming performance:
 # 2 concurrent requests: 9.1ms TTFA p95 ✅ (excellent, no cold start)
-# 4 concurrent requests: 3657.1ms TTFA p95 ❌ (cold start returns)
+# 4 concurrent requests: 3657.1ms TTFA p95  (cold start returns)
 
 # Chunk generation: Excellent across all concurrency levels (0.003-0.004ms median gaps)
 # Memory usage: Stable across concurrency levels (47-48MB RSS)
@@ -117,7 +117,7 @@ curl http://localhost:8000/status | jq '.tts_processing.phoneme_cache'
 # Recommendation: System handles moderate concurrency well, avoid high concurrency for optimal performance
 ```
 
-## 📊 Performance Monitoring
+##  Performance Monitoring
 
 ### **Quick TTFA Test**
 ```bash
@@ -150,7 +150,7 @@ curl http://localhost:8000/benchmarks/optimization/status
 curl http://localhost:8000/session-status
 ```
 
-## 🔧 Configuration Tuning
+##  Configuration Tuning
 
 ### **Environment Variables (Optimized)**
 ```bash
@@ -170,35 +170,35 @@ export KOKORO_VERBOSE_LOGS=1  # for debugging
 KOKORO_COREML_COMPUTE_UNITS=CPUAndGPU  # Better memory efficiency
 KOKORO_MEMORY_ARENA_SIZE_MB=3072       # Large arena for 64GB RAM
 
-# ⚠️ Alternative (Higher memory usage)
+#  Alternative (Higher memory usage)
 KOKORO_COREML_COMPUTE_UNITS=ALL        # Uses more memory
 KOKORO_MEMORY_ARENA_SIZE_MB=2048       # Smaller arena
 ```
 
-## 🎯 Performance Targets & Current Status
+##  Performance Targets & Current Status
 
 | Metric | Target | Current (CPU) | Current (CoreML) | Status |
 |--------|--------|---------------|------------------|--------|
-| TTFA | 800ms | 152ms | 4178ms | ✅ **CPU: 70% better!** ❌ **CoreML: 8.4x worse** |
+| TTFA | 800ms | 152ms | 4178ms | ✅ **CPU: 70% better!**  **CoreML: 8.4x worse** |
 | RTF | <0.6 | 0.121 | 0.121 | ✅ **Perfect!** |
 | Memory (short) | <300MB | 50.3MB | 50.3MB | ✅ **Excellent** |
 | Memory (long) | <300MB | 4.4-5.0MB | 4.4-5.0MB | ✅ **Excellent** |
 | Underruns | <1/10min | 1/5 trials | 1/5 trials | ✅ **Good** |
 
-### **🚨 Provider Performance Comparison**
+### ** Provider Performance Comparison**
 - **CPU Provider**: 152ms TTFA p95 ✅ (70% better than target)
-- **CoreML Provider**: 4178ms TTFA p95 ❌ (8.4x worse than target)
+- **CoreML Provider**: 4178ms TTFA p95  (8.4x worse than target)
 - **CoreML ALL/CPUAndGPU**: Complete failure (503 errors, server crashes)
 - **Performance Gap**: 27x difference between providers
 - **Recommendation**: Use CPU provider for production deployment
 
-### **🎉 Memory Issue RESOLVED**
+### ** Memory Issue RESOLVED**
 - **Previous issue**: 606.9MB memory usage for long text
 - **Current status**: 4.4-5.0MB RSS range ✅ (excellent efficiency)
 - **Resolution**: Likely through session management and cache optimizations
 - **Recommendation**: No further memory optimization needed
 
-## 🚨 Emergency Recovery
+##  Emergency Recovery
 
 ### **If Sessions Block**
 ```bash
@@ -220,7 +220,7 @@ curl http://localhost:8000/status | jq '.["performance_stats"]'
 # - Error rates
 ```
 
-## 📈 Next Steps by Priority
+##  Next Steps by Priority
 
 ### **P0: Critical Issues** ✅ **RESOLVED**
 - ✅ Session resource leaks fixed
@@ -262,7 +262,7 @@ curl http://localhost:8000/status | jq '.["performance_stats"]'
 2. **Auto-tuning with ML**: Bayesian parameter optimization
 3. **Custom Metal kernels**: Low-level hardware optimization
 
-## 🔍 Debugging Checklist
+##  Debugging Checklist
 
 **If TTFA > 100ms:**
 - [ ] Check provider selection (should be CoreML)
@@ -282,7 +282,7 @@ curl http://localhost:8000/status | jq '.["performance_stats"]'
 - [ ] Verify daemon health
 - [ ] Check network/IPC latency
 
-## 📚 References
+##  References
 
 - **Blueprint:** `docs/optimization/optimization-blueprint.md`
 - **Tracker:** `docs/optimization/optimization-tracker.md`
@@ -290,7 +290,7 @@ curl http://localhost:8000/status | jq '.["performance_stats"]'
 - **Scripts:** `scripts/quantize_model.py`, `scripts/optimization_pipeline.py`
 - **Monitoring:** `api/performance/benchmarks/`
 
-## 🎉 **Optimization Success Summary**
+##  **Optimization Success Summary**
 
 **Major Achievements:**
 - ✅ **TTFA improved 145x**: From 800ms target to 5.5-6.9ms actual
@@ -299,7 +299,7 @@ curl http://localhost:8000/status | jq '.["performance_stats"]'
 - ✅ **Production-ready configuration**: Optimized for 64GB M1 Max
 
 **Remaining Work:**
-- ⚠️ **Long text memory**: 606.9MB needs optimization
-- 📊 **Cache utilization**: Monitor real-world usage patterns
+-  **Long text memory**: 606.9MB needs optimization
+-  **Cache utilization**: Monitor real-world usage patterns
 
-**Overall Status: 🚀 EXCELLENT PERFORMANCE ACHIEVED!**
+**Overall Status:  EXCELLENT PERFORMANCE ACHIEVED!**

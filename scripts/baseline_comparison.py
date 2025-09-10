@@ -409,7 +409,7 @@ class BaselineComparator:
                 report_lines.append("✅ **Inference Time Reduction**: 50-70% claim validated")
                 claims_validated += 1
             elif avg_inference_improvement > 0:
-                report_lines.append(f"⚠️ **Inference Time Reduction**: {avg_inference_improvement:.1f}% improvement (claim: 50-70%)")
+                report_lines.append(f" **Inference Time Reduction**: {avg_inference_improvement:.1f}% improvement (claim: 50-70%)")
             else:
                 report_lines.append(" **Inference Time Reduction**: No improvement detected")
         else:
@@ -422,7 +422,7 @@ class BaselineComparator:
                 report_lines.append("✅ **Memory Usage Reduction**: 30% claim validated")
                 claims_validated += 1
             elif mem_improvement > 0:
-                report_lines.append(f"⚠️ **Memory Usage Reduction**: {mem_improvement:.1f}% improvement (claim: 30%)")
+                report_lines.append(f" **Memory Usage Reduction**: {mem_improvement:.1f}% improvement (claim: 30%)")
             else:
                 report_lines.append(" **Memory Usage Reduction**: No improvement detected")
         else:
@@ -446,7 +446,7 @@ class BaselineComparator:
         if claims_validated >= 2:
             report_lines.append("✅ **Good Progress**: Major optimization claims are being validated")
         elif claims_validated >= 1:
-            report_lines.append("⚠️ **Partial Success**: Some optimizations working, others need attention")
+            report_lines.append(" **Partial Success**: Some optimizations working, others need attention")
         else:
             report_lines.append(" **Needs Work**: Optimization claims not validated by testing")
         

@@ -125,15 +125,15 @@ class TTFABenchmark:
     async def run_benchmark(self, num_iterations: int = 5) -> Dict[str, Any]:
         """Run comprehensive TTFA benchmark"""
         
-        print(f"🚀 Starting TTFA Benchmark - {num_iterations} iterations per test case")
-        print(f"📡 Server: {self.server_url}")
+        print(f" Starting TTFA Benchmark - {num_iterations} iterations per test case")
+        print(f" Server: {self.server_url}")
         print("=" * 80)
         
         async with aiohttp.ClientSession() as session:
             all_results = []
             
             for test_case in self.test_cases:
-                print(f"\n📝 Testing: {test_case['name']} (Target: {test_case['expected_ttfa']}ms)")
+                print(f"\n Testing: {test_case['name']} (Target: {test_case['expected_ttfa']}ms)")
                 print(f"   Text: '{test_case['text'][:50]}{'...' if len(test_case['text']) > 50 else ''}'")
                 
                 case_results = []
@@ -147,10 +147,10 @@ class TTFABenchmark:
                     
                     if result["success"]:
                         ttfa = result["actual_ttfa_ms"]
-                        status = "✅" if result["target_achieved"] else "❌"
+                        status = "✅" if result["target_achieved"] else ""
                         print(f"{status} TTFA: {ttfa:.1f}ms")
                     else:
-                        print(f"❌ Error: {result['error']}")
+                        print(f" Error: {result['error']}")
                 
                 # Calculate statistics for this test case
                 successful_results = [r for r in case_results if r["success"]]
@@ -158,9 +158,9 @@ class TTFABenchmark:
                     ttfa_values = [r["actual_ttfa_ms"] for r in successful_results]
                     target_achieved_count = sum(1 for r in successful_results if r["target_achieved"])
                     
-                    print(f"   📊 Results: {len(successful_results)}/{num_iterations} successful")
-                    print(f"   📈 TTFA: min={min(ttfa_values):.1f}ms, avg={statistics.mean(ttfa_values):.1f}ms, max={max(ttfa_values):.1f}ms")
-                    print(f"   🎯 Target Achievement: {target_achieved_count}/{len(successful_results)} ({target_achieved_count/len(successful_results)*100:.1f}%)")
+                    print(f"    Results: {len(successful_results)}/{num_iterations} successful")
+                    print(f"    TTFA: min={min(ttfa_values):.1f}ms, avg={statistics.mean(ttfa_values):.1f}ms, max={max(ttfa_values):.1f}ms")
+                    print(f"    Target Achievement: {target_achieved_count}/{len(successful_results)} ({target_achieved_count/len(successful_results)*100:.1f}%)")
         
         return self.analyze_results(all_results)
     
@@ -246,13 +246,13 @@ class TTFABenchmark:
         target_achievement_rate = sum(1 for r in results if r["target_achieved"]) / len(results) * 100
         
         if target_achievement_rate < 80:
-            recommendations.append(f"⚠️ Target achievement rate is only {target_achievement_rate:.1f}% - consider aggressive optimization")
+            recommendations.append(f" Target achievement rate is only {target_achievement_rate:.1f}% - consider aggressive optimization")
         
         if avg_ttfa > 800:
-            recommendations.append(f"⚠️ Average TTFA ({avg_ttfa:.1f}ms) exceeds target - review session routing")
+            recommendations.append(f" Average TTFA ({avg_ttfa:.1f}ms) exceeds target - review session routing")
         
         if max_ttfa > 2000:
-            recommendations.append(f"🚨 Maximum TTFA ({max_ttfa:.1f}ms) is critical - investigate bottlenecks")
+            recommendations.append(f" Maximum TTFA ({max_ttfa:.1f}ms) is critical - investigate bottlenecks")
         
         if target_achievement_rate >= 90 and avg_ttfa <= 600:
             recommendations.append("✅ Excellent TTFA performance - targets consistently achieved")
@@ -263,11 +263,11 @@ class TTFABenchmark:
         """Print comprehensive benchmark report"""
         
         print("\n" + "=" * 80)
-        print("📊 TTFA BENCHMARK REPORT")
+        print(" TTFA BENCHMARK REPORT")
         print("=" * 80)
         
         summary = analysis["summary"]
-        print(f"\n📈 OVERALL SUMMARY:")
+        print(f"\n OVERALL SUMMARY:")
         print(f"   Total Requests: {summary['total_requests']}")
         print(f"   Successful: {summary['successful_requests']} ({summary['overall_success_rate']:.1f}%)")
         print(f"   Failed: {summary['failed_requests']}")
@@ -277,7 +277,7 @@ class TTFABenchmark:
             stats = perf["overall_stats"]
             target = perf["target_achievement"]
             
-            print(f"\n⏱️ TTFA PERFORMANCE:")
+            print(f"\n⏱ TTFA PERFORMANCE:")
             print(f"   Average: {stats['avg_ms']:.1f}ms")
             print(f"   Range: {stats['min_ms']:.1f}ms - {stats['max_ms']:.1f}ms")
             print(f"   Median: {stats['median_ms']:.1f}ms")
@@ -285,7 +285,7 @@ class TTFABenchmark:
             print(f"   Target Achievement: {target['count']}/{target['total']} ({target['percentage']:.1f}%)")
         
         if "by_test_case" in analysis:
-            print(f"\n📝 BY TEST CASE:")
+            print(f"\n BY TEST CASE:")
             for case_name, case_data in analysis["by_test_case"].items():
                 stats = case_data["ttfa_stats"]
                 target = case_data["target_achievement"]
@@ -294,7 +294,7 @@ class TTFABenchmark:
                 print(f"     Target: {target['count']}/{target['total']} ({target['percentage']:.1f}%)")
         
         if "recommendations" in analysis and analysis["recommendations"]:
-            print(f"\n💡 RECOMMENDATIONS:")
+            print(f"\n RECOMMENDATIONS:")
             for rec in analysis["recommendations"]:
                 print(f"   {rec}")
         
@@ -319,12 +319,12 @@ async def main():
         if args.output:
             with open(args.output, 'w') as f:
                 json.dump(analysis, f, indent=2)
-            print(f"\n💾 Results saved to {args.output}")
+            print(f"\n Results saved to {args.output}")
             
     except KeyboardInterrupt:
-        print("\n⏹️ Benchmark interrupted by user")
+        print("\n⏹ Benchmark interrupted by user")
     except Exception as e:
-        print(f"\n❌ Benchmark failed: {e}")
+        print(f"\n Benchmark failed: {e}")
 
 
 if __name__ == "__main__":

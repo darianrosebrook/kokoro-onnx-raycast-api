@@ -253,7 +253,7 @@ With these layered optimizations—algorithmic (quantization, pruning), graph-le
 ChatGPT said:
 Absolutely—this follow-up review is rich with actionable, orthogonal enhancements that should absolutely be folded into your optimization roadmap. It contributes several tactical implementations and low-level insights that deepen the original assessment. Here's a synthesis of where it meaningfully extends or reinforces prior recommendations, and how to incorporate it into the project’s performance plan:
 
-🔧 Additions & Refinements to Original Optimization Plan
+ Additions & Refinements to Original Optimization Plan
 1. Quantization Improvements (Expanded and Practical)
 What's New:
 
@@ -371,7 +371,7 @@ Track whether your model falls back to dynamic shapes during inference; if so, t
 
 This will become more relevant as the CoreML team improves dev access to these features.
 
-✳️ Integration Summary
+ Integration Summary
 Enhancement Type	Recommendation	Priority	Benefit
 Quantization	Per-channel INT8 + QAT + hybrid FP16	High	Up to 4× speed, minimal quality loss
 ONNX Graph	Optimized graph + static shape binding	High	Reduces scheduling/runtime overhead
@@ -381,7 +381,7 @@ Pipeline Engineering	Lock-free 3-stage pipeline + QoS	High	Boosts concurrency, a
 Distillation	Student model from Kokoro	Medium-High	2–4× faster at similar audio quality
 Metal/MPS	Custom kernels & zero-copy buffers	Experimental	Shaves latency in DSP or preprocessing ops
 JIT MLProgram	Conditional compile-on-input	Experimental	Reduces cold start latency on shape mismatch
-📌 Final Thoughts
+ Final Thoughts
 These recommendations extend your original strategy from a performance-focused optimization effort into a systems-level, hardware-aware TTS engine. By combining:
 
 strategic quantization and pruning,
@@ -535,7 +535,7 @@ Low-level performance tuning suggestions (e.g., MLProgram, FastPrediction, seque
 
 Here’s how I recommend integrating this review into the broader Kokoro optimization roadmap:
 
-🔁 Fold-in Strategy: What to Reuse, Extend, or Emphasize
+ Fold-in Strategy: What to Reuse, Extend, or Emphasize
 ✅ Reinforce & Deepen:
 Existing Concept	New Reinforcement
 Use of ANE via CoreML	Emphasizes MLProgram + FastPrediction, and the nuanced trade-off between ALL vs. CPUAndGPU across short vs. long inputs. Integrate into runtime provider selection heuristics.
@@ -543,7 +543,7 @@ Quantization Best Practices	Aligns strongly with earlier notes on INT8 + mixed-p
 Threading & Dual Session Management	Endorses your strategy of isolating ANE-bound inference and offloading other tasks (e.g. phoneme generation) to CPU/GPU. Also offers use-case-aware scheduling (e.g. don’t oversubscribe ANE).
 Streaming Buffering Strategy	Validates buffering 2–3 chunks (100–150 ms) before playback to prevent underruns. Recommends adaptive pre-buffer sizing depending on content length.
 Persistent Audio Playback Daemon	Fully supports your use of a dedicated streaming playback process (with WebSockets and ring buffers). Suggests extending it with sequence-indexed chunks and audio recovery strategies.
-✴️ New Material to Integrate:
+ New Material to Integrate:
 New Concept	Recommended Integration
 Segment-Level Batching	While complex, the idea of padding multiple segments into a single forward pass can be considered for cases where throughput (not TTFA) is the priority. Label this as a potential Phase 3 optimization.
 Misaki G2P Performance Profiling	Build in a benchmark/diagnostic mode to time how long phonemization takes per request, especially on paragraph-length inputs. Include warmup logic for Misaki and fallback to eSpeak NG for long-form failover.
@@ -551,7 +551,7 @@ Chunk Sequence Tagging	Add chunk_id to audio stream metadata. Your WebSocket pla
 Control Character Sanitization Before Phonemization	Preprocess input text to collapse or remove problematic characters. Use a dedicated sanitize_text_for_phonemizer() utility module before any G2P call.
 Pre-buffer Flushing for HTTP Streaming	Explicitly flush a small chunk (~100 ms) before sending more to satisfy client buffer startup conditions—especially useful for aggressive HTTP stream readers.
 Inference Queueing for Rapid Reuse	Add a strategy for handling back-to-back Raycast requests: either serialize in a short FIFO queue or interrupt current playback, depending on UX preference. Tie this into your caching layer with MD5 identifiers.
-🔄 Overlap Resolution & Prioritization
+ Overlap Resolution & Prioritization
 These three reviews (the one synthesized earlier, the advanced quantization/graph strategies, and this Apple Silicon-focused review) cover a comprehensive and overlapping optimization surface. To consolidate:
 
 Theme	Sourced From	Final Integration
@@ -560,7 +560,7 @@ Streaming pipeline (sequence handling, pre-buffer, chunk sizing)	Review 2 & 3	Bu
 Multi-device concurrency (ANE + CPU/GPU)	Review 1 & 3	Confirm dual session mode is supported in runtime and doesn’t oversubscribe ANE. Possibly integrate a concurrency throttle and scheduler heuristic.
 MPS vs. CoreML vs. ONNX CPU/GPU EP selection	Review 1 & 2	Add environment-controlled benchmarking toggle to auto-select optimal EP for each chunk type or input length.
 Graph optimizations (fusion, shape binding)	Review 1	Add this as part of model build step for every .onnx → .ort conversion cycle. Cache artifacts with shape/ops metadata.
-📘 Suggested Structure for Final Report / Documentation
+ Suggested Structure for Final Report / Documentation
 Your final optimization report (or developer documentation for future contributors) could be structured as follows:
 
 System Goals and Performance Baselines

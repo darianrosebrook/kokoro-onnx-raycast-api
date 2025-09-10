@@ -107,8 +107,8 @@ class CoreMLMemoryManager:
             'peak_memory_usage': 0.0
         }
         
-        logger.debug(f"🧠 CoreML memory manager initialized (aggressive={aggressive_mode})")
-        logger.debug(f"📊 Baseline memory: {self.baseline_memory:.1f}MB")
+        logger.debug(f" CoreML memory manager initialized (aggressive={aggressive_mode})")
+        logger.debug(f" Baseline memory: {self.baseline_memory:.1f}MB")
     
     def _get_current_memory(self) -> float:
         """Get current process memory usage in MB."""
@@ -116,7 +116,7 @@ class CoreMLMemoryManager:
             process = psutil.Process()
             return process.memory_info().rss / 1024 / 1024
         except Exception as e:
-            logger.debug(f"⚠️ Could not get memory usage: {e}")
+            logger.debug(f" Could not get memory usage: {e}")
             return 0.0
     
     def _get_system_memory_pressure(self) -> float:
@@ -125,7 +125,7 @@ class CoreMLMemoryManager:
             memory = psutil.virtual_memory()
             return memory.percent
         except Exception as e:
-            logger.debug(f"⚠️ Could not get system memory pressure: {e}")
+            logger.debug(f" Could not get system memory pressure: {e}")
             return 0.0
     
     def _force_objective_c_cleanup(self):
@@ -142,7 +142,7 @@ class CoreMLMemoryManager:
             # Load Objective-C runtime
             objc_lib = ctypes.util.find_library("objc")
             if not objc_lib:
-                logger.debug("⚠️ Could not find Objective-C runtime library")
+                logger.debug(" Could not find Objective-C runtime library")
                 return False
             
             libobjc = ctypes.CDLL(objc_lib)
@@ -168,7 +168,7 @@ class CoreMLMemoryManager:
                 # Get NSAutoreleasePool class
                 NSAutoreleasePool = objc_getClass(b"NSAutoreleasePool")
                 if not NSAutoreleasePool:
-                    logger.debug("⚠️ Could not get NSAutoreleasePool class")
+                    logger.debug(" Could not get NSAutoreleasePool class")
                     return False
                 
                 # Get selectors
@@ -187,14 +187,14 @@ class CoreMLMemoryManager:
                 return True
                 
             except Exception as e:
-                logger.debug(f"⚠️ Error draining autorelease pool: {e}")
+                logger.debug(f" Error draining autorelease pool: {e}")
                 return False
                 
         except ImportError:
-            logger.debug("⚠️ ctypes not available for Objective-C cleanup")
+            logger.debug(" ctypes not available for Objective-C cleanup")
             return False
         except Exception as e:
-            logger.debug(f"⚠️ Objective-C cleanup failed: {e}")
+            logger.debug(f" Objective-C cleanup failed: {e}")
             return False
     
     def _aggressive_memory_cleanup(self) -> float:
@@ -227,7 +227,7 @@ class CoreMLMemoryManager:
                     ort._clear_cache()
                     
             except Exception as e:
-                logger.debug(f"⚠️ Could not clear ONNX Runtime caches: {e}")
+                logger.debug(f" Could not clear ONNX Runtime caches: {e}")
             
             # 5. Final garbage collection
             gc.collect()
@@ -236,7 +236,7 @@ class CoreMLMemoryManager:
             memory_freed = memory_before - memory_after
             
             if memory_freed > 0:
-                logger.debug(f"🧹 Aggressive cleanup freed {memory_freed:.1f}MB")
+                logger.debug(f" Aggressive cleanup freed {memory_freed:.1f}MB")
                 self.stats['memory_saved_mb'] += memory_freed
             
             self.stats['cleanups_triggered'] += 1
@@ -245,7 +245,7 @@ class CoreMLMemoryManager:
             return memory_freed
             
         except Exception as e:
-            logger.debug(f"⚠️ Aggressive cleanup failed: {e}")
+            logger.debug(f" Aggressive cleanup failed: {e}")
             return 0.0
     
     def _should_trigger_cleanup(self, current_memory: float) -> bool:
@@ -260,7 +260,7 @@ class CoreMLMemoryManager:
         
         # Check if memory increase exceeds threshold
         if memory_increase > self.cleanup_threshold:
-            logger.debug(f"🔍 Memory increase ({memory_increase:.1f}MB) exceeds threshold ({self.cleanup_threshold}MB)")
+            logger.debug(f" Memory increase ({memory_increase:.1f}MB) exceeds threshold ({self.cleanup_threshold}MB)")
             return True
         
         # Check if it's been too long since last cleanup
@@ -272,7 +272,7 @@ class CoreMLMemoryManager:
         # Check system memory pressure
         system_pressure = self._get_system_memory_pressure()
         if system_pressure > 80:  # High system memory usage
-            logger.debug(f"💽 High system memory pressure ({system_pressure:.1f}%)")
+            logger.debug(f" High system memory pressure ({system_pressure:.1f}%)")
             return True
         
         return False
@@ -288,7 +288,7 @@ class CoreMLMemoryManager:
         operation_start = time.time()
         
         try:
-            logger.debug(f"🔄 Starting managed operation: {operation_name}")
+            logger.debug(f" Starting managed operation: {operation_name}")
             yield
             
         finally:
@@ -310,15 +310,15 @@ class CoreMLMemoryManager:
             if memory_after > self.stats['peak_memory_usage']:
                 self.stats['peak_memory_usage'] = memory_after
             
-            logger.debug(f"📊 Operation {operation_name} completed in {operation_time:.2f}s, memory delta: {memory_delta:+.1f}MB")
+            logger.debug(f" Operation {operation_name} completed in {operation_time:.2f}s, memory delta: {memory_delta:+.1f}MB")
             
             # Check if cleanup is needed
             if self.aggressive_mode and self._should_trigger_cleanup(memory_after):
-                logger.debug(f"🧹 Triggering cleanup after {operation_name}")
+                logger.debug(f" Triggering cleanup after {operation_name}")
                 freed_memory = self._aggressive_memory_cleanup()
                 
                 if freed_memory > 5:  # Significant memory freed
-                    logger.info(f"🧠 Memory cleanup freed {freed_memory:.1f}MB after {operation_name}")
+                    logger.info(f" Memory cleanup freed {freed_memory:.1f}MB after {operation_name}")
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get memory management statistics."""
@@ -396,7 +396,7 @@ def force_coreml_memory_cleanup() -> Dict[str, Any]:
         'timestamp': time.time()
     }
     
-    logger.info(f"🧠 Forced CoreML memory cleanup: freed {freed_memory:.1f}MB")
+    logger.info(f" Forced CoreML memory cleanup: freed {freed_memory:.1f}MB")
     return result
 
 
@@ -453,7 +453,7 @@ def configure_coreml_memory_management(
     
     # Only log configuration on first time or parameter changes
     if not _memory_management_configured or _last_config_params != current_params:
-        logger.info(f"🔧 CoreML memory management configured:")
+        logger.info(f" CoreML memory management configured:")
         logger.info(f"   Aggressive cleanup: {aggressive_cleanup}")
         logger.info(f"   Memory threshold: {memory_threshold_mb}MB")
         logger.info(f"   Monitoring enabled: {monitoring_enabled}")
@@ -469,17 +469,17 @@ def initialize_coreml_memory_management():
     
     # Prevent duplicate initialization
     if _global_memory_manager is not None:
-        logger.debug("🧠 CoreML memory management already initialized, skipping")
+        logger.debug(" CoreML memory management already initialized, skipping")
         return True
         
     try:
         manager = get_memory_manager()
-        logger.info("🧠 CoreML memory management system initialized")
-        logger.info(f"📊 Baseline memory: {manager.baseline_memory:.1f}MB")
-        logger.info(f"🔧 Aggressive mode: {manager.aggressive_mode}")
+        logger.info(" CoreML memory management system initialized")
+        logger.info(f" Baseline memory: {manager.baseline_memory:.1f}MB")
+        logger.info(f" Aggressive mode: {manager.aggressive_mode}")
         return True
     except Exception as e:
-        logger.error(f"❌ Failed to initialize CoreML memory management: {e}")
+        logger.error(f" Failed to initialize CoreML memory management: {e}")
         return False
 
 

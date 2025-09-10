@@ -7,7 +7,7 @@
 
 ---
 
-## 🎯 **Executive Summary**
+##  **Executive Summary**
 
 Your Kokoro TTS system has achieved **exceptional performance** through systematic optimization. The system now delivers **near-instantaneous** text-to-speech with performance that far exceeds the original targets.
 
@@ -19,7 +19,7 @@ Your Kokoro TTS system has achieved **exceptional performance** through systemat
 
 ---
 
-## 📊 **Performance Metrics Comparison**
+##  **Performance Metrics Comparison**
 
 ### **Before vs After Optimization**
 
@@ -35,13 +35,13 @@ Your Kokoro TTS system has achieved **exceptional performance** through systemat
 
 | Configuration | TTFA (ms) | Memory (MB) | RTF | Recommendation |
 |---------------|-----------|-------------|-----|----------------|
-| **ALL + 512MB** | 7.2 | 329.8 | 0.000 | ⚠️ High memory |
+| **ALL + 512MB** | 7.2 | 329.8 | 0.000 |  High memory |
 | **CPUAndGPU + 512MB** | 6.0 | 119.7 | 0.000 | ✅ Good |
 | **CPUAndGPU + 3072MB** | 5.5-6.9 | 70.9-606.9 | 0.000 | ✅ **Optimal** |
 
 ---
 
-## 🚀 **Optimizations Applied**
+##  **Optimizations Applied**
 
 ### **1. Model-Level Optimizations** ✅ **COMPLETE**
 - **INT8 Quantization**: Using `kokoro-v1.0.int8.onnx` (88MB vs 310MB original)
@@ -60,7 +60,7 @@ Your Kokoro TTS system has achieved **exceptional performance** through systemat
 
 ---
 
-## 🎯 **Current Performance Status**
+##  **Current Performance Status**
 
 ### **✅ Excellent Performance (Short Text)**
 - **TTFA: 5.5ms p95** - 91x better than 500ms target
@@ -68,7 +68,7 @@ Your Kokoro TTS system has achieved **exceptional performance** through systemat
 - **RTF: 0.000** - Perfect real-time synthesis
 - **All gates passing** ✅
 
-### **⚠️ Good Performance (Long Text)**
+### ** Good Performance (Long Text)**
 - **TTFA: 11.4ms p95** (stream, long preset)
 - **RTF: 0.00312 p95** (non-stream, long preset)
 - **Memory variation (RSS range): ~7MB during run**
@@ -76,7 +76,7 @@ Your Kokoro TTS system has achieved **exceptional performance** through systemat
 
 ---
 
-## 🔧 **Optimal Configuration**
+##  **Optimal Configuration**
 
 ### **Environment Variables (Production)**
 ```bash
@@ -98,7 +98,7 @@ export KOKORO_VERBOSE_LOGS=1  # for debugging
 
 ---
 
-## 📈 **Remaining Optimization Opportunities**
+##  **Remaining Optimization Opportunities**
 
 ### **P1: Memory Optimization for Long Text**
 - **Current**: 606.9MB for long paragraphs
@@ -116,13 +116,13 @@ export KOKORO_VERBOSE_LOGS=1  # for debugging
 
 ---
 
-## 🎉 **Success Metrics**
+##  **Success Metrics**
 
 ### **Performance Targets Met**
 - ✅ **TTFA ≤ 500ms**: Achieved 5.5-6.9ms (145x better)
 - ✅ **RTF ≤ 0.6**: Achieved 0.000 (perfect)
 - ✅ **Memory ≤ 300MB**: Achieved for short text (70.9MB)
-- ⚠️ **Memory ≤ 300MB**: 606.9MB for long text (needs work)
+-  **Memory ≤ 300MB**: 606.9MB for long text (needs work)
 
 ### **System Stability**
 - ✅ **No underruns**: 0 per 10 minutes
@@ -132,7 +132,7 @@ export KOKORO_VERBOSE_LOGS=1  # for debugging
 
 ---
 
-## 🚀 **Recommendations**
+##  **Recommendations**
 
 ### **Immediate Actions**
 1. **Deploy current configuration**: Already optimized and production-ready
@@ -146,7 +146,7 @@ export KOKORO_VERBOSE_LOGS=1  # for debugging
 
 ---
 
-## 📚 **Documentation Updates**
+##  **Documentation Updates**
 
 ### **Updated Files**
 - ✅ `docs/optimization/quick-reference.md` - Current optimal configuration
@@ -160,7 +160,7 @@ export KOKORO_VERBOSE_LOGS=1  # for debugging
 
 ---
 
-## 🎯 **Conclusion**
+##  **Conclusion**
 
 Your Kokoro TTS system has achieved **exceptional performance** through systematic optimization. The system now delivers:
 
@@ -171,7 +171,7 @@ Your Kokoro TTS system has achieved **exceptional performance** through systemat
 
 The optimization journey has been **highly successful**, achieving performance that far exceeds the original targets. The system is now ready for production use with confidence.
 
-**Overall Status: 🚀 EXCELLENT PERFORMANCE ACHIEVED!**
+**Overall Status:  EXCELLENT PERFORMANCE ACHIEVED!**
 
 ---
 

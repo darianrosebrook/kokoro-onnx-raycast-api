@@ -78,7 +78,7 @@ def validate_hardware_requirements(capabilities: Optional[Dict[str, Any]] = None
     elif 'CPUExecutionProvider' not in provider_priority:
         validation_results['warnings'].append("CPU provider not available as fallback")
     
-    logger.info(f"Hardware validation: {'✅ PASSED' if validation_results['meets_requirements'] else '❌ FAILED'}")
+    logger.info(f"Hardware validation: {'✅ PASSED' if validation_results['meets_requirements'] else ' FAILED'}")
     
     return validation_results
 

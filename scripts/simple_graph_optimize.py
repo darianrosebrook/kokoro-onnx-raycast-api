@@ -61,7 +61,7 @@ def apply_ort_graph_optimizations(input_model_path: str, output_model_path: str)
             logger.info(f"✅ Optimized model saved to: {output_model_path}")
             return True
         else:
-            logger.error("❌ Optimized model was not saved")
+            logger.error(" Optimized model was not saved")
             return False
             
     except Exception as e:

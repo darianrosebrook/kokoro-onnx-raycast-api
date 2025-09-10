@@ -31,9 +31,9 @@ This blueprint consolidates several review passes into one engineering plan to p
 * ✅ **Dual session management:** DualSessionManager for ANE+GPU concurrent processing
 * ✅ **Performance monitoring:** Comprehensive benchmark suite with HTTP endpoints
 * ✅ **Production reliability:** Session leak fixes, error handling, fallback systems
-* ⚠️ **Quantization ready:** Scripts implemented but models not quantized yet
-* ❌ **Auto-tuning:** ML-based parameter optimization not implemented
-* 📊 **Current TTFA:** 2188ms (target: 800ms) - 2.7x improvement still needed
+*  **Quantization ready:** Scripts implemented but models not quantized yet
+*  **Auto-tuning:** ML-based parameter optimization not implemented
+*  **Current TTFA:** 2188ms (target: 800ms) - 2.7x improvement still needed
 
 ---
 
@@ -318,11 +318,11 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 |----------|----------|---------|--------|--------|
 | P0 | Provider optimization | High | Low | ✅ Done |
 | P0 | Session leak fixes | Critical | Low | ✅ Done |
-| P1 | INT8 quantization | High | Medium | ⚠️ Ready |
-| P1 | ONNX graph optimization | Medium | Low | ⚠️ Ready |
-| P2 | Advanced caching | Medium | Medium | ❌ TODO |
-| P2 | Auto-tuning | Medium | High | ❌ TODO |
-| P3 | Custom Metal kernels | Low | High | ❌ R&D |
+| P1 | INT8 quantization | High | Medium |  Ready |
+| P1 | ONNX graph optimization | Medium | Low |  Ready |
+| P2 | Advanced caching | Medium | Medium |  TODO |
+| P2 | Auto-tuning | Medium | High |  TODO |
+| P3 | Custom Metal kernels | Low | High |  R&D |
 
 **Baseline & Instrumentation** ✅ **COMPLETED**
 
@@ -331,7 +331,7 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 
 **Quick Wins** ✅ **MOSTLY COMPLETED**
 
-* ⚠️ Enable **per‑channel INT8**; export `.ort`; set memory arena 2–4 GB. (Scripts ready)
+*  Enable **per‑channel INT8**; export `.ort`; set memory arena 2–4 GB. (Scripts ready)
 * ✅ Primer header+silence; pre‑buffer 2 chunks; sequence‑tagged chunks.
 * ✅ Sanitation + defensive G2P wrapper.
 
@@ -341,16 +341,16 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 * ✅ Dual session (ANE + CPU/GPU) with backpressure.
 * ✅ Cross‑fade splice at seams; primer micro‑cache.
 
-**Advanced** ⚠️ **PARTIALLY READY**
+**Advanced**  **PARTIALLY READY**
 
-* ⚠️ Mixed‑precision layer allowlist; optional QAT on sensitive blocks. (Scripts ready)
-* ❌ Auto‑tuner (Bayesian) for chunk size, provider, threads; Pareto store.
-* ❌ MPS EP A/B; pick graph‑dependent winner.
+*  Mixed‑precision layer allowlist; optional QAT on sensitive blocks. (Scripts ready)
+*  Auto‑tuner (Bayesian) for chunk size, provider, threads; Pareto store.
+*  MPS EP A/B; pick graph‑dependent winner.
 
-**Experimental R\&D** ❌ **NOT STARTED**
+**Experimental R\&D**  **NOT STARTED**
 
-* ❌ Structured pruning; student distillation; batched multi‑segment forward.
-* ❌ MPSGraph custom kernels for hot ops; MLProgram JIT exploration.
+*  Structured pruning; student distillation; batched multi‑segment forward.
+*  MPSGraph custom kernels for hot ops; MLProgram JIT exploration.
 
 Each critical function gates on the **Benchmark Plan** criteria before advancing.
 

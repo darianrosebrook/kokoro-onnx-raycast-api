@@ -479,19 +479,19 @@ class TTSBenchmark {
 
     if (metrics.networkLatency > 100) {
       console.warn(
-        `   ⚠️  High network latency (${metrics.networkLatency.toFixed(2)}ms) - Consider local server`
+        `     High network latency (${metrics.networkLatency.toFixed(2)}ms) - Consider local server`
       );
     }
 
     if (metrics.processingTime > 1000) {
       console.warn(
-        `   ⚠️  Slow server processing (${metrics.processingTime.toFixed(2)}ms) - Check server resources`
+        `     Slow server processing (${metrics.processingTime.toFixed(2)}ms) - Check server resources`
       );
     }
 
     if (metrics.streamToPlayDelay > 100) {
       console.warn(
-        `   ⚠️  High stream-to-play delay (${metrics.streamToPlayDelay.toFixed(2)}ms) - Audio processing bottleneck`
+        `     High stream-to-play delay (${metrics.streamToPlayDelay.toFixed(2)}ms) - Audio processing bottleneck`
       );
     }
 
@@ -505,7 +505,7 @@ class TTSBenchmark {
       );
     } else {
       console.warn(
-        `   ⚠️  Slow streaming performance - First audio in ${metrics.firstAudioPlayTime.toFixed(2)}ms`
+        `     Slow streaming performance - First audio in ${metrics.firstAudioPlayTime.toFixed(2)}ms`
       );
     }
 
@@ -947,7 +947,7 @@ class TTSBenchmark {
     );
     console.log(`   Cache Hit Rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
 
-    console.log(`\n⏱️  TIMING PERFORMANCE:`);
+    console.log(`\n⏱  TIMING PERFORMANCE:`);
     console.log(`   Average Send Time: ${stats.averageSendTime.toFixed(2)}ms`);
     console.log(`   Average Network Latency: ${stats.averageLatency.toFixed(2)}ms`);
     console.log(`   Average Time to First Byte: ${stats.averageTTFB.toFixed(2)}ms`);

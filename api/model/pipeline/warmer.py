@@ -115,7 +115,7 @@ class InferencePipelineWarmer:
             ["a"] * 256  # Maximum length pattern
         ]
 
-        self.logger.debug("🔥 Inference pipeline warmer initialized")
+        self.logger.debug(" Inference pipeline warmer initialized")
 
     async def warm_up_complete_pipeline(self) -> Dict[str, Any]:
         """
@@ -132,7 +132,7 @@ class InferencePipelineWarmer:
         if self.warm_up_complete:
             return self.warm_up_results
 
-        self.logger.info("🔥 Starting comprehensive pipeline warm-up...")
+        self.logger.info(" Starting comprehensive pipeline warm-up...")
         self.warm_up_start_time = time.perf_counter()
 
         results = {
@@ -144,22 +144,22 @@ class InferencePipelineWarmer:
 
         try:
             # CoreML graph compilation
-            self.logger.info("🧠 Precompiling CoreML graphs...")
+            self.logger.info(" Precompiling CoreML graphs...")
             coreml_results = await self._warm_up_coreml_graphs()
             results['functionality']['coreml_graphs'] = coreml_results
 
             # Common pattern caching
-            self.logger.info("💾 Caching common text/phoneme patterns...")
+            self.logger.info(" Caching common text/phoneme patterns...")
             pattern_cache_results = await self._cache_common_patterns()
             results['functionality']['common_patterns'] = pattern_cache_results
 
             # Dual session optimization
-            self.logger.info("⚡ Optimizing dual-session routing...")
+            self.logger.info(" Optimizing dual-session routing...")
             session_routing_results = await self._optimize_session_routing()
             results['functionality']['session_routing'] = session_routing_results
 
             # Memory pattern optimization
-            self.logger.info("🧠 Optimizing memory patterns...")
+            self.logger.info(" Optimizing memory patterns...")
             memory_optimization_results = await self._optimize_memory_patterns()
             results['functionality']['memory_patterns'] = memory_optimization_results
 
@@ -181,7 +181,7 @@ class InferencePipelineWarmer:
             results['success'] = False
             results['error'] = str(e)
             results['errors'].append(str(e))
-            self.logger.error(f"❌ Pipeline warm-up failed: {e}", exc_info=True)
+            self.logger.error(f" Pipeline warm-up failed: {e}", exc_info=True)
 
         return results
 
@@ -484,7 +484,7 @@ class InferencePipelineWarmer:
         self.warm_up_start_time = 0.0
         self.warm_up_duration = 0.0
         self.warm_up_results = {}
-        self.logger.info("🔄 Pipeline warmer reset")
+        self.logger.info(" Pipeline warmer reset")
 
 
 def get_pipeline_warmer() -> Optional[InferencePipelineWarmer]:
@@ -499,7 +499,7 @@ def initialize_pipeline_warmer():
 
     if pipeline_warmer is None:
         logger = logging.getLogger(__name__)
-        logger.info("🔥 Initializing inference pipeline warmer...")
+        logger.info(" Initializing inference pipeline warmer...")
         pipeline_warmer = InferencePipelineWarmer()
         logger.debug("✅ Pipeline warmer initialized")
 

@@ -146,9 +146,9 @@ Based on current implementation status analysis:
   **Status:** ✅ ROOT CAUSE IDENTIFIED - Provider selection issue confirmed
   **Root Cause:** CoreML provider causing severe performance degradation vs CPU provider
   **Current Impact:** 
-  - Short text: CoreML 4422ms ❌ vs CPU 10.6ms ✅ (417x difference)
-  - Medium text: CoreML 7920ms ❌ (target ≤500ms)
-  - Long text: CoreML 2718ms ❌ (target ≤500ms)
+  - Short text: CoreML 4422ms  vs CPU 10.6ms ✅ (417x difference)
+  - Medium text: CoreML 7920ms  (target ≤500ms)
+  - Long text: CoreML 2718ms  (target ≤500ms)
   **Evidence:** Provider comparison benchmarks from `scripts/run_bench.py --preset=short --stream`
   - CoreML: `artifacts/bench/2025-08-17/bench_stream_short_015033.json` (4422ms TTFA p95)
   - CPU: `artifacts/bench/2025-08-17/bench_stream_short_015157.json` (10.6ms TTFA p95)
@@ -223,7 +223,7 @@ Based on current implementation status analysis:
   KOKORO_COREML_COMPUTE_UNITS=CPUOnly python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
   ```
 
-  **🔍 INVESTIGATION RESULTS (2025-08-17):**
+  ** INVESTIGATION RESULTS (2025-08-17):**
   - **CoreML ALL**: Complete failure - 503 Service Unavailable, server hangs/crashes
   - **CoreML CPUAndGPU**: Complete failure - 503 Service Unavailable, server crashes
   - **CoreML CPUOnly**: Works but with severe cold start penalty (4178ms first request)
@@ -247,10 +247,10 @@ Based on current implementation status analysis:
   python scripts/run_bench.py --preset=short --stream --trials=3 --chunk-size=120 --verbose
   ```
 
-  **🔍 INVESTIGATION RESULTS (2025-08-17):**
+  ** INVESTIGATION RESULTS (2025-08-17):**
   - **50ms chunks (stable profile)**: 152ms TTFA p95 ✅ (best performance)
-  - **40ms chunks (benchmark profile)**: 4671.8ms TTFA p95 ❌ (worse, more underruns)
-  - **100ms chunks (safe profile)**: 3943.4ms TTFA p95 ❌ (worse cold start, good steady state)
+  - **40ms chunks (benchmark profile)**: 4671.8ms TTFA p95  (worse, more underruns)
+  - **100ms chunks (safe profile)**: 3943.4ms TTFA p95  (worse cold start, good steady state)
   - **Chunk generation timing**: Excellent across all sizes (0.003-0.005ms median gaps)
   - **Cold start penalty**: Consistent across all chunk sizes (~4 seconds first request)
   - **Steady state performance**: 4-6ms TTFA for all chunk sizes after warmup
@@ -274,7 +274,7 @@ Based on current implementation status analysis:
   KOKORO_MEMORY_ARENA_SIZE_MB=4096 python scripts/run_bench.py --preset=long --stream --trials=3 --verbose
   ```
 
-  **🔍 INVESTIGATION RESULTS (2025-08-17):**
+  ** INVESTIGATION RESULTS (2025-08-17):**
   - **Memory issue RESOLVED**: Long text now uses only 4.4-5.0MB RSS range ✅
   - **Previous issue**: 606.9MB memory usage (resolved through recent optimizations)
   - **Memory arena testing**: 2048MB, 3072MB, 4096MB all show similar low memory usage
@@ -296,11 +296,11 @@ Based on current implementation status analysis:
   python scripts/run_bench.py --preset=long --stream --trials=3 --verbose
   ```
 
-  **🔍 INVESTIGATION RESULTS (2025-08-17):**
+  ** INVESTIGATION RESULTS (2025-08-17):**
   - **Provider Selection Logic**: Working correctly across all text lengths
   - **Short text (<200 chars)**: 152ms TTFA p95 ✅ (CPU provider)
-  - **Medium text (142 chars)**: 7718.9ms TTFA p95 ❌ (one slow trial, others good)
-  - **Long text (>1000 chars)**: 3497.3ms TTFA p95 ❌ (cold start, then 2-3ms)
+  - **Medium text (142 chars)**: 7718.9ms TTFA p95  (one slow trial, others good)
+  - **Long text (>1000 chars)**: 3497.3ms TTFA p95  (cold start, then 2-3ms)
   - **Cold Start Pattern**: Consistent ~3-4 second penalty across all text lengths
   - **Steady State Performance**: 2-5ms TTFA after warmup (excellent)
   - **Provider Switching**: No evidence of provider switching overhead
@@ -321,9 +321,9 @@ Based on current implementation status analysis:
   python scripts/run_bench.py --preset=short --stream --trials=3 --concurrency=4 --verbose
   ```
 
-  **🔍 INVESTIGATION RESULTS (2025-08-17):**
+  ** INVESTIGATION RESULTS (2025-08-17):**
   - **Concurrent Streaming (2 requests)**: 9.1ms TTFA p95 ✅ (excellent, no cold start)
-  - **High Concurrency (4 requests)**: 3657.1ms TTFA p95 ❌ (cold start returns)
+  - **High Concurrency (4 requests)**: 3657.1ms TTFA p95  (cold start returns)
   - **Chunk Generation**: Excellent across all concurrency levels (0.003-0.004ms median gaps)
   - **Memory Usage**: Stable across concurrency levels (47-48MB RSS)
   - **Concurrency Sweet Spot**: 2 concurrent requests optimal
@@ -332,28 +332,28 @@ Based on current implementation status analysis:
 
 ## 13) Implementation Status
 
-### **🎯 Official Benchmark Results (`run_bench.py`)**
-- **Short text streaming (CoreML)**: 4422ms TTFA p95 ❌ (target ≤500ms)
+### ** Official Benchmark Results (`run_bench.py`)**
+- **Short text streaming (CoreML)**: 4422ms TTFA p95  (target ≤500ms)
 - **Short text streaming (CPU)**: 10.6ms TTFA p95 ✅ (target ≤500ms)
-- **Medium text streaming (CoreML)**: 7920ms TTFA p95 ❌ (target ≤500ms) 
-- **Long text streaming (CoreML)**: 2718ms TTFA p95 ❌ (target ≤500ms)
+- **Medium text streaming (CoreML)**: 7920ms TTFA p95  (target ≤500ms) 
+- **Long text streaming (CoreML)**: 2718ms TTFA p95  (target ≤500ms)
 - **Memory efficiency**: 2-4MB range ✅ (target ≤300MB)
 
-### **📊 Performance Summary**
+### ** Performance Summary**
 - **CPU Provider achievement:** ✅ **TARGET EXCEEDED** - 10.6ms << 500ms (98% better)
-- **CoreML Provider issues:** ❌ Severe performance degradation across all text lengths
+- **CoreML Provider issues:**  Severe performance degradation across all text lengths
 - **Provider performance gap:** 417x difference (CPU 10.6ms vs CoreML 4422ms)
 - **Model optimization:** ✅ **COMPLETE** - INT8 quantization + graph optimization deployed
   - INT8 quantization: 71.6% size reduction, 15% speed improvement
   - Graph optimization: 71% additional TTFA improvement, 99.8% cold start improvement
-- **Pipeline optimization:** ✅ **COMPLETE** for CPU provider, ❌ CoreML needs investigation
+- **Pipeline optimization:** ✅ **COMPLETE** for CPU provider,  CoreML needs investigation
   - CPU provider: Consistent sub-15ms performance across all trials
   - CoreML provider: Cold start penalty (4422ms) with warmup recovery (17ms)
 - **Core systems:** ✅ HTTP API, streaming (CPU), monitoring, session management, warming
-- **Production ready:** ✅ For CPU provider use cases, ❌ CoreML needs optimization
+- **Production ready:** ✅ For CPU provider use cases,  CoreML needs optimization
 - **Next milestone:** Switch to CPU provider for production deployment
 
-### **🎯 Critical Provider Performance Discovery**
+### ** Critical Provider Performance Discovery**
 - **CPU Provider dramatically outperforms CoreML for all text lengths**: 10.6ms vs 4422ms TTFA p95
 - **CoreML cold start penalty confirmed**: 4422ms first request vs 17ms subsequent requests
 - **CPU provider consistent performance**: 4.7-10.6ms TTFA across all trials (no cold start penalty)
@@ -362,7 +362,7 @@ Based on current implementation status analysis:
   - CPU: `artifacts/bench/2025-08-17/bench_stream_short_015157.json` (10.6ms TTFA p95)
   - CoreML: `artifacts/bench/2025-08-17/bench_stream_short_015033.json` (4422ms TTFA p95)
 
-### **🎯 Audio Chunk Timing Analysis**
+### ** Audio Chunk Timing Analysis**
 **Excellent chunk generation performance across all providers:**
 - **Median gap between chunks**: 0.003-0.005ms (sub-millisecond - excellent)
 - **P95 gap**: 3-34ms (varies by provider and request)
@@ -375,7 +375,7 @@ Based on current implementation status analysis:
 - **CoreML Provider**: 0.005ms median gaps, 3-34ms p95 gaps (good with occasional spikes)
 - **Buffer efficiency**: Both providers generate chunks faster than playback, enabling buffer growth
 
-### **🚨 Critical Performance Regression Discovery**
+### ** Critical Performance Regression Discovery**
 - **Severe CoreML degradation confirmed**: 4422ms TTFA p95 vs 10.6ms CPU baseline
 - **Cold start penalty persists**: Even with fresh server restart, CoreML shows 4422ms first request
 - **Warmup recovery works**: CoreML recovers to 17ms after first request
@@ -385,7 +385,7 @@ Based on current implementation status analysis:
   - CPU comparison: `artifacts/bench/2025-08-17/bench_stream_short_015157.json` (10.6ms TTFA p95)
 
 ### **Root Cause Analysis Update**
-**🎯 CRITICAL DISCOVERY - CoreML Provider Performance Issues Confirmed:**
+** CRITICAL DISCOVERY - CoreML Provider Performance Issues Confirmed:**
 
 **Evidence from fresh server restart (2025-08-17 01:50):**
 - CoreML first request: 4422ms (severe cold start penalty)
@@ -400,12 +400,12 @@ Based on current implementation status analysis:
 4. **Chunk generation timing**: Excellent for both providers (sub-millisecond gaps)
 
 **NOT the issue:**
-- ❌ Background task interference (resolved with `KOKORO_DEFER_BACKGROUND_INIT=true`)
-- ❌ Memory management overhead (tested, minimal impact)
-- ❌ Session cache misses (no "PERFORMANCE ISSUE" logs detected)
-- ❌ Model recreation (would show cache miss warnings)
+-  Background task interference (resolved with `KOKORO_DEFER_BACKGROUND_INIT=true`)
+-  Memory management overhead (tested, minimal impact)
+-  Session cache misses (no "PERFORMANCE ISSUE" logs detected)
+-  Model recreation (would show cache miss warnings)
 
-### **🎯 PERFORMANCE ISSUE RESOLUTION**
+### ** PERFORMANCE ISSUE RESOLUTION**
 
 **Final Solution Implemented:**
 ```bash

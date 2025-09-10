@@ -216,7 +216,7 @@ class ServerPerformanceTracker:
         
     def _log_final_summary(self, request_id: str, metrics: ServerPerformanceMetrics) -> None:
         """Log final performance summary"""
-        status = "✅ PASS" if metrics.first_chunk_generated_time_ms <= 800 else "❌ FAIL"
+        status = "✅ PASS" if metrics.first_chunk_generated_time_ms <= 800 else " FAIL"
         
         logger.info(f"[SERVER_PERF:{request_id}] FINAL_SUMMARY", extra={
             "timestamp": datetime.now().isoformat(),

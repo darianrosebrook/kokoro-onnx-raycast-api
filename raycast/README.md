@@ -149,7 +149,7 @@ graph TD
 
 **Why Traditional Approach Fails**:
 ```typescript
-// ❌ Traditional: Wait for complete audio before playback
+//  Traditional: Wait for complete audio before playback
 await fetch('/synthesize') → wait 5-10 seconds → play entire audio
 ```
 
@@ -279,7 +279,7 @@ const optimalProvider = selectBestProvider(benchmarkResults);
 - **Chunk-based processing**: 50ms audio chunks for smooth playback
 - **Intelligent buffering**: Balances latency vs. quality
 
-### 🎛️ **Advanced Playback Controls**
+###  **Advanced Playback Controls**
 - **Pause/Resume**: Mid-sentence control without audio gaps
 - **Speed adjustment**: 0.1x to 3.0x with pitch preservation
 - **Stop/Restart**: Immediate response with proper cleanup
@@ -432,7 +432,7 @@ On Apple Silicon (M1/M2/M3):
 
 ## License
 
-MIT License - Built for the developer community with ❤️
+MIT License - Built for the developer community with 
 
 ---
 
