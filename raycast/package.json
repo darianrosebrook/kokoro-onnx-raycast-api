@@ -140,7 +140,7 @@
     "@raycast/eslint-config": "^2.0.4",
     "@types/node": "^22.13.10",
     "@types/react": "^19.0.12",
-    "eslint": "^9.22.0",
+    "eslint": "^9.36.0",
     "globals": "^16.3.0",
     "prettier": "^3.4.2",
     "react": "^19.0.0",
