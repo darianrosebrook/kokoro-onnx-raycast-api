@@ -60,7 +60,7 @@
  * ```typescript
  * const processor = new TTSSpeechProcessor({
  *   voice: "af_heart",
- *   speed: 1.2,
+ *   speed: 1.25,
  *   serverUrl: "http://localhost:8000",
  *   useStreaming: true,
  *   onStatusUpdate: (status) => console.log(status)
@@ -78,6 +78,7 @@ import { PerformanceTracker } from "../core/performance-tracker.js";
 import { RetryManager } from "../api/retry-manager.js";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager.js";
 import { StreamingContext, TextSegment, TTS_CONSTANTS } from "../validation/tts-types.js";
+import { EventEmitter } from "events";
 // const execAsync = promisify(exec);
 
 /**
@@ -204,8 +205,8 @@ export class TTSSpeechProcessor {
     // Voice selection with high-quality default
     this.voice = (prefs.voice as VoiceOption) ?? "af_heart";
 
-    // Speed parsing with safe defaults
-    this.speed = parseFloat(prefs.speed ?? "1.0");
+    // Speed parsing with API validation (minimum 1.25)
+    this.speed = Math.max(1.25, parseFloat(prefs.speed ?? "1.0"));
 
     // Server URL with automatic trailing slash cleanup
     this.serverUrl = prefs.serverUrl?.replace(/\/+$/, "") ?? "http://localhost:8000";
@@ -812,8 +813,8 @@ export class TTSSpeechProcessor {
    * Wait for the daemon to signal that all audio playback is complete
    * This prevents premature WebSocket closure and ensures all audio is played
    */
-  private async waitForDaemonCompletion(streamingPlayback: any): Promise<void> {
-    return new Promise((resolve, reject) => {
+  private async waitForDaemonCompletion(streamingPlayback: unknown): Promise<void> {
+    return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         console.warn(`[${this.instanceId}] Daemon completion timeout - forcing resolution`);
         resolve(); // Don't reject - just resolve to continue
@@ -841,9 +842,14 @@ export class TTSSpeechProcessor {
       };
 
       // Add listeners to the streaming playback
-      if (streamingPlayback && typeof streamingPlayback.on === "function") {
-        streamingPlayback.once("completed", onCompleted);
-        streamingPlayback.once("error", onError);
+      if (
+        streamingPlayback &&
+        typeof streamingPlayback === "object" &&
+        streamingPlayback !== null
+      ) {
+        const playback = streamingPlayback as EventEmitter;
+        playback.once("completed", onCompleted);
+        playback.once("error", onError);
       } else {
         console.warn(`[${this.instanceId}] Streaming playback not available for completion events`);
         clearInterval(keepAliveInterval);

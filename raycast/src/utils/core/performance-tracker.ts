@@ -15,7 +15,7 @@ export interface PerformanceEvent {
   stage: string;
   timestamp: number;
   duration?: number;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 export interface RequestFlow {
@@ -93,7 +93,7 @@ export class PerformanceTracker {
   /**
    * Record a performance event
    */
-  logEvent(requestId: string, stage: string, metadata: Record<string, any> = {}): void {
+  logEvent(requestId: string, stage: string, metadata: Record<string, unknown> = {}): void {
     const flow = this.activeFlows.get(requestId);
     if (!flow) {
       console.warn(`PerformanceTracker: No active flow for request ${requestId}`);
@@ -150,7 +150,7 @@ export class PerformanceTracker {
     const startTime = flow.startTime;
 
     // Find key timing events
-    const requestStart = events.find((e) => e.stage === "REQUEST_START");
+    const _requestStart = events.find((e) => e.stage === "REQUEST_START");
     const firstByte = events.find((e) => e.stage === "FIRST_BYTE_RECEIVED");
     const firstAudio = events.find((e) => e.stage === "FIRST_AUDIO_CHUNK");
     const lastChunk = events.find((e) => e.stage === "LAST_AUDIO_CHUNK");
@@ -165,14 +165,19 @@ export class PerformanceTracker {
 
     // Calculate streaming metrics
     const chunkCount = events.filter((e) => e.stage === "AUDIO_CHUNK_RECEIVED").length;
-    const audioDuration = lastChunk ? lastChunk.metadata.audioDurationMs / 1000 : 0;
+    const audioDurationMs = (lastChunk?.metadata.audioDurationMs as number) || 0;
+    const audioDuration = audioDurationMs / 1000;
 
     // Use streaming duration from metadata if available, otherwise calculate from timestamps
     let streamingEfficiency = 0;
     let totalStreamingTime = 0;
-    if (lastChunk && lastChunk.metadata.streamingDurationMs) {
+    if (
+      lastChunk &&
+      lastChunk.metadata.streamingDurationMs &&
+      typeof lastChunk.metadata.streamingDurationMs === "number"
+    ) {
       // Use the streaming duration provided in metadata
-      totalStreamingTime = lastChunk.metadata.streamingDurationMs;
+      totalStreamingTime = lastChunk.metadata.streamingDurationMs as number;
       const streamingTimeSeconds = totalStreamingTime / 1000;
       streamingEfficiency = audioDuration / streamingTimeSeconds;
     } else if (lastChunk && firstAudio) {
@@ -199,22 +204,24 @@ export class PerformanceTracker {
       events.find((e) => e.stage === "INFERENCE_START")?.metadata.provider || "unknown";
 
     // Collect errors and warnings
-    const errors = events.filter((e) => e.stage === "ERROR").map((e) => e.metadata.error);
-    const warnings = events.filter((e) => e.stage === "WARNING").map((e) => e.metadata.warning);
+    const errors = events.filter((e) => e.stage === "ERROR").map((e) => e.metadata.error as string);
+    const warnings = events
+      .filter((e) => e.stage === "WARNING")
+      .map((e) => e.metadata.warning as string);
 
     return {
-      requestStartToFirstByte,
-      serverProcessingTime,
-      firstByteToFirstAudio,
-      totalTimeToFirstAudio,
-      totalStreamingTime,
-      audioGenerationTime: serverProcessingTime,
-      chunkCount,
-      averageChunkTime,
-      streamingEfficiency,
-      audioDuration,
-      cacheHit,
-      providerUsed,
+      requestStartToFirstByte: requestStartToFirstByte as number,
+      serverProcessingTime: serverProcessingTime as number,
+      firstByteToFirstAudio: firstByteToFirstAudio as number,
+      totalTimeToFirstAudio: totalTimeToFirstAudio as number,
+      totalStreamingTime: totalStreamingTime as number,
+      audioGenerationTime: serverProcessingTime as number,
+      chunkCount: chunkCount as number,
+      averageChunkTime: averageChunkTime as number,
+      streamingEfficiency: streamingEfficiency as number,
+      audioDuration: audioDuration as number,
+      cacheHit: cacheHit as boolean,
+      providerUsed: providerUsed as string,
       errors,
       warnings,
     };

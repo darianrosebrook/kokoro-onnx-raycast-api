@@ -8,6 +8,28 @@
 import { EventEmitter } from "events";
 import { logger } from "@/utils/core/logger";
 
+// Type definitions for Node.js globals
+declare const _Buffer: {
+  alloc(size: number): Uint8Array;
+  from(data: string | Uint8Array | number[]): Uint8Array;
+  isBuffer(obj: unknown): obj is Uint8Array;
+};
+
+interface _NodeJSTimeout {
+  ref(): void;
+  unref(): void;
+  hasRef(): boolean;
+}
+
+interface PerformanceImprovement {
+  successRateChange: number;
+  latencyChange: number;
+  dropRateChange: number;
+  successRate?: number;
+  latency?: number;
+  dropRate?: number;
+}
+
 interface StreamHealthMetrics {
   totalStreams: number;
   successfulStreams: number;
@@ -19,6 +41,13 @@ interface StreamHealthMetrics {
   playbackLatency: number[];
   lastError?: string;
   errorCount: number;
+  successRate: number;
+  averageLatency: number;
+  dropRate: number;
+  currentBufferSize?: number;
+  targetBufferSize?: number;
+  bufferConfig?: AdaptiveBufferConfig;
+  isOptimizing?: boolean;
 }
 
 interface AdaptiveBufferConfig {
@@ -42,7 +71,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
   private instanceId: string;
 
   // Buffer management
-  private audioBuffer: Buffer[] = [];
+  private audioBuffer: Uint8Array[] = [];
   private bufferConfig: AdaptiveBufferConfig;
   private currentBufferSize = 0;
   private targetBufferSize = 0;
@@ -54,12 +83,8 @@ export class AdaptiveAudioDaemon extends EventEmitter {
 
   // Adaptive optimization
   private isOptimizing = false;
-  private optimizationInterval?: NodeJS.Timeout;
-  private performanceBaseline?: {
-    successRate: number;
-    averageLatency: number;
-    dropRate: number;
-  };
+  private optimizationInterval?: number;
+  private performanceBaseline?: PerformanceImprovement;
 
   // Playback state
   private isPlaying = false;
@@ -93,6 +118,9 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       chunkSizeVariance: 0,
       playbackLatency: [],
       errorCount: 0,
+      successRate: 0,
+      averageLatency: 0,
+      dropRate: 0,
     };
 
     logger.info(` AdaptiveAudioDaemon initialized: ${this.instanceId}`, {
@@ -111,7 +139,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
     this.isOptimizing = true;
     this.optimizationInterval = setInterval(() => {
       this.optimizeConfiguration();
-    }, intervalMs);
+    }, intervalMs) as unknown as number;
 
     logger.info(` Started adaptive optimization (${intervalMs}ms interval)`, {
       component: this.name,
@@ -140,7 +168,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
   /**
    * Write audio chunk with adaptive buffering
    */
-  async writeChunk(chunk: Buffer, metadata?: Partial<ChunkMetadata>): Promise<void> {
+  async writeChunk(chunk: Uint8Array, metadata?: Partial<ChunkMetadata>): Promise<void> {
     const startTime = performance.now();
 
     try {
@@ -378,7 +406,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
   /**
    * Adapt buffer size based on chunk variation patterns
    */
-  private adaptBufferSize(chunkMeta: ChunkMetadata): void {
+  private adaptBufferSize(_chunkMeta: ChunkMetadata): void {
     if (this.chunkHistory.length < 5) return; // Need some history
 
     // Calculate recent variance
@@ -467,17 +495,23 @@ export class AdaptiveAudioDaemon extends EventEmitter {
     // Establish baseline if not set
     if (!this.performanceBaseline) {
       this.performanceBaseline = {
+        successRateChange: health.successRate,
+        latencyChange: health.averageLatency,
+        dropRateChange: health.dropRate,
         successRate: health.successRate,
-        averageLatency: health.averageLatency,
+        latency: health.averageLatency,
         dropRate: health.dropRate,
       };
       return;
     }
 
-    const improvement = {
-      successRate: health.successRate - this.performanceBaseline.successRate,
-      latency: this.performanceBaseline.averageLatency - health.averageLatency, // Lower is better
-      dropRate: this.performanceBaseline.dropRate - health.dropRate, // Lower is better
+    const improvement: PerformanceImprovement = {
+      successRateChange: health.successRate - this.performanceBaseline.successRateChange,
+      latencyChange: this.performanceBaseline.latencyChange - health.averageLatency, // Lower is better
+      dropRateChange: this.performanceBaseline.dropRateChange - health.dropRate, // Lower is better
+      successRate: health.successRate,
+      latency: health.averageLatency,
+      dropRate: health.dropRate,
     };
 
     // Emit optimization recommendations
@@ -490,8 +524,11 @@ export class AdaptiveAudioDaemon extends EventEmitter {
 
     // Update baseline with current performance
     this.performanceBaseline = {
+      successRateChange: health.successRate,
+      latencyChange: health.averageLatency,
+      dropRateChange: health.dropRate,
       successRate: health.successRate,
-      averageLatency: health.averageLatency,
+      latency: health.averageLatency,
       dropRate: health.dropRate,
     };
   }
@@ -499,7 +536,10 @@ export class AdaptiveAudioDaemon extends EventEmitter {
   /**
    * Generate optimization recommendations
    */
-  private generateRecommendations(health: any, improvement: any): string[] {
+  private generateRecommendations(
+    health: StreamHealthMetrics,
+    improvement: PerformanceImprovement
+  ): string[] {
     const recommendations: string[] = [];
 
     if (health.dropRate > 0.05) {
@@ -527,7 +567,7 @@ export class AdaptiveAudioDaemon extends EventEmitter {
   /**
    * Get current stream health metrics
    */
-  getStreamHealth(): any {
+  getStreamHealth(): StreamHealthMetrics {
     const totalChunks = Math.max(this.chunkHistory.length, 1);
     const successRate =
       this.healthMetrics.successfulStreams / Math.max(this.healthMetrics.totalStreams, 1);
@@ -564,6 +604,9 @@ export class AdaptiveAudioDaemon extends EventEmitter {
       chunkSizeVariance: 0,
       playbackLatency: [],
       errorCount: 0,
+      successRate: 0,
+      averageLatency: 0,
+      dropRate: 0,
     };
 
     this.chunkHistory = [];

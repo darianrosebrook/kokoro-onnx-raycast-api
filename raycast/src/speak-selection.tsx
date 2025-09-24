@@ -83,10 +83,11 @@ export default async function SpeakSelection() {
     // Validate and get the best available voice
     const validatedVoice = await getValidatedVoice(prefs.voice || "af_heart", serverUrl);
 
-    // Create processor with validated voice
+    // Create processor with validated voice and speed (minimum 1.25 for API)
+    const validatedSpeed = Math.max(1.25, parseFloat(prefs.speed || "1.0"));
     processor = new TTSSpeechProcessor({
       voice: validatedVoice,
-      speed: prefs.speed || "1.0",
+      speed: String(validatedSpeed),
       serverUrl: serverUrl,
       useStreaming: prefs.useStreaming ?? true,
       sentencePauses: prefs.sentencePauses ?? false,

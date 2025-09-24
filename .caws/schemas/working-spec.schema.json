@@ -80,7 +80,9 @@
           "type": "object",
           "properties": {
             "api_p95_ms": { "type": "integer", "minimum": 1 },
-            "lcp_ms": { "type": "integer", "minimum": 1 }
+            "lcp_ms": { "type": "integer", "minimum": 1 },
+            "streaming_ttfa_ms": { "type": "integer", "minimum": 1 },
+            "memory_limit_mb": { "type": "integer", "minimum": 1 }
           },
           "additionalProperties": false
         },

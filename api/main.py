@@ -206,7 +206,7 @@ from api.security import SecurityMiddleware, SecurityConfig
 import soundfile as sf
 
 from api.config import TTSConfig, TTSRequest
-from api.warnings import setup_coreml_warning_handler
+from api.warnings import setup_coreml_warning_handler, configure_onnx_runtime_logging, suppress_phonemizer_warnings
 from api.model.patch import apply_all_patches, get_patch_status
 from api.model.loader import (
     initialize_model_fast as initialize_model_sync,
@@ -1033,7 +1033,7 @@ app = FastAPI(
 
 # Add security middleware first to block malicious requests early
 security_config = SecurityConfig(
-    allow_localhost_only=True,  # Restrict to localhost only
+    allow_localhost_only=False,  # Allow all IPs for development
     block_suspicious_ips=True,
     max_requests_per_minute=60,
     max_requests_per_hour=1000

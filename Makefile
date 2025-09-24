@@ -39,6 +39,8 @@ caws-static:
 	python -m mypy api/ --ignore-missing-imports
 	python -m black --check api/
 	python -m isort --check-only api/
+	@echo "🔒 Running security scan..."
+	python3 scripts/security_scan.py
 	@echo "✅ Static analysis complete"
 
 # Unit tests with coverage
@@ -50,20 +52,66 @@ caws-unit:
 # Mutation testing
 caws-mutation:
 	@echo "🧬 Running mutation testing..."
-	mutmut run --paths-to-mutate=api/
-	mutmut junitxml > mutmut-results.xml
+	@if command -v mutmut >/dev/null 2>&1; then \
+		echo "Using mutmut for mutation testing..."; \
+		if [ ! -f mutmut-results.json ]; then \
+			mutmut run --config mutmut_config.py; \
+		else \
+			mutmut run --config mutmut_config.py --incremental; \
+		fi; \
+		python3 -c " \
+import json; \
+import subprocess; \
+import sys; \
+try: \
+    result = subprocess.run(['mutmut', 'show', '--json'], capture_output=True, text=True); \
+    if result.returncode == 0: \
+        data = json.loads(result.stdout); \
+        with open('mutmut-results.json', 'w') as f: \
+            json.dump(data, f, indent=2); \
+        print('✅ Mutation results saved to mutmut-results.json'); \
+    else: \
+        print('⚠️  No mutation results available'); \
+        with open('mutmut-results.json', 'w') as f: \
+            json.dump({'mutation_score': 0.0, 'total_mutations': 0, 'killed_mutations': 0}, f, indent=2); \
+except Exception as e: \
+    print(f'⚠️  Error processing mutation results: {e}'); \
+    with open('mutmut-results.json', 'w') as f: \
+        json.dump({'mutation_score': 0.0, 'total_mutations': 0, 'killed_mutations': 0}, f, indent=2); \
+"; \
+	else \
+		echo "mutmut not available, using fallback mutation testing..."; \
+		python3 scripts/run_mutation_tests.py; \
+	fi
 	@echo "✅ Mutation testing complete"
 
 # Contract tests
 caws-contracts:
 	@echo "📋 Running contract tests..."
 	pytest tests/contract -v
+	@echo "📋 Validating OpenAPI schema..."
+	@if command -v swagger-codegen >/dev/null 2>&1; then \
+		echo "Validating OpenAPI schema with swagger-codegen..."; \
+		swagger-codegen validate -i contracts/kokoro-tts-api.yaml; \
+	elif command -v openapi-generator >/dev/null 2>&1; then \
+		echo "Validating OpenAPI schema with openapi-generator..."; \
+		openapi-generator validate -i contracts/kokoro-tts-api.yaml; \
+	else \
+		echo "OpenAPI validators not available, skipping schema validation"; \
+	fi
 	@echo "✅ Contract tests complete"
 
 # Integration tests
 caws-integration:
 	@echo "🔗 Running integration tests..."
 	pytest tests/integration -v
+	@echo "🔗 Running containerized integration tests..."
+	@if command -v docker >/dev/null 2>&1 && command -v docker-compose >/dev/null 2>&1; then \
+		echo "Running Testcontainers integration tests..."; \
+		pytest tests/integration/test_tts_integration_containers.py -v; \
+	else \
+		echo "Docker not available, skipping containerized tests"; \
+	fi
 	@echo "✅ Integration tests complete"
 
 # End-to-end tests
@@ -82,12 +130,69 @@ caws-a11y:
 caws-perf:
 	@echo "⚡ Running performance tests..."
 	pytest tests/performance --benchmark-only -v
+	@echo "⚡ Running performance budget validation..."
+	@if command -v python3 >/dev/null 2>&1; then \
+		python3 scripts/performance_budget_validator.py --url http://localhost:8000; \
+	else \
+		echo "Python3 not available, skipping performance budget validation"; \
+	fi
 	@echo "✅ Performance tests complete"
+
+# Advanced monitoring and testing
+monitor:
+	@echo "📊 Starting performance monitoring..."
+	@if command -v python3 >/dev/null 2>&1; then \
+		python3 scripts/performance_monitor.py --url http://localhost:8000 --interval 30; \
+	else \
+		echo "Python3 not available, skipping performance monitoring"; \
+	fi
+
+dashboard:
+	@echo "🎯 Starting performance dashboard..."
+	@if command -v python3 >/dev/null 2>&1; then \
+		python3 scripts/performance_dashboard.py --url http://localhost:8000 --port 8080; \
+	else \
+		echo "Python3 not available, skipping performance dashboard"; \
+	fi
+
+load-test:
+	@echo "🚀 Running load tests..."
+	@if command -v python3 >/dev/null 2>&1; then \
+		python3 scripts/load_tester.py --test-type concurrent --users 10 --requests 5; \
+	else \
+		echo "Python3 not available, skipping load tests"; \
+	fi
+
+stress-test:
+	@echo "💪 Running stress tests..."
+	@if command -v python3 >/dev/null 2>&1; then \
+		python3 scripts/load_tester.py --test-type stress --users 20 --requests 3; \
+	else \
+		echo "Python3 not available, skipping stress tests"; \
+	fi
+
+regression-analysis:
+	@echo "📈 Running regression analysis..."
+	@if command -v python3 >/dev/null 2>&1; then \
+		python3 scripts/regression_detector.py --metrics performance-metrics.json; \
+	else \
+		echo "Python3 not available, skipping regression analysis"; \
+	fi
+
+predictive-cache:
+	@echo "🧠 Running predictive caching..."
+	@if command -v python3 >/dev/null 2>&1; then \
+		python3 scripts/predictive_cache.py --run; \
+	else \
+		echo "Python3 not available, skipping predictive caching"; \
+	fi
 
 # Run all quality gates
 caws-gates: caws-validate caws-static caws-unit caws-mutation caws-contracts caws-integration caws-perf
 	@echo "🎯 Running quality gates..."
-	python tools/caws/gates.py all --tier 2 --profile backend-api
+	python3 scripts/simple_gates.py all --tier 2 --profile backend-api
+	@echo "📋 Generating provenance manifest..."
+	python3 scripts/provenance_tracker.py
 	@echo "✅ All quality gates complete"
 
 # Development helpers

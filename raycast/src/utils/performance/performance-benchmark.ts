@@ -673,7 +673,7 @@ class TTSBenchmark {
       {
         text: "Another medium sentence to test consistency.",
         voice: "af_heart" as VoiceOption,
-        speed: 1.2,
+        speed: 1.25,
       },
 
       // Long text test

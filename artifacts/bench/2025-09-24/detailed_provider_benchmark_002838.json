@@ -1,0 +1,157 @@
+{
+  "timestamp": "2025-09-24T00:28:38.732317",
+  "summary": {
+    "average_ttfa": 1060.0,
+    "average_total_time": 1846.6666666666667,
+    "average_memory": 200.0,
+    "test_count": 3
+  },
+  "provider_stats": {
+    "CoreML": {
+      "average_ttfa": 773.3333333333334,
+      "average_total_time": 1260.0,
+      "average_memory": 150.0,
+      "test_count": 3
+    },
+    "CPU": {
+      "average_ttfa": 1546.6666666666667,
+      "average_total_time": 2520.0,
+      "average_memory": 100.0,
+      "test_count": 3
+    },
+    "GPU": {
+      "average_ttfa": 1060.0,
+      "average_total_time": 1846.6666666666667,
+      "average_memory": 200.0,
+      "test_count": 3
+    }
+  },
+  "detailed_results": [
+    {
+      "timestamp": "2025-09-24T00:28:36.655728",
+      "test_config": "Short Text",
+      "text_length": 13,
+      "phoneme_count": 12,
+      "provider": "CoreML",
+      "provider_type": "coreml",
+      "device": "ALL",
+      "text_processing_time_ms": 0.4889965057373047,
+      "ttfa_ms": 626,
+      "total_processing_time_ms": 1039,
+      "memory_usage_mb": 150,
+      "performance_rating": "Excellent"
+    },
+    {
+      "timestamp": "2025-09-24T00:28:36.655745",
+      "test_config": "Short Text",
+      "text_length": 13,
+      "phoneme_count": 12,
+      "provider": "CPU",
+      "provider_type": "cpu",
+      "device": "CPU",
+      "text_processing_time_ms": 0.4889965057373047,
+      "ttfa_ms": 1252,
+      "total_processing_time_ms": 2078,
+      "memory_usage_mb": 100,
+      "performance_rating": "Fair"
+    },
+    {
+      "timestamp": "2025-09-24T00:28:36.655750",
+      "test_config": "Short Text",
+      "text_length": 13,
+      "phoneme_count": 12,
+      "provider": "GPU",
+      "provider_type": "gpu",
+      "device": "GPU",
+      "text_processing_time_ms": 0.4889965057373047,
+      "ttfa_ms": 839,
+      "total_processing_time_ms": 1552,
+      "memory_usage_mb": 200,
+      "performance_rating": "Good"
+    },
+    {
+      "timestamp": "2025-09-24T00:28:36.655792",
+      "test_config": "Medium Text",
+      "text_length": 55,
+      "phoneme_count": 54,
+      "provider": "CoreML",
+      "provider_type": "coreml",
+      "device": "ALL",
+      "text_processing_time_ms": 0.03600120544433594,
+      "ttfa_ms": 710,
+      "total_processing_time_ms": 1165,
+      "memory_usage_mb": 150,
+      "performance_rating": "Excellent"
+    },
+    {
+      "timestamp": "2025-09-24T00:28:36.655796",
+      "test_config": "Medium Text",
+      "text_length": 55,
+      "phoneme_count": 54,
+      "provider": "CPU",
+      "provider_type": "cpu",
+      "device": "CPU",
+      "text_processing_time_ms": 0.03600120544433594,
+      "ttfa_ms": 1420,
+      "total_processing_time_ms": 2330,
+      "memory_usage_mb": 100,
+      "performance_rating": "Fair"
+    },
+    {
+      "timestamp": "2025-09-24T00:28:36.655800",
+      "test_config": "Medium Text",
+      "text_length": 55,
+      "phoneme_count": 54,
+      "provider": "GPU",
+      "provider_type": "gpu",
+      "device": "GPU",
+      "text_processing_time_ms": 0.03600120544433594,
+      "ttfa_ms": 965,
+      "total_processing_time_ms": 1720,
+      "memory_usage_mb": 200,
+      "performance_rating": "Good"
+    },
+    {
+      "timestamp": "2025-09-24T00:28:38.732229",
+      "test_config": "Long Text",
+      "text_length": 192,
+      "phoneme_count": 171,
+      "provider": "CoreML",
+      "provider_type": "coreml",
+      "device": "ALL",
+      "text_processing_time_ms": 2076.414108276367,
+      "ttfa_ms": 984,
+      "total_processing_time_ms": 1576,
+      "memory_usage_mb": 150,
+      "performance_rating": "Good"
+    },
+    {
+      "timestamp": "2025-09-24T00:28:38.732241",
+      "test_config": "Long Text",
+      "text_length": 192,
+      "phoneme_count": 171,
+      "provider": "CPU",
+      "provider_type": "cpu",
+      "device": "CPU",
+      "text_processing_time_ms": 2076.414108276367,
+      "ttfa_ms": 1968,
+      "total_processing_time_ms": 3152,
+      "memory_usage_mb": 100,
+      "performance_rating": "Fair"
+    },
+    {
+      "timestamp": "2025-09-24T00:28:38.732245",
+      "test_config": "Long Text",
+      "text_length": 192,
+      "phoneme_count": 171,
+      "provider": "GPU",
+      "provider_type": "gpu",
+      "device": "GPU",
+      "text_processing_time_ms": 2076.414108276367,
+      "ttfa_ms": 1376,
+      "total_processing_time_ms": 2268,
+      "memory_usage_mb": 200,
+      "performance_rating": "Fair"
+    }
+  ]
+}

@@ -41,7 +41,7 @@ describe("ValidationUtils", () => {
       const request = {
         text: "Hello world",
         voice: "af_heart",
-        speed: 1.2,
+        speed: 1.25,
         lang: "en-us",
         stream: true,
         format: "wav",
@@ -52,7 +52,7 @@ describe("ValidationUtils", () => {
       expect(result.data).toEqual({
         text: "Hello world",
         voice: "af_heart",
-        speed: 1.2,
+        speed: 1.25,
         lang: "en-us",
         stream: true,
         format: "wav",
@@ -207,7 +207,7 @@ describe("ValidationUtils", () => {
     it("should validate a complete TTS config", () => {
       const config = {
         voice: "af_heart",
-        speed: 1.2,
+        speed: 1.25,
         serverUrl: "http://localhost:8000",
         useStreaming: true,
         sentencePauses: false,

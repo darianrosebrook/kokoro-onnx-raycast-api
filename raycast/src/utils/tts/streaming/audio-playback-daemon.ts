@@ -34,7 +34,6 @@ import { spawn, ChildProcess } from "child_process";
 import { join, dirname } from "path";
 import { existsSync, statSync } from "fs";
 import { fileURLToPath } from "url";
-import { TTS_CONSTANTS } from "../../validation/tts-types.js";
 import type {
   AudioFormat,
   StreamingStats,
@@ -480,7 +479,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
         // Create a mock daemon process object for the existing daemon
         this.daemonProcess = {
-          process: null as any, // No process to manage
+          process: null as ChildProcess | null, // No process to manage
           port: this.config.port,
           isConnected: false,
           lastHeartbeat: Date.now(),
@@ -724,7 +723,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       // The daemon needs access to node_modules, so we need to run it from the project root
       const projectRoot = findKokoroProjectRoot(process.cwd()) ?? process.env.KOKORO_PROJECT_ROOT;
       const workingDir = projectRoot || process.cwd();
-      
+
       console.log("Daemon working directory", {
         component: this.name,
         method: "startDaemon",
@@ -1292,9 +1291,11 @@ export class AudioPlaybackDaemon extends EventEmitter {
         await this.startDaemon();
         await this.establishWebSocketConnection();
         // Give connection a moment to establish
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (error) {
-        throw new Error(`Failed to reconnect to daemon: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(
+          `Failed to reconnect to daemon: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
       }
     }
 

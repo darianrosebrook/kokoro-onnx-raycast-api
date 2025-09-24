@@ -19,7 +19,7 @@ import { TTSSpeechProcessor } from "./src/utils/tts/tts-processor.js";
  */
 const TEST_CONFIG = {
   voice: "bm_fable",
-  speed: "1.2", // String as expected by the processor
+  speed: "1.25", // String as expected by the processor
   serverUrl: "http://localhost:8000",
   daemonPort: "8081",
   useStreaming: true,

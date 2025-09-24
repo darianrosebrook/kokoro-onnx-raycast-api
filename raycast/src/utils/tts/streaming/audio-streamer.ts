@@ -275,9 +275,13 @@ export class AudioStreamer implements IAudioStreamer {
       speed: request.speed,
     });
 
+    // API VALIDATION: Ensure speed meets minimum requirement (1.25) for TTS API
+    const validatedSpeed = Math.max(1.25, request.speed);
+
     // PHASE 1 OPTIMIZATION: Use PCM format for streaming to avoid WAV header + raw audio mixing
     const streamingRequest = {
       ...request,
+      speed: validatedSpeed, // Use validated speed
       stream: true,
       format: "pcm", // Use PCM for streaming, WAV for caching
     };
