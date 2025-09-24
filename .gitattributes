@@ -1,1 +1,0 @@
-kokoro-v1.0.int8.onnx filter=lfs diff=lfs merge=lfs -text

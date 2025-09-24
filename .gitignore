@@ -222,14 +222,16 @@ raycast/dist/
 # ==============================================================================
 # The following files are intentionally NOT ignored and should remain in git:
 #
-# Large Model Files (excluded due to GitHub size limits >100MB)
-# These files should be downloaded separately or via setup scripts
-kokoro.onnx                        # Main TTS model file (310MB - exceeds GitHub limits)
-kokoro-v1_0.pth                   # Voice model file (312MB - exceeds GitHub limits)
-
-# Keep smaller model files that are under GitHub limits
-# kokoro-v1.0.int8.onnx          # Quantized model (88MB - under GitHub limits)
+# Model Files (external dependencies - not owned by this project)
+# These files come from external repositories and should be downloaded via setup scripts
+# They are not part of our intellectual property
+kokoro.onnx                        # Main TTS model file (310MB)
+kokoro-v1_0.pth                   # Voice model file (312MB)
+kokoro-v1.0.int8.onnx             # Quantized model (88MB)
 voices-v1.0.bin                    # Voice data file
+*.onnx                            # ONNX model files (external)
+*.pth                             # PyTorch model files (external)
+*.bin                             # Binary model files (external)
 #
 # Core Configuration:
 # - requirements*.txt              # Python dependencies
