@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  tts-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    ports:
+      - "8000:8000"
+    environment:
+      - KOKORO_PRODUCTION=false
+      - KOKORO_BENCHMARK_PROVIDERS=false
+      - ONNX_PROVIDER=CPUExecutionProvider
+    volumes:
+      - ./kokoro-v1.0.int8.onnx:/app/kokoro-v1.0.int8.onnx:ro
+      - ./voices-v1.0.bin:/app/voices-v1.0.bin:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - tts-test-network
+
+  # Optional: Add a test database for future use
+  test-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=kokoro_test
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - test-db-data:/var/lib/postgresql/data
+    networks:
+      - tts-test-network
+
+  # Optional: Add Redis for caching tests
+  test-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - tts-test-network
+
+networks:
+  tts-test-network:
+    driver: bridge
+
+volumes:
+  test-db-data:

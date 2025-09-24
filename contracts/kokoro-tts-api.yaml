@@ -1,0 +1,382 @@
+openapi: 3.0.3
+info:
+  title: Kokoro TTS API
+  description: |
+    High-performance Text-to-Speech API with hardware acceleration and streaming support.
+    
+    This API provides OpenAI-compatible TTS endpoints with advanced features:
+    - Hardware acceleration (CoreML on Apple Silicon)
+    - Streaming audio generation
+    - Multi-voice support
+    - Real-time performance monitoring
+    
+    ## Performance Characteristics
+    - TTFA (Time to First Audio): ≤ 500ms for streaming
+    - API P95 latency: ≤ 1000ms for non-streaming
+    - Memory usage: ≤ 500MB steady-state
+    - Audio quality: LUFS -16 ±1 LU, dBTP ≤ -1.0 dB
+  version: 1.0.0
+  contact:
+    name: Kokoro TTS Team
+    email: support@kokoro-tts.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.kokoro-tts.com
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Simple health check endpoint
+      operationId: healthCheck
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [online, initializing]
+                    description: Current service status
+                required:
+                  - status
+              examples:
+                online:
+                  summary: Service is online
+                  value:
+                    status: "online"
+                initializing:
+                  summary: Service is initializing
+                  value:
+                    status: "initializing"
+
+  /status:
+    get:
+      summary: Detailed Status
+      description: Comprehensive service status including performance metrics
+      operationId: getStatus
+      tags:
+        - System
+      responses:
+        '200':
+          description: Detailed service status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  model_loaded:
+                    type: boolean
+                    description: Whether the TTS model is loaded and ready
+                  providers:
+                    type: array
+                    items:
+                      type: string
+                    description: Available ONNX execution providers
+                  performance_stats:
+                    type: object
+                    properties:
+                      avg_inference_time_ms:
+                        type: number
+                        description: Average inference time in milliseconds
+                      total_requests:
+                        type: integer
+                        description: Total number of requests processed
+                      success_rate:
+                        type: number
+                        minimum: 0
+                        maximum: 1
+                        description: Success rate as a decimal (0.0 to 1.0)
+                  hardware_acceleration:
+                    type: object
+                    properties:
+                      coreml_available:
+                        type: boolean
+                        description: Whether CoreML acceleration is available
+                      coreml_enabled:
+                        type: boolean
+                        description: Whether CoreML acceleration is enabled
+                      fallback_count:
+                        type: integer
+                        description: Number of times fallback to CPU was used
+                required:
+                  - model_loaded
+                  - providers
+                  - performance_stats
+                  - hardware_acceleration
+
+  /voices:
+    get:
+      summary: List Available Voices
+      description: Get list of available TTS voices
+      operationId: listVoices
+      tags:
+        - Voices
+      responses:
+        '200':
+          description: List of available voices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: Unique voice identifier
+                    name:
+                      type: string
+                      description: Human-readable voice name
+                    language:
+                      type: string
+                      description: Voice language code (e.g., en-US, ja-JP)
+                    gender:
+                      type: string
+                      enum: [male, female, neutral]
+                      description: Voice gender
+                    quality:
+                      type: string
+                      enum: [A, B, C]
+                      description: Voice quality rating
+                  required:
+                    - id
+                    - name
+                    - language
+              examples:
+                voices:
+                  summary: Available voices
+                  value:
+                    - id: "af_heart"
+                      name: "Heart (Female)"
+                      language: "en-US"
+                      gender: "female"
+                      quality: "A"
+                    - id: "bm_fable"
+                      name: "Fable (Male)"
+                      language: "en-US"
+                      gender: "male"
+                      quality: "A"
+
+  /v1/audio/speech:
+    post:
+      summary: Generate Speech
+      description: |
+        Generate speech from text using the specified voice and parameters.
+        
+        Supports both streaming and non-streaming modes:
+        - **Streaming mode**: Returns audio chunks as they are generated (TTFA ≤ 500ms)
+        - **Non-streaming mode**: Returns complete audio file after generation
+        
+        ## Performance Budgets
+        - TTFA (streaming): ≤ 500ms
+        - API P95 (non-streaming): ≤ 1000ms
+        - Memory usage: ≤ 500MB
+        - Audio quality: LUFS -16 ±1 LU, dBTP ≤ -1.0 dB
+      operationId: generateSpeech
+      tags:
+        - TTS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 4500
+                  description: Text to convert to speech
+                voice:
+                  type: string
+                  default: "af_heart"
+                  description: Voice identifier
+                speed:
+                  type: number
+                  minimum: 0.25
+                  maximum: 4.0
+                  default: 1.0
+                  description: Speech speed multiplier
+                lang:
+                  type: string
+                  default: "en-us"
+                  description: Language code
+                stream:
+                  type: boolean
+                  default: false
+                  description: Enable streaming mode
+                format:
+                  type: string
+                  enum: [wav, pcm]
+                  default: "pcm"
+                  description: Audio format
+              required:
+                - text
+            examples:
+              basic:
+                summary: Basic TTS request
+                value:
+                  text: "Hello, world!"
+                  voice: "af_heart"
+                  speed: 1.0
+                  lang: "en-us"
+                  stream: false
+                  format: "wav"
+              streaming:
+                summary: Streaming TTS request
+                value:
+                  text: "This is a longer text that will be streamed as audio chunks."
+                  voice: "bm_fable"
+                  speed: 1.2
+                  lang: "en-us"
+                  stream: true
+                  format: "pcm"
+      responses:
+        '200':
+          description: Audio data
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+              description: WAV audio data
+            audio/pcm:
+              schema:
+                type: string
+                format: binary
+              description: PCM audio data
+          headers:
+            X-Request-ID:
+              description: Unique request identifier for debugging
+              schema:
+                type: string
+            X-TTFA:
+              description: Time to first audio (streaming mode only)
+              schema:
+                type: number
+            X-Provider:
+              description: ONNX execution provider used
+              schema:
+                type: string
+        '400':
+          description: Bad request - invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_text:
+                  summary: Text too long
+                  value:
+                    error: "Text length exceeds maximum of 4500 characters"
+                    code: "TEXT_TOO_LONG"
+                    request_id: "req_123456789"
+                invalid_speed:
+                  summary: Invalid speed parameter
+                  value:
+                    error: "Speed must be between 0.25 and 4.0"
+                    code: "INVALID_SPEED"
+                    request_id: "req_123456789"
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '503':
+          description: Service unavailable - model not loaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                model_not_loaded:
+                  summary: Model not loaded
+                  value:
+                    error: "TTS model is not loaded. Please try again later."
+                    code: "MODEL_NOT_LOADED"
+                    request_id: "req_123456789"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                internal_error:
+                  summary: Internal server error
+                  value:
+                    error: "An internal error occurred while processing your request"
+                    code: "INTERNAL_ERROR"
+                    request_id: "req_123456789"
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+        request_id:
+          type: string
+          description: Request identifier for debugging
+      required:
+        - error
+        - code
+        - request_id
+    
+    ValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  type: string
+              msg:
+                type: string
+              type:
+                type: string
+        request_id:
+          type: string
+          description: Request identifier for debugging
+      required:
+        - detail
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication (optional for development)
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: System
+    description: System health and status endpoints
+  - name: Voices
+    description: Voice management endpoints
+  - name: TTS
+    description: Text-to-speech generation endpoints

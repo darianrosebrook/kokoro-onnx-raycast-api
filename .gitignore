@@ -1,0 +1,259 @@
+# ==============================================================================
+# Kokoro TTS - Comprehensive Git Ignore
+# ==============================================================================
+
+# Core Generated Directories (always ignore these)
+# =================================================
+artifacts/
+logs/
+reports/
+temp/
+.cache/
+__pycache__/
+build/
+dist/
+.venv/
+node_modules/
+*.egg-info/
+
+# Specific Artifact Subdirectories (keep some, ignore generated results)
+# =====================================================================
+artifacts/bench/          # Benchmark results - ignore all
+artifacts/models/         # Model artifacts - ignore all
+artifacts/cache/          # Cache artifacts - ignore all
+
+# Benchmark and Performance Results
+# =================================
+benchmark_results.json
+benchmark_results.md
+performance_report_*.json
+benchmark_report_*.json
+*benchmark*.json
+*performance*.json
+*results*.json
+*metrics*.json
+*_results.json
+*_metrics.json
+
+# Generated Audio and Test Files
+# ==============================
+*.wav
+*.mp3
+*.pcm
+*.flac
+*.ogg
+test_audio.*
+final_test.*
+dev_test.*
+temp_audio_*
+generated_*.wav
+
+# Log Files (all types)
+# =====================
+*.log
+logs/
+benchmark_*.log
+server.log
+api_server.log
+audio-daemon.log
+dashboard.log
+dev-run.log
+dev-server.log
+
+# Cache and Temporary Files
+# =========================
+.cache/
+.cache/tmp*
+.cache/coreml_context_*
+.cache/ort/
+temp/
+*.tmp
+*.temp
+*.cache
+.last_cleanup_check
+coreml_config.json
+
+# Process and Runtime Files
+# =========================
+*.pid
+.audio-daemon.pid
+.daemon.pid
+.webui_secret_key
+
+# Development and Debug Files
+# ===========================
+debug_*.py
+test_*.py
+test-*.txt
+debug-*.json
+temp_*.json
+scratch_*.py
+
+# Model and CoreML Artifacts
+# ==========================
+# Keep source models (these are part of the project), ignore generated/compiled ones
+*.mlmodelc/
+*.mlmodel
+compiled_*.onnx
+optimized_*.onnx
+temp_benchmark.onnx
+optimized_models/
+*.graph_optimized.onnx
+*graph_optimization*
+
+# Performance and Profiling Data
+# ==============================
+*.prof
+*.trace
+performance_*.txt
+profiling_*.json
+coverage.xml
+.coverage
+htmlcov/
+
+# Environment and Configuration
+# =============================
+.env
+.env.local
+.env.production
+.env.development
+.env.backup
+config.local.json
+settings.local.json
+
+# Backup and Archive Files
+# ========================
+*.backup
+*.bak
+*.old
+archive/
+backup/
+
+# IDE and Editor Files
+# ====================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS-Specific Files
+# =================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Python
+# ======
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Node.js
+# =======
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npmrc.local
+
+# Raycast and Development Tools
+# =============================
+.raycast-history.json
+.cursor/
+.cursorrules
+.cursorignore
+.cursorignorerules
+.raycast-swift-build/
+
+# Deployment and Build Artifacts
+# ===============================
+deploy/
+docker-compose.override.yml
+docker-compose.*.yml
+
+# Documentation Builds
+# ===================
+docs/_build/
+docs/build/
+*.pdf
+*.html
+
+# Files to KEEP (important project files)
+# =======================================
+# Explicitly keep these even if they match broad patterns above
+!.gitignore
+!README.md
+!requirements*.txt
+!pyproject.toml
+!package.json
+!setup.py
+!Makefile
+!Dockerfile*
+!docker-compose*.yml
+
+# Miscellaneous Generated Files
+# =============================
+summary/
+plans/
+dashboard/dist/
+raycast/dist/
+*.lock
+*.lockb
+
+# ==============================================================================
+# IMPORTANT: Files That SHOULD Be Tracked
+# ==============================================================================
+# The following files are intentionally NOT ignored and should remain in git:
+#
+# Large Model Files (excluded due to GitHub size limits >100MB)
+# These files should be downloaded separately or via setup scripts
+kokoro.onnx                        # Main TTS model file (310MB - exceeds GitHub limits)
+kokoro-v1_0.pth                   # Voice model file (312MB - exceeds GitHub limits)
+
+# Keep smaller model files that are under GitHub limits
+# kokoro-v1.0.int8.onnx          # Quantized model (88MB - under GitHub limits)
+voices-v1.0.bin                    # Voice data file
+#
+# Core Configuration:
+# - requirements*.txt              # Python dependencies
+# - pyproject.toml                # Project configuration
+# - Makefile                      # Build and deployment scripts
+# - Dockerfile*                   # Container definitions
+# - docker-compose*.yml           # Docker orchestration
+# - README.md                     # Project documentation
+#
+# Scripts and Tools:
+# - scripts/                      # Benchmark and utility scripts
+# - docs/                         # Documentation (keep source, ignore builds)
+# - api/                          # Main application code
+# - dashboard/                    # Frontend code (keep source, ignore dist)
+# - raycast/                      # Raycast integration (keep source, ignore dist)
+#
+# ==============================================================================
+# Maintenance Notes
+# ==============================================================================
+# To check what files would be ignored:
+#   git status --ignored
+#
+# To see what would be added if patterns were removed:
+#   git add . && git status
+#
+# To clean untracked files that should be ignored:
+#   git clean -fdx

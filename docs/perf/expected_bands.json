@@ -1,0 +1,37 @@
+{
+  "performance_gates": {
+    "ttfa": {
+      "short_text_chars": 140,
+      "threshold_p95_ms": 500,
+      "description": "Time to First Audio for short text (~140 chars)"
+    },
+    "rtf": {
+      "long_paragraph_threshold_p95": 0.60,
+      "description": "Real-Time Factor for long paragraph synthesis"
+    },
+    "underruns": {
+      "max_per_10min": 1,
+      "description": "Maximum audio underruns allowed per 10 minutes"
+    },
+    "drift": {
+      "soak_duration_min": 20,
+      "max_degradation_percent": 5,
+      "description": "Maximum TTFA/RTF drift over 20-minute soak test"
+    },
+    "audio_quality": {
+      "lufs_target": -16,
+      "lufs_tolerance": 1,
+      "dbtp_ceiling": -1.0,
+      "description": "Audio loudness and peak level requirements"
+    },
+    "memory": {
+      "rss_envelope_mb": 300,
+      "description": "Memory RSS steady-state envelope"
+    }
+  },
+  "test_requirements": {
+    "min_trials": 3,
+    "metrics_required": ["p50", "p95"],
+    "units_required": true
+  }
+}

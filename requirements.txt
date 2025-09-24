@@ -1,0 +1,56 @@
+# Core FastAPI and web framework dependencies
+fastapi>=0.115.12
+uvicorn[standard]>=0.24.0
+gunicorn>=21.0.0
+starlette>=0.27.0
+
+# TTS and audio processing
+kokoro-onnx>=0.4.9
+soundfile>=0.12.0
+pyaudio>=0.2.11
+
+# Text processing and G2P engines
+# NOTE: For Python 3.13 compatibility, install these in order:
+# 1. First install spacy (which provides compatible blis wheel)
+# 2. Then install misaki dependencies
+spacy>=3.8.0  # Provides compatible blis wheel for Python 3.13
+num2words>=0.5.0  # Required by misaki[en]
+misaki>=0.1.0  # Kokoro-specific G2P engine
+phonemizer-fork>=0.1.0  # Fallback compatibility
+espeakng-loader>=0.1.0  # Required for eSpeak integration
+
+# Machine learning and optimization
+onnxruntime>=1.20.1
+numpy>=1.26.0
+numba>=0.60.0
+
+# Data validation and serialization
+pydantic>=2.0.0
+
+# HTTP and networking
+requests>=2.32.0
+aiohttp>=3.10.0
+
+# Text processing
+inflect>=7.0.0
+
+# Production performance optimizations
+orjson>=3.10.0  # 2-3x faster JSON serialization
+uvloop>=0.19.0; sys_platform != "win32"  # Fast event loop (Unix only)
+
+# Optional dependencies (for enhanced functionality)
+psutil>=5.9.0  # System monitoring and diagnostics
+
+# Testing and quality assurance (CAWS v1.0)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+mutmut>=2.4.0
+hypothesis>=6.0.0
+testcontainers>=3.0.0
+httpx>=0.24.0  # For testing FastAPI endpoints
+mypy>=1.0.0
+flake8>=6.0.0
+black>=23.0.0
+isort>=5.12.0

@@ -1,0 +1,38 @@
+{
+  "timestamp": 1755415340.8763578,
+  "input_model": "kokoro-v1.0.int8.onnx",
+  "output_model": "optimized_models/kokoro-v1.0.int8-graph-opt.onnx",
+  "input_size_mb": 88.0825719833374,
+  "optimization_time_seconds": 0.5318362712860107,
+  "optimization_success": true,
+  "output_size_mb": 87.91812801361084,
+  "size_reduction_percent": 0.18669297004368857,
+  "validation_passed": true,
+  "original_benchmark": {
+    "num_runs": 5,
+    "times_ms": [
+      568.1232910001199,
+      567.4467499993625,
+      651.6285830002744,
+      584.8884170000019,
+      603.2768750001196
+    ],
+    "avg_ms": 595.0727831999757,
+    "min_ms": 567.4467499993625,
+    "max_ms": 651.6285830002744
+  },
+  "optimized_benchmark": {
+    "num_runs": 5,
+    "times_ms": [
+      153.20554200025072,
+      148.72320799986483,
+      151.58233399961318,
+      149.30550000008225,
+      172.25204199985455
+    ],
+    "avg_ms": 155.0137251999331,
+    "min_ms": 148.72320799986483,
+    "max_ms": 172.25204199985455
+  },
+  "performance_improvement_percent": 73.95045957801092
+}
