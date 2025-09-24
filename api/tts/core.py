@@ -765,41 +765,49 @@ async def stream_tts_audio(
                 logger.error(f"[{request_id}] WAV header generation failed: {e}; falling back to PCM")
                 format = "pcm"
 
-        # Process segments with adaptive generation
+        # Process segments with adaptive generation and lookahead prefetch to avoid inter-segment gaps
         processed_count = 0
         total_audio_bytes = 0
         
         # Use overridden segments if primer split was applied; otherwise use original segments
         segments_to_process: List[str] = segments_override if segments_override is not None else segments
 
-        for i, seg_text in enumerate(segments_to_process):
-            segment_start = time.perf_counter()
-            
+        async def _generate_segment_async(j: int):
+            seg = segments_to_process[j]
+            use_fast_local = (j in fast_indices) or (j == 0 and len(segments) == 1)
+            start_local = time.perf_counter()
+            if use_fast_local:
+                return await run_in_threadpool(_fast_generate_audio_segment, j, seg, voice, speed, lang, request_id, no_cache), time.perf_counter() - start_local, use_fast_local
+            else:
+                return await run_in_threadpool(_generate_audio_with_fallback, j, seg, voice, speed, lang, request_id, no_cache), time.perf_counter() - start_local, use_fast_local
+
+        n = len(segments_to_process)
+        if n == 0:
+            logger.error(f"[{request_id}] No segments to process after preprocessing")
+            raise HTTPException(status_code=400, detail="No valid text segments found")
+
+        # Prefetch current and next
+        current_index = 0
+        current_future = asyncio.create_task(_generate_segment_async(current_index))
+        next_future = asyncio.create_task(_generate_segment_async(1)) if n > 1 else None
+
+        while current_index < n:
             try:
-                # Choose processing path
-                use_fast = (i in fast_indices) or (i == 0 and len(segments) == 1)
-                
-                if use_fast:
-                    idx, audio_np, provider = await run_in_threadpool(
-                        _fast_generate_audio_segment, i, seg_text, voice, speed, lang, request_id, no_cache
-                    )
-                else:
-                    idx, audio_np, provider = await run_in_threadpool(
-                        _generate_audio_with_fallback, i, seg_text, voice, speed, lang, request_id, no_cache
-                    )
+                (idx, audio_np, provider), gen_time, use_fast = await current_future
+                logger.debug(f"[{request_id}] Segment {current_index} generated in {gen_time:.3f}s via {provider}")
 
-                segment_duration = time.perf_counter() - segment_start
-                logger.debug(f"[{request_id}] Segment {i} completed in {segment_duration:.3f}s via {provider}")
-
-                # Handle failed segments gracefully
                 if audio_np is None:
-                    logger.error(f"[{request_id}] Segment {i} produced no audio, skipping")
+                    logger.error(f"[{request_id}] Segment {current_index} produced no audio, skipping")
+                    current_index += 1
+                    current_future = next_future if next_future is not None else None
+                    if (current_index + 1) < n and next_future is None:
+                        next_future = asyncio.create_task(_generate_segment_async(current_index + 1))
                     continue
 
                 processed_count += 1
 
                 # Store primer if applicable
-                if (i in fast_indices) and primer_hint_key and (not no_cache):
+                if (current_index in fast_indices) and primer_hint_key and (not no_cache):
                     try:
                         _put_cached_primer(primer_hint_key, audio_np)
                         logger.debug(f"[{request_id}] Primer stored in micro-cache")
@@ -811,44 +819,30 @@ async def stream_tts_audio(
                 segment_bytes = scaled.tobytes()
                 total_audio_bytes += len(segment_bytes)
 
-                # Track audio size variation for optimization (use the *actual* list being processed)
-                if i == len(segments_to_process) - 1:
-                    variation_analysis = variation_handler.record_audio_size(full_text_hash, total_audio_bytes)
-                    
-                    if not variation_analysis['is_consistent']:
-                        logger.info(
-                            f"[{request_id}]  Audio size variation detected: {variation_analysis['variation_pct']:.1f}% "
-                            f"(current: {total_audio_bytes}, baseline: {variation_analysis['baseline_size']}, "
-                            f"threshold: {variation_analysis['threshold_used']:.1f}%)"
-                        )
-
-                # Stream in optimized chunks
+                # Stream in optimized chunks while prefetching the next segment (if any)
                 chunk_size = max(1024, TTSConfig.CHUNK_SIZE_BYTES // 2) if use_fast else TTSConfig.CHUNK_SIZE_BYTES
                 offset = 0
+
+                # Ensure next is prefetching
+                if (current_index + 1) < n and next_future is None:
+                    next_future = asyncio.create_task(_generate_segment_async(current_index + 1))
 
                 while offset < len(segment_bytes):
                     chunk = segment_bytes[offset:offset + chunk_size]
                     current_time = time.monotonic()
                     chunk_state["chunk_count"] += 1
 
-                    # Track TTFA
                     if chunk_state["first_chunk_time"] is None:
                         chunk_state["first_chunk_time"] = current_time
                         ttfa_ms = (current_time - chunk_state["stream_start_time"]) * 1000.0
                         logger.info(f"[{request_id}] First chunk in {ttfa_ms:.2f} ms")
-                        
-                        # Log first chunk generation with performance tracker
-                        server_tracker.log_event(request_id, "FIRST_CHUNK_GENERATED", {
-                            "ttfa_ms": ttfa_ms,
-                            "chunk_size": len(chunk)
-                        })
+                        server_tracker.log_event(request_id, "FIRST_CHUNK_GENERATED", {"ttfa_ms": ttfa_ms, "chunk_size": len(chunk)})
 
                     # Track audio duration
                     chunk_state["total_audio_duration_ms"] += (
                         len(chunk) / TTSConfig.BYTES_PER_SAMPLE / TTSConfig.SAMPLE_RATE
                     ) * 1000.0
 
-                    # Periodic efficiency logging
                     if (chunk_state["chunk_count"] % 10) == 0:
                         elapsed = current_time - chunk_state["stream_start_time"]
                         expected = chunk_state["total_audio_duration_ms"] / 1000.0
@@ -861,9 +855,27 @@ async def stream_tts_audio(
                 # Clean up segment memory
                 del audio_np, scaled, segment_bytes
 
+                # Move to next
+                current_index += 1
+                current_future = next_future if next_future is not None else None
+                next_future = asyncio.create_task(_generate_segment_async(current_index + 1)) if (current_index + 1) < n else None
+
+                # Track audio size variation only at the very end
+                if current_index == n:
+                    variation_analysis = variation_handler.record_audio_size(full_text_hash, total_audio_bytes)
+                    if not variation_analysis['is_consistent']:
+                        logger.info(
+                            f"[{request_id}]  Audio size variation detected: {variation_analysis['variation_pct']:.1f}% "
+                            f"(current: {total_audio_bytes}, baseline: {variation_analysis['baseline_size']}, "
+                            f"threshold: {variation_analysis['threshold_used']:.1f}%)"
+                        )
+
             except Exception as e:
-                logger.error(f"[{request_id}] Error processing segment {i}: {e}", exc_info=True)
+                logger.error(f"[{request_id}] Error processing segment {current_index}: {e}", exc_info=True)
                 error_details = str(e)
+                current_index += 1
+                current_future = next_future if next_future is not None else None
+                next_future = asyncio.create_task(_generate_segment_async(current_index + 1)) if (current_index + 1) < n else None
                 continue
 
         # Final statistics and cleanup

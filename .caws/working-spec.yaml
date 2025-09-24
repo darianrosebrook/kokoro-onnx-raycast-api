@@ -1,0 +1,91 @@
+id: KOKORO-001
+title: 'Kokoro TTS API - Production System'
+risk_tier: 2
+profile: backend-api
+rationale: >
+  Production TTS API serving real users with hardware acceleration, streaming audio,
+  and performance-critical requirements. Handles audio generation with CoreML/CPU fallback,
+  includes comprehensive monitoring and security middleware.
+dependencies: []
+feature_flags: ['KOKORO_PRODUCTION', 'ENABLE_STREAMING', 'ENABLE_COREML']
+scope:
+  in: 
+    - 'TTS synthesis with Kokoro ONNX model'
+    - 'Hardware acceleration (CoreML/CPU fallback)'
+    - 'Streaming audio delivery with <500ms latency'
+    - 'Performance monitoring and benchmarking'
+    - 'Security middleware and rate limiting'
+    - 'OpenAI-compatible API endpoints'
+  out: 
+    - 'User authentication and authorization'
+    - 'Payment processing or billing'
+    - 'Data persistence beyond caching'
+    - 'Multi-tenant user management'
+    - 'External service integrations beyond TTS'
+invariants:
+  - 'TTFA (Time to First Audio) < 800ms for all requests'
+  - 'Audio quality maintained across all providers (CoreML/CPU)'
+  - 'Memory usage bounded and cleaned up after each request'
+  - 'Provider fallback maintains service availability'
+  - 'Streaming responses maintain constant memory usage'
+  - 'Security middleware blocks malicious requests'
+acceptance:
+  - id: A1
+    given: 'valid text input and loaded ONNX model'
+    when: 'user requests TTS synthesis via /v1/audio/speech'
+    then: 'audio streamed within 800ms with proper WAV/PCM format'
+  - id: A2
+    given: 'CoreML provider fails or unavailable'
+    when: 'TTS synthesis is requested'
+    then: 'system falls back to CPU provider seamlessly'
+  - id: A3
+    given: 'malicious request with attack patterns'
+    when: 'request reaches security middleware'
+    then: 'request is blocked and logged without processing'
+  - id: A4
+    given: 'long text input (>1000 characters)'
+    when: 'streaming TTS synthesis is requested'
+    then: 'audio is streamed in chunks with constant memory usage'
+  - id: A5
+    given: 'model is not loaded or initializing'
+    when: 'TTS synthesis is requested'
+    then: '503 Service Unavailable response with clear error message'
+non_functional:
+  perf:
+    api_p95_ms: 800
+  security:
+    - 'Rate limiting: 60 requests/minute per IP'
+    - 'Localhost-only access control'
+    - 'Malicious pattern detection and blocking'
+    - 'Input validation with Pydantic models'
+  security_policy:
+    sast_max_severity: 'none'
+    secret_scan_block: true
+    dep_policy: 'strict'
+  i18n:
+    locales: ['en-US']
+    rtl_supported: false
+contracts:
+  - type: openapi
+    role: provider
+    path: 'contracts/kokoro-tts-api.yaml'
+observability:
+  logs:
+    - 'Request tracking with unique IDs'
+    - 'Performance metrics (inference time, provider usage)'
+    - 'Error logging with stack traces'
+    - 'Security events (blocked requests, suspicious IPs)'
+  metrics:
+    - 'ttfa_average: Average Time to First Audio'
+    - 'provider_usage: CoreML vs CPU utilization'
+    - 'error_rate: Failed requests percentage'
+    - 'memory_usage: System memory consumption'
+  traces:
+    - 'TTS synthesis pipeline spans'
+    - 'Provider selection and fallback traces'
+    - 'Security middleware processing'
+migrations: []
+rollback:
+  - 'Feature flag: KOKORO_PRODUCTION=false to disable service'
+  - 'Provider fallback: Force CPU-only mode'
+  - 'Rate limiting: Increase limits for emergency access'

@@ -1,0 +1,26 @@
+caws_version: '1.0'
+default_profile: backend-api
+coverage_metric: branch
+
+services:
+  postgres: false
+  redis: false
+
+tools:
+  unit: 'pytest tests/unit --cov=api --cov-report=xml --cov-report=term'
+  mutation: 'mutmut run --paths-to-mutate=api/'
+  contracts: 'pytest tests/contract'
+  integration: 'pytest tests/integration'
+  e2e: 'pytest tests/e2e'
+  a11y: 'echo "No a11y tests for backend-api"'
+  static: 'python -m flake8 api/ && python -m mypy api/'
+  perf: 'pytest tests/performance --benchmark-only'
+
+overrides:
+  paths:
+    tier1: ['api/security.py', 'api/main.py']
+    ignore_contracts: ['api/performance/**', 'api/monitoring/**']
+
+waivers:
+  max_concurrent: 2
+  approvers: ['@darianrosebrook']

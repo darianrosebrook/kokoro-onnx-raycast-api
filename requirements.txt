@@ -39,4 +39,18 @@ orjson>=3.10.0  # 2-3x faster JSON serialization
 uvloop>=0.19.0; sys_platform != "win32"  # Fast event loop (Unix only)
 
 # Optional dependencies (for enhanced functionality)
-psutil>=5.9.0  # System monitoring and diagnostics 
+psutil>=5.9.0  # System monitoring and diagnostics
+
+# Testing and quality assurance (CAWS v1.0)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+mutmut>=2.4.0
+hypothesis>=6.0.0
+testcontainers>=3.0.0
+httpx>=0.24.0  # For testing FastAPI endpoints
+mypy>=1.0.0
+flake8>=6.0.0
+black>=23.0.0
+isort>=5.12.0

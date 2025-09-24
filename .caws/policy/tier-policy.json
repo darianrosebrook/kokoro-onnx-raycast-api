@@ -1,0 +1,31 @@
+{
+  "1": {
+    "coverage_metric": "branch",
+    "min_coverage": 0.9,
+    "min_mutation": 0.7,
+    "requires_contracts": true,
+    "requires_manual_review": true,
+    "profiles": {
+      "library": { "requires_contracts": false },
+      "web-ui": { "perf_budgets": "lhci" },
+      "backend-api": { "perf_budgets": "k6" }
+    }
+  },
+  "2": {
+    "coverage_metric": "branch",
+    "min_coverage": 0.8,
+    "min_mutation": 0.5,
+    "requires_contracts": true,
+    "profiles": {
+      "library": { "requires_contracts": false },
+      "web-ui": { "perf_budgets": "lhci" },
+      "backend-api": { "perf_budgets": "k6" }
+    }
+  },
+  "3": {
+    "coverage_metric": "line",
+    "min_coverage": 0.7,
+    "min_mutation": 0.3,
+    "requires_contracts": false
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["agent", "model", "commit", "artifacts", "results", "approvals"],
+  "properties": {
+    "agent": { "type": "string" },
+    "model": { "type": "string" },
+    "prompts": { "type": "array", "items": { "type": "string" } },
+    "commit": { "type": "string" },
+    "artifacts": { "type": "array", "items": { "type": "string" } },
+    "results": {
+      "type": "object",
+      "properties": {
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "metric": {
+              "type": "string",
+              "enum": ["branch", "line", "condition"]
+            },
+            "value": { "type": "number" }
+          },
+          "required": ["metric", "value"]
+        },
+        "mutation_score": { "type": "number" },
+        "tests_passed": { "type": "integer" },
+        "spec_changed": { "type": "boolean" },
+        "contracts": {
+          "type": "object",
+          "properties": {
+            "consumer": { "type": "boolean" },
+            "provider": { "type": "boolean" }
+          }
+        },
+        "a11y": { "type": "string" },
+        "perf": { "type": "object" },
+        "flake_rate": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "redactions": { "type": "array", "items": { "type": "string" } },
+    "attestations": {
+      "type": "object",
+      "properties": {
+        "inputs_sha256": { "type": "string" },
+        "artifacts_sha256": { "type": "string" }
+      }
+    },
+    "approvals": { "type": "array", "items": { "type": "string" } }
+  }
+}
