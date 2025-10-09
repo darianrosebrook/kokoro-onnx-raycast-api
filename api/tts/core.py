@@ -980,9 +980,15 @@ async def stream_tts_audio(
         logger.info(f"[{request_id}] Optimization: content_length={len(text)}, "
                    f"category={chunk_state['content_length_category']}, "
                    f"adaptive_chunk_duration={adaptive_chunk_duration}ms")
+        # Null-safe formatting for metrics that may be None
+        ttfa_str = f"{ttfa_ms:.1f}" if ttfa_ms is not None else "N/A"
+        rtf_str = f"{rtf:.2f}" if rtf is not None else "N/A"
+        efficiency_str = f"{efficiency:.1f}" if efficiency is not None else "N/A"
+        max_gap_str = f"{max_gap_ms:.1f}" if max_gap_ms is not None else "N/A"
+        
         logger.info(f"[{request_id}] Performance: segments={processed_count}/{len(segments_to_process)}, "
-                   f"chunks={chunk_state['chunk_count']}, TTFA={ttfa_ms:.1f}ms, RTF={rtf:.2f}, "
-                   f"efficiency={efficiency:.1f}%, max_gap={max_gap_ms:.1f}ms, compliant={compliant}")
+                   f"chunks={chunk_state['chunk_count']}, TTFA={ttfa_str}ms, RTF={rtf_str}, "
+                   f"efficiency={efficiency_str}%, max_gap={max_gap_str}ms, compliant={compliant}")
 
         if processed_count == 0:
             logger.error(f"[{request_id}] No segments processed successfully")
