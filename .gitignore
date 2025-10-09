@@ -83,7 +83,7 @@ coreml_config.json
 # Development and Debug Files
 # ===========================
 debug_*.py
-test_*.py
+# test_*.py - Commented out to allow test files in tests/ directory
 test-*.txt
 debug-*.json
 temp_*.json
