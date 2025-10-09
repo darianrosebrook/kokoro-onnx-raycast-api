@@ -5,22 +5,52 @@ coverage_metric: branch
 services:
   postgres: false
   redis: false
+  fastapi: true
 
 tools:
-  unit: 'pytest tests/unit --cov=api --cov-report=xml --cov-report=term'
+  unit: 'pytest tests/unit/ --cov=api --cov-report=term-missing'
   mutation: 'mutmut run --paths-to-mutate=api/'
-  contracts: 'pytest tests/contract'
-  integration: 'pytest tests/integration'
-  e2e: 'pytest tests/e2e'
-  a11y: 'echo "No a11y tests for backend-api"'
-  static: 'python -m flake8 api/ && python -m mypy api/'
-  perf: 'pytest tests/performance --benchmark-only'
+  contracts: 'pytest tests/contract/ -v'
+  integration: 'pytest tests/integration/ -v'
+  e2e: 'pytest tests/performance/ -v'
+  a11y: 'echo "N/A for backend-api profile"'
+  static: 'ruff check api/ && mypy api/ && bandit -r api/ -ll'
+  perf: 'python scripts/run_bench.py --preset=short --stream --trials=3'
 
 overrides:
   paths:
-    tier1: ['api/security.py', 'api/main.py']
-    ignore_contracts: ['api/performance/**', 'api/monitoring/**']
+    tier1: 
+      - 'api/model/**'
+      - 'api/tts/core.py'
+      - 'api/tts/streaming_optimizer.py'
+    ignore_contracts: 
+      - 'api/performance/**'
+      - 'scripts/**'
 
 waivers:
   max_concurrent: 2
-  approvers: ['@darianrosebrook']
+  approvers: ['@owner']
+
+# Project-specific settings
+project:
+  name: kokoro-onnx
+  type: backend-api
+  language: python
+  framework: fastapi
+  
+# Performance baselines from docs/perf/baselines.json
+performance:
+  ttfa_p95_ms: 500
+  rtf_p95: 0.60
+  memory_envelope_mb: 300
+  
+# Testing configuration
+testing:
+  pytest_config: pytest.ini
+  coverage_target: 0.80
+  mutation_target: 0.50
+  
+# CI/CD
+ci:
+  provider: github-actions
+  workflow_path: .github/workflows/caws.yml

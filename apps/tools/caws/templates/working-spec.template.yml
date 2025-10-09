@@ -1,0 +1,74 @@
+id: '{{FEATURE_ID}}'
+title: '{{FEATURE_TITLE}}'
+risk_tier: { { TIER } }
+scope:
+  in:
+    - '{{SCOPE_ITEM_1}}'
+    - '{{SCOPE_ITEM_2}}'
+  out:
+    - '{{OUT_OF_SCOPE_ITEM_1}}'
+invariants:
+  - '{{BUSINESS_RULE_1}}'
+  - '{{BUSINESS_RULE_2}}'
+acceptance:
+  - id: A1
+    given: '{{GIVEN_CONDITION}}'
+    when: '{{WHEN_ACTION}}'
+    then: '{{THEN_OUTCOME}}'
+    status: pending # pending | in_progress | completed
+    # Optional: detailed progress tracking
+    # tests:
+    #   written: 0
+    #   passing: 0
+    # coverage: 0.0
+    # last_updated: '2025-10-09T14:30:00Z'
+  - id: A2
+    given: '{{GIVEN_CONDITION_2}}'
+    when: '{{WHEN_ACTION_2}}'
+    then: '{{THEN_OUTCOME_2}}'
+    status: pending # pending | in_progress | completed
+    # Optional: detailed progress tracking
+    # tests:
+    #   written: 0
+    #   passing: 0
+    # coverage: 0.0
+    # last_updated: '2025-10-09T14:30:00Z'
+non_functional:
+  a11y:
+    - '{{ACCESSIBILITY_REQUIREMENT}}'
+  perf:
+    api_p95_ms: { { PERF_BUDGET } }
+    lcp_ms: { { LCP_BUDGET } }
+  security:
+    - '{{SECURITY_REQUIREMENT}}'
+contracts:
+  - type: '{{CONTRACT_TYPE}}'
+    path: '{{CONTRACT_PATH}}'
+observability:
+  logs:
+    - '{{LOG_STATEMENT}}'
+  metrics:
+    - '{{METRIC_NAME}}'
+  traces:
+    - '{{TRACE_SPAN}}'
+migrations:
+  - '{{MIGRATION_DESCRIPTION}}'
+rollback:
+  - '{{ROLLBACK_STRATEGY}}'
+# Optional: Enable for experimental features with reduced requirements
+# experiment_mode: true
+# timeboxed_hours: 24
+
+# Optional: AI confidence assessment
+# ai_assessment:
+#   confidence_level: 8
+#   uncertainty_areas: ["complex business logic", "performance implications"]
+#   recommended_pairing: false
+
+# Optional: Human override for special cases (hotfixes, urgent changes)
+# human_override:
+#   approved_by: "senior-dev-username"
+#   reason: "Urgent production fix - bypassing mutation tests for immediate deployment"
+#   waived_requirements: ["mutation_testing", "manual_review"]
+#   expiry_date: "2025-10-01T00:00:00Z"
+

@@ -1,100 +1,125 @@
 id: KOKORO-001
-title: 'Kokoro TTS API - High-Performance Text-to-Speech Service'
+title: Kokoro ONNX TTS Backend API with Raycast Integration
 risk_tier: 2
 profile: backend-api
 rationale: >
-  Provides production-ready TTS API with hardware acceleration, streaming audio delivery,
-  and comprehensive monitoring. Handles user-facing features, internal APIs, and third-party
-  integrations with real-time audio processing requirements.
-dependencies: []
-feature_flags: ['ENABLE_COREML_ACCELERATION', 'ENABLE_STREAMING_MODE', 'ENABLE_BENCHMARKING']
+  Real-time TTS API serving ONNX models via FastAPI with streaming audio generation.
+  Integrates with Raycast for user-facing voice synthesis. Performance-critical with
+  strict latency and audio quality requirements per kokoro-tts-optimization-blueprint.
+mode: feature
+change_budget:
+  max_files: 25
+  max_loc: 1000
+blast_radius:
+  modules:
+    - api/
+    - api/model/
+    - api/tts/
+    - api/performance/
+    - raycast/
+    - tests/
+  data_migration: false
+operational_rollback_slo: 5m
+threats: []
 scope:
-  in: 
-    - 'OpenAI-compatible TTS API endpoints'
-    - 'Streaming audio generation with <500ms latency'
-    - 'Hardware acceleration (CoreML on Apple Silicon)'
-    - 'Multi-voice support with speed/language control'
-    - 'Real-time performance monitoring and benchmarking'
-    - 'Production-ready error handling and fallback systems'
-  out: 
-    - 'Voice training or model fine-tuning'
-    - 'Real-time voice cloning'
-    - 'Multi-speaker conversations'
-    - 'Offline processing capabilities'
+  in:
+    - api/
+    - api/model/
+    - api/tts/
+    - api/performance/
+    - raycast/src/
+    - tests/
+    - scripts/
+    - docs/
+  out:
+    - node_modules/
+    - __pycache__/
+    - .venv/
+    - optimized_models/
+    - artifacts/
+    - logs/
+    - temp/
 invariants:
-  - 'Audio quality must maintain LUFS -16 ±1 LU and dBTP ≤ -1.0 dB'
-  - 'TTFA (Time to First Audio) must be ≤ 500ms for streaming requests'
-  - 'API response time P95 must be ≤ 1000ms for non-streaming requests'
-  - 'Memory usage must not exceed 500MB steady-state'
-  - 'All audio output must be properly formatted (WAV/PCM) with correct headers'
-  - 'Error responses must be consistent and include request IDs for debugging'
+  - TTFA (short, ~140 chars) ≤ 0.50s p95
+  - RTF (long paragraph) ≤ 0.60 p95
+  - Underruns ≤ 1 per 10 minutes
+  - Loudness -16 LUFS ±1 LU, dBTP ≤ -1.0 dB
+  - Memory envelope (RSS) ±300 MB steady-state
+  - Server binds to 127.0.0.1 by default
+  - API versioned under /v1
+  - Text sanitized before G2P (Misaki primary, eSpeak fallback)
 acceptance:
   - id: A1
-    given: 'valid text input and TTS request parameters'
-    when: 'user makes POST request to /v1/audio/speech'
-    then: 'API returns properly formatted audio data within performance budgets'
+    given: valid text input (~140 chars)
+    when: /v1/tts request received
+    then: TTFA ≤ 0.50s p95, audio stream begins
   - id: A2
-    given: 'streaming mode enabled and valid request'
-    when: 'user requests streaming audio generation'
-    then: 'first audio chunk arrives within 500ms, subsequent chunks stream smoothly'
+    given: long paragraph input
+    when: /v1/tts with streaming enabled
+    then: RTF ≤ 0.60 p95, no underruns, monotonic playback
   - id: A3
-    given: 'CoreML hardware acceleration available'
-    when: 'TTS request is processed'
-    then: 'system automatically selects CoreML provider and achieves 2-5x performance improvement'
+    given: malformed or unsupported text
+    when: /v1/tts request received
+    then: explainable error, no state change, no PII in logs
   - id: A4
-    given: 'invalid request parameters or malformed input'
-    when: 'user submits invalid TTS request'
-    then: 'API returns appropriate HTTP error code with descriptive error message'
-  - id: A5
-    given: 'system under load with multiple concurrent requests'
-    when: 'multiple TTS requests are processed simultaneously'
-    then: 'system maintains performance budgets and handles requests without degradation'
-  - id: A6
-    given: 'model loading or hardware acceleration failure'
-    when: 'TTS request is processed'
-    then: 'system gracefully falls back to CPU execution with appropriate logging'
+    given: concurrent requests
+    when: multiple /v1/tts calls
+    then: memory envelope maintained, no drift in TTFA/RTF
 non_functional:
   a11y:
     axe_rules: []
     keyboard_paths: []
-  perf: 
-    api_p95_ms: 1000
-    streaming_ttfa_ms: 500
-    memory_limit_mb: 500
-  security: 
-    - 'Input validation and sanitization for all text inputs'
-    - 'Rate limiting to prevent abuse and resource exhaustion'
-    - 'Request ID tracking for audit trails and debugging'
-    - 'Secure handling of audio data and temporary files'
-  security_policy:
-    sast_max_severity: 'low'
-    secret_scan_block: true
-    dep_policy: 'strict'
+    contrast_min: 4.5
   i18n:
-    locales: ['en-US', 'ja-JP', 'zh-CN', 'es-ES', 'fr-FR']
+    locales:
+      - en-US
+      - ja-JP
     rtl_supported: false
+  perf:
+    api_p95_ms: 500
+    ttfa_p95_ms: 500
+    rtf_p95: 0.60
+  security:
+    - Server-side input validation
+    - PII redaction in logs
+    - No client trust for audio generation params
+  security_policy:
+    sast_max_severity: none
+    secret_scan_block: true
+    dep_policy: strict
 contracts:
   - type: openapi
     role: provider
-    path: 'contracts/kokoro-tts-api.yaml'
+    path: contracts/kokoro-tts-api.yaml
 observability:
-  logs: 
-    - 'Request processing start/end with timing'
-    - 'Provider selection and performance metrics'
-    - 'Error conditions with stack traces and context'
-    - 'Hardware acceleration status and fallback events'
-  metrics: 
-    - 'tts_request_count_total'
-    - 'tts_request_duration_seconds'
-    - 'tts_audio_generation_duration_seconds'
-    - 'tts_provider_usage_count'
-    - 'tts_error_count_by_type'
-  traces: 
-    - 'TTS request processing span with request_id'
-    - 'Audio generation span with provider and timing'
-    - 'Hardware acceleration span with performance metrics'
+  logs:
+    - Request start/end with duration
+    - TTFA per request
+    - RTF per request
+    - Errors with sanitized input context
+  metrics:
+    - tts_requests_total
+    - tts_ttfa_seconds
+    - tts_rtf_ratio
+    - tts_errors_total
+    - tts_underruns_total
+  traces:
+    - /v1/tts span with text_length, voice, streaming attributes
 migrations: []
-rollback: 
-  - 'Feature flag KOKORO_DISABLE_COREML=true to force CPU-only execution'
-  - 'Environment variable KOKORO_FALLBACK_MODE=true for degraded service'
-  - 'Model file rollback to previous version if audio quality issues detected'
+rollback:
+  - Feature flag kill-switch via environment variables
+  - Provider fallback (Core ML -> ORT)
+  - Quantization fallback (INT8 -> FP16)
+ai_assessment:
+  confidence_level: 0.9
+  uncertainty_areas:
+    - Core ML EP selection logic (ALL vs CPUAndGPU)
+    - Memory profiling under sustained load
+  complexity_factors:
+    - Real-time audio streaming with buffering
+    - Multi-provider ONNX session management
+    - Performance monitoring and adaptive optimization
+  risk_factors:
+    - Audio quality regression from quantization
+    - Memory leaks in long-running sessions
+    - Platform-specific Core ML behavior

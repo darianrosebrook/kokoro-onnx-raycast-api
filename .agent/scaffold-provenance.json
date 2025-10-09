@@ -1,0 +1,29 @@
+{
+  "agent": "caws-cli",
+  "model": "cli-scaffold",
+  "modelHash": "3.3.1",
+  "toolAllowlist": [
+    "node",
+    "fs-extra"
+  ],
+  "prompts": [
+    "scaffold",
+    "normal"
+  ],
+  "commit": null,
+  "artifacts": [
+    "apps/tools/caws",
+    "COMMIT_CONVENTIONS.md"
+  ],
+  "results": {
+    "operation": "scaffold",
+    "force_mode": false,
+    "target_directory": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx",
+    "files_added": 2,
+    "files_skipped": 4
+  },
+  "approvals": [],
+  "timestamp": "2025-10-09T18:55:53.356Z",
+  "version": "3.3.1",
+  "hash": "da7850d692374e14821dfea48ebc85c634f8cc464ce39e2c799c24b5a777965f"
+}

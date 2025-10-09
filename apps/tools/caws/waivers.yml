@@ -1,0 +1,19 @@
+waivers:
+  # Example waiver for urgent fixes
+  # - id: "HOTFIX-001"
+  #   description: "Urgent security fix - mutation testing waived"
+  #   gates: ["mutation", "coverage"]
+  #   reason: "urgent_fix"
+  #   approver: "senior-dev"
+  #   expires_at: "2025-10-07T10:00:00.000Z"
+  #   projects: ["FEAT-1234"]
+  #   max_trust_score: 79
+
+  # Example waiver for experimental features
+  # - id: "EXP-001"
+  #   description: "Experimental feature - relaxed testing"
+  #   gates: ["mutation", "contracts"]
+  #   reason: "experimental"
+  #   approver: "tech-lead"
+  #   expires_at: "2025-10-14T10:00:00.000Z"
+  #   max_trust_score: 75

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAWS Waivers Configuration",
+  "type": "object",
+  "patternProperties": {
+    ".*": {
+      "type": "object",
+      "required": ["gate", "reason", "owner", "expiry"],
+      "properties": {
+        "gate": {
+          "type": "string",
+          "enum": ["coverage", "mutation", "contracts", "a11y", "perf", "security"]
+        },
+        "reason": { "type": "string", "minLength": 10 },
+        "owner": { "type": "string" },
+        "expiry": { "type": "string", "format": "date-time" },
+        "compensating_control": { "type": "string" },
+        "ticket_url": { "type": "string", "format": "uri" },
+        "approved_by": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "status": {
+          "type": "string",
+          "enum": ["active", "expired", "revoked"],
+          "default": "active"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
