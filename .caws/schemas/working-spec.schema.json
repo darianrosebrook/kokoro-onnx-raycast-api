@@ -82,7 +82,9 @@
             "api_p95_ms": { "type": "integer", "minimum": 1 },
             "lcp_ms": { "type": "integer", "minimum": 1 },
             "streaming_ttfa_ms": { "type": "integer", "minimum": 1 },
-            "memory_limit_mb": { "type": "integer", "minimum": 1 }
+            "memory_limit_mb": { "type": "integer", "minimum": 1 },
+            "ttfa_p95_ms": { "type": "integer", "minimum": 1 },
+            "rtf_p95": { "type": "number", "minimum": 0.1 }
           },
           "additionalProperties": false
         },
@@ -133,7 +135,33 @@
       }
     },
     "migrations": { "type": "array", "items": { "type": "string" } },
-    "rollback": { "type": "array", "items": { "type": "string" } }
+    "rollback": { "type": "array", "items": { "type": "string" } },
+    "mode": { "type": "string", "enum": ["feature", "bugfix", "refactor", "maintenance"] },
+    "change_budget": {
+      "type": "object",
+      "properties": {
+        "max_files": { "type": "integer", "minimum": 1 },
+        "max_loc": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "blast_radius": {
+      "type": "object",
+      "properties": {
+        "modules": { "type": "array", "items": { "type": "string" } },
+        "data_migration": { "type": "boolean" }
+      }
+    },
+    "operational_rollback_slo": { "type": "string" },
+    "threats": { "type": "array", "items": { "type": "string" } },
+    "ai_assessment": {
+      "type": "object",
+      "properties": {
+        "confidence_level": { "type": "number", "minimum": 0, "maximum": 1 },
+        "uncertainty_areas": { "type": "array", "items": { "type": "string" } },
+        "complexity_factors": { "type": "array", "items": { "type": "string" } },
+        "risk_factors": { "type": "array", "items": { "type": "string" } }
+      }
+    }
   },
   "additionalProperties": false
 }

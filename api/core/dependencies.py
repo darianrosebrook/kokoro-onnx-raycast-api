@@ -60,8 +60,8 @@ def get_performance_tracker():
     Returns cached performance tracking instance.
     Cache size limited to 1 since tracker is singleton.
     """
-    from api.performance.stats import PerformanceTracker
-    return PerformanceTracker()
+    from api.performance.stats import get_performance_stats
+    return get_performance_stats()
 
 
 # Async cached dependencies for better performance

@@ -1,0 +1,699 @@
+{
+  "total_failures": 32,
+  "by_category": {
+    "unknown": [
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_default_config_values",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_valid_request_creation",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_request_with_defaults",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_request_format_validation",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_coreml_memory_managed_session_creation_uses_manager",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_coreml_memory_managed_session_creation_fallback",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_cleanup_coreml_contexts_logs_activity",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_benchmark_mlcompute_units_if_needed_returns_selection",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_setup_temp_directory_handles_permission_error",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a1_provider_options_support_fast_ttfa",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a1_cache_prevents_redundant_configuration",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a4_memory_management_prevents_leaks",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_full_setup_workflow",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_provider_options_include_performance_hints",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_ort.py",
+        "test_name": "test_get_cached_provider_options_for_coreml",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_default_security_config",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_middleware_initialization",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_is_local_ip",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_get_client_ip",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_rate_limiting",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_ip_blocking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_block_expiration",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_suspicious_ip_tracking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_legitimate_request_flow",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_malicious_request_blocking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_rate_limit_exceeded",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_audio_generation.py",
+        "test_name": "test_handles_none_from_dual_session",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_processes_single_segment",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_processes_multiple_segments",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_wav_format_includes_header",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_a2_streaming_generates_monotonic_chunks",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_a2_streaming_supports_long_text",
+        "error_message": "======================== 32 failed, 186 passed in 5.34s ========================",
+        "category": "unknown",
+        "severity": "low"
+      }
+    ]
+  },
+  "by_file": {
+    "tests/unit/test_config.py": [
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_default_config_values",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_valid_request_creation",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_request_with_defaults",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_request_format_validation",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      }
+    ],
+    "tests/unit/test_model_providers_coreml.py": [
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_coreml_memory_managed_session_creation_uses_manager",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_coreml_memory_managed_session_creation_fallback",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_cleanup_coreml_contexts_logs_activity",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_benchmark_mlcompute_units_if_needed_returns_selection",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_setup_temp_directory_handles_permission_error",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a1_provider_options_support_fast_ttfa",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a1_cache_prevents_redundant_configuration",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a4_memory_management_prevents_leaks",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_full_setup_workflow",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_provider_options_include_performance_hints",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      }
+    ],
+    "tests/unit/test_model_providers_ort.py": [
+      {
+        "test_file": "tests/unit/test_model_providers_ort.py",
+        "test_name": "test_get_cached_provider_options_for_coreml",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      }
+    ],
+    "tests/unit/test_security.py": [
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_default_security_config",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_middleware_initialization",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_is_local_ip",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_get_client_ip",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_rate_limiting",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_ip_blocking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_block_expiration",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_suspicious_ip_tracking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_legitimate_request_flow",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_malicious_request_blocking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_rate_limit_exceeded",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      }
+    ],
+    "tests/unit/test_tts_audio_generation.py": [
+      {
+        "test_file": "tests/unit/test_tts_audio_generation.py",
+        "test_name": "test_handles_none_from_dual_session",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      }
+    ],
+    "tests/unit/test_tts_streaming.py": [
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_processes_single_segment",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_processes_multiple_segments",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_wav_format_includes_header",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_a2_streaming_generates_monotonic_chunks",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_a2_streaming_supports_long_text",
+        "error_message": "======================== 32 failed, 186 passed in 5.34s ========================",
+        "category": "unknown",
+        "severity": "low"
+      }
+    ]
+  },
+  "by_severity": {
+    "low": [
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_default_config_values",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_valid_request_creation",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_request_with_defaults",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_config.py",
+        "test_name": "test_request_format_validation",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_coreml_memory_managed_session_creation_uses_manager",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_coreml_memory_managed_session_creation_fallback",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_cleanup_coreml_contexts_logs_activity",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_benchmark_mlcompute_units_if_needed_returns_selection",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_setup_temp_directory_handles_permission_error",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a1_provider_options_support_fast_ttfa",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a1_cache_prevents_redundant_configuration",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_a4_memory_management_prevents_leaks",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_full_setup_workflow",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_coreml.py",
+        "test_name": "test_provider_options_include_performance_hints",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_model_providers_ort.py",
+        "test_name": "test_get_cached_provider_options_for_coreml",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_default_security_config",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_middleware_initialization",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_is_local_ip",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_get_client_ip",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_rate_limiting",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_ip_blocking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_block_expiration",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_suspicious_ip_tracking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_legitimate_request_flow",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_malicious_request_blocking",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_security.py",
+        "test_name": "test_rate_limit_exceeded",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_audio_generation.py",
+        "test_name": "test_handles_none_from_dual_session",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_processes_single_segment",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_processes_multiple_segments",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_wav_format_includes_header",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_a2_streaming_generates_monotonic_chunks",
+        "error_message": "",
+        "category": "unknown",
+        "severity": "low"
+      },
+      {
+        "test_file": "tests/unit/test_tts_streaming.py",
+        "test_name": "test_a2_streaming_supports_long_text",
+        "error_message": "======================== 32 failed, 186 passed in 5.34s ========================",
+        "category": "unknown",
+        "severity": "low"
+      }
+    ]
+  },
+  "common_issues": [],
+  "recommendations": []
+}

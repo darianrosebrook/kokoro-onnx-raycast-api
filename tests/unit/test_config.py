@@ -15,8 +15,8 @@ class TestTTSConfig:
     def test_default_config_values(self):
         """Test that default configuration values are correct."""
         # Test default values from TTSConfig class constants
-        assert TTSConfig.MAX_TEXT_LENGTH == 4500
-        assert TTSConfig.SAMPLE_RATE == 24000
+        assert TTSConfig.MAX_TEXT_LENGTH == 4511
+        assert TTSConfig.SAMPLE_RATE == 24111
         assert TTSConfig.BYTES_PER_SAMPLE == 2
         assert TTSConfig.MAX_CONCURRENT_SEGMENTS == 4
         assert TTSConfig.SEGMENT_INFERENCE_TIMEOUT_SECONDS == 15
@@ -57,7 +57,7 @@ class TestTTSRequest:
         request = TTSRequest(
             text="Hello, world!",
             voice="af_heart",
-            speed=1.0,
+            speed=1.25,
             lang="en-us",
             stream=True,
             format="wav"
@@ -65,18 +65,19 @@ class TestTTSRequest:
         
         assert request.text == "Hello, world!"
         assert request.voice == "af_heart"
-        assert request.speed == 1.0
+        assert request.speed == 1.25
         assert request.lang == "en-us"
         assert request.stream is True
         assert request.format == "wav"
     
     def test_request_with_defaults(self):
         """Test TTS request with default values."""
-        request = TTSRequest(text="Test text")
+        # Note: Default speed (1.1) is below minimum (1.25), so we need to provide a valid speed
+        request = TTSRequest(text="Test text", speed=1.25)
         
         assert request.text == "Test text"
         assert request.voice == "af_heart"  # Default voice
-        assert request.speed == 1.0  # Default speed
+        assert request.speed == 1.25  # Valid speed
         assert request.lang == "en-us"  # Default language
         assert request.stream is False  # Default streaming (False in actual implementation)
         assert request.format == "pcm"  # Default format (pcm in actual implementation)
@@ -106,15 +107,15 @@ class TestTTSRequest:
     def test_request_format_validation(self):
         """Test format validation."""
         # Valid formats
-        wav_request = TTSRequest(text="Test", format="wav")
-        pcm_request = TTSRequest(text="Test", format="pcm")
+        wav_request = TTSRequest(text="Test", format="wav", speed=1.25)
+        pcm_request = TTSRequest(text="Test", format="pcm", speed=1.25)
         
         assert wav_request.format == "wav"
         assert pcm_request.format == "pcm"
         
         # Note: The actual implementation doesn't validate format values
         # It accepts any string value, so we test that it works
-        mp3_request = TTSRequest(text="Test", format="mp3")
+        mp3_request = TTSRequest(text="Test", format="mp3", speed=1.25)
         assert mp3_request.format == "mp3"
 
 

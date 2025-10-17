@@ -1,41 +1,56 @@
 {
-  "agent": "caws-cli",
-  "model": "cli-interactive",
-  "modelHash": "1.0.0",
-  "toolAllowlist": [
-    "node",
-    "npm",
-    "git",
-    "fs-extra",
-    "inquirer",
-    "commander",
-    "js-yaml",
-    "ajv",
-    "chalk"
+  "agent": "CAWS Provenance Tracker",
+  "model": "Python Script",
+  "prompts": [
+    "Generate provenance manifest for CAWS compliance",
+    "Track quality gate results and test outcomes"
   ],
+  "commit": "9c1bd9014a31d259fd88c18225f007a002bc9a7e",
+  "branch": "clean-branch",
+  "timestamp": "2025-10-17T18:53:09.065399Z",
   "artifacts": [
-    ".caws/working-spec.yaml"
+    "coverage.xml",
+    "mutmut-results.json",
+    ".caws/working-spec.yaml",
+    "contracts/kokoro-tts-api.yaml"
   ],
   "results": {
-    "project_id": "PROJ-923",
-    "project_title": "kokoro-onnx",
-    "risk_tier": 2,
-    "mode": "feature",
-    "change_budget": {
-      "max_files": 25,
-      "max_loc": 1000
+    "coverage": {
+      "metric": "line",
+      "value": 0.2301
     },
-    "blast_radius": {
-      "modules": [
-        "src",
-        "tests"
-      ],
-      "data_migration": false
+    "mutation_score": 1.0,
+    "tests_passed": 187,
+    "spec_changed": false,
+    "contracts": {
+      "consumer": true,
+      "provider": true
     },
-    "operational_rollback_slo": "5m"
+    "a11y": "pass",
+    "perf": {
+      "api_p95_ms": 500,
+      "ttfa_p95_ms": 500,
+      "rtf_p95": 0.6
+    },
+    "flake_rate": 0.14
   },
-  "approvals": [],
-  "timestamp": "2025-10-09T18:54:23.592Z",
-  "version": "1.0.0",
-  "hash": "119c545bcd935322ae2848eec0b1263bbf3e2e6a4c928dcd19317e71bbea7b89"
+  "redactions": [
+    "PII in logs",
+    "Internal IP addresses",
+    "Sensitive configuration values"
+  ],
+  "attestations": {
+    "inputs_sha256": "a0d2ca3da505bae6996ae8c55e41831ef2f353aa046128ce7d13f1428755f50f",
+    "artifacts_sha256": "d6aff945bd549257a38a92c8c4b75d2469f7d33a27ca56e4d61afe6ee0afdd69"
+  },
+  "approvals": [
+    "automated-ci"
+  ],
+  "working_spec": {
+    "id": "KOKORO-001",
+    "risk_tier": 2,
+    "profile": "backend-api",
+    "acceptance_criteria_count": 4,
+    "invariants_count": 8
+  }
 }

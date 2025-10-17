@@ -424,7 +424,7 @@ def _validate_and_handle_audio_corruption(audio_np: Any, segment_idx: int, reque
 
 
 def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float, lang: str, 
-                                  request_id: str, no_cache: bool = False) -> Tuple[int, Optional[np.ndarray], str]:
+                                  request_id: str, no_cache: bool = False) -> Tuple[int, Optional[np.ndarray], str, str]:
     """
     Generate audio with corruption detection and fallback mechanisms.
     Combines full-fidelity path with CoreML corruption handling.

@@ -46,7 +46,7 @@ caws-static:
 # Unit tests with coverage
 caws-unit:
 	@echo "🧪 Running unit tests with coverage..."
-	pytest tests/unit --cov=api --cov-report=xml --cov-report=term-missing --cov-report=html
+	pytest tests/unit --cov=api --cov-branch --cov-report=xml --cov-report=term-missing --cov-report=html
 	@echo "✅ Unit tests complete"
 
 # Mutation testing

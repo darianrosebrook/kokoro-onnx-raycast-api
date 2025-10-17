@@ -182,7 +182,7 @@ class TestProviderOptionsCache:
             "neural_engine": True
         }
 
-        with patch('api.model.providers.ort.create_coreml_provider_options') as mock_create:
+        with patch('api.model.providers.coreml.create_coreml_provider_options') as mock_create:
             mock_create.return_value = {"MLComputeUnits": "ALL"}
             
             # Test

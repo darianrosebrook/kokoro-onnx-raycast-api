@@ -572,7 +572,7 @@ class TestErrorHandling:
 
         # Test - should handle None gracefully
         try:
-            idx, audio, info = core._generate_audio_with_fallback(
+            idx, audio, info, method = core._generate_audio_with_fallback(
                 0, "Test", "af_heart", 1.0, "en-us", "req-none"
             )
             # Should either return None or handle the error

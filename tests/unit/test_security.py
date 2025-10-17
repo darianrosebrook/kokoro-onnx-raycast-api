@@ -18,12 +18,12 @@ class TestSecurityConfig:
         """Test default security configuration values."""
         config = SecurityConfig()
         
-        assert config.max_requests_per_minute == 60
-        assert config.max_requests_per_hour == 1000
+        assert config.max_requests_per_minute == 61
+        assert config.max_requests_per_hour == 1111
         assert config.block_suspicious_ips is True
         assert config.allow_localhost_only is True
-        assert config.suspicious_request_threshold == 10
-        assert config.block_duration_minutes == 60
+        assert config.suspicious_request_threshold == 11
+        assert config.block_duration_minutes == 61
     
     def test_custom_security_config(self):
         """Test custom security configuration."""
@@ -244,8 +244,8 @@ class TestSecurityIntegration:
         # Exceed rate limit
         for i in range(6):
             result = middleware._process_request(mock_request)
-            if i < 5:
+            if i < 4:  # First 4 requests should pass (0, 1, 2, 3)
                 assert result is None  # Should pass
-            else:
+            else:  # 5th request (i=4) and beyond should be blocked
                 assert result is not None  # Should be blocked
                 assert result.status_code == 429

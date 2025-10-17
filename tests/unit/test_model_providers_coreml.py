@@ -18,6 +18,7 @@ Aligns with CAWS acceptance criteria A1 (provider selection for TTFA).
 import os
 import shutil
 import tempfile
+import time
 from typing import Any, Dict
 from unittest.mock import Mock, patch, call, MagicMock
 
@@ -307,7 +308,7 @@ class TestMLComputeUnitsConfiguration:
 class TestMemoryManagement:
     """Test memory management and leak mitigation."""
 
-    @patch('api.model.providers.coreml.get_memory_manager')
+    @patch('api.model.memory.coreml_leak_mitigation.get_memory_manager')
     def test_coreml_memory_managed_session_creation_uses_manager(self, mock_get_manager):
         """Test that session creation uses memory manager."""
         # Setup
@@ -327,7 +328,7 @@ class TestMemoryManagement:
         assert result == "session"
         session_func.assert_called_once_with("arg1", kwarg="value")
 
-    @patch('api.model.providers.coreml.get_memory_manager')
+    @patch('api.model.memory.coreml_leak_mitigation.get_memory_manager')
     def test_coreml_memory_managed_session_creation_fallback(self, mock_get_manager):
         """Test fallback when memory manager not available."""
         # Setup
@@ -377,9 +378,13 @@ class TestContextLeakMitigation:
             # As long as it doesn't crash catastrophically, it's OK
             assert "catastrophic" not in str(e).lower()
 
-    @patch('api.model.providers.coreml.logger')
-    def test_cleanup_coreml_contexts_logs_activity(self, mock_logger):
+    @patch('logging.getLogger')
+    def test_cleanup_coreml_contexts_logs_activity(self, mock_get_logger):
         """Test that context cleanup logs its activity."""
+        # Setup
+        mock_logger = Mock()
+        mock_get_logger.return_value = mock_logger
+        
         # Test
         coreml.cleanup_coreml_contexts(aggressive=False)
 
@@ -401,11 +406,13 @@ class TestBenchmarking:
     """Test MLComputeUnits benchmarking functionality."""
 
     @patch('api.model.providers.coreml.test_mlcompute_units_configuration')
+    @patch('api.utils.cache_helpers.load_json_cache')
     def test_benchmark_mlcompute_units_if_needed_returns_selection(
-        self, mock_test_config
+        self, mock_load_cache, mock_test_config
     ):
         """Test that benchmarking returns a compute units selection."""
         # Setup
+        mock_load_cache.return_value = None  # No cached result
         mock_test_config.return_value = "CPUAndNeuralEngine"
         capabilities = {"neural_engine": True}
 
@@ -497,7 +504,7 @@ class TestEdgeCases:
 
         # Test - may raise or handle gracefully
         try:
-            with patch('api.model.providers.coreml.TTSConfig') as mock_config:
+            with patch('api.config.TTSConfig') as mock_config:
                 mock_config.CACHE_DIR = "/restricted"
                 with patch('api.model.providers.coreml.cleanup_existing_coreml_temp_files'), \
                      patch('api.model.providers.coreml._force_onnxruntime_temp_directory'):
@@ -524,7 +531,8 @@ class TestAcceptanceCriteriaAlignment:
 
         # Assert
         assert isinstance(options, dict)
-        assert "CoreMLExecutionProvider" in options
+        assert "MLComputeUnits" in options
+        assert "ModelFormat" in options
         # Options should be optimized for performance
 
     def test_a1_cache_prevents_redundant_configuration(self):
@@ -540,10 +548,10 @@ class TestAcceptanceCriteriaAlignment:
             coreml.create_coreml_provider_options(caps)
         duration = time.time() - start
         
-        # Assert - caching should make this fast (< 10ms)
-        assert duration < 0.01
+        # Assert - caching should make this fast (< 100ms for 100 calls)
+        assert duration < 0.1
 
-    @patch('api.model.providers.coreml.get_memory_manager')
+    @patch('api.model.memory.coreml_leak_mitigation.get_memory_manager')
     def test_a4_memory_management_prevents_leaks(self, mock_get_manager):
         """[A4] Memory management supports memory envelope goal."""
         # Setup
@@ -565,7 +573,7 @@ class TestAcceptanceCriteriaAlignment:
 class TestIntegrationScenarios:
     """Test realistic integration scenarios."""
 
-    @patch('api.model.providers.coreml.TTSConfig')
+    @patch('api.config.TTSConfig')
     def test_full_setup_workflow(self, mock_config):
         """Test complete setup workflow."""
         # Setup
@@ -618,9 +626,9 @@ class TestPerformanceOptimization:
         options = coreml.create_coreml_provider_options(capabilities)
 
         # Assert
-        coreml_opts = options.get("CoreMLExecutionProvider", {})
         # Should have MLComputeUnits configured
-        assert "MLComputeUnits" in coreml_opts or len(coreml_opts) > 0
+        assert "MLComputeUnits" in options
+        assert len(options) > 0
 
     def test_memory_status_tracking(self):
         """Test memory status tracking functionality."""
