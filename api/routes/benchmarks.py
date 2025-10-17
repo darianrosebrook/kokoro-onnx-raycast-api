@@ -14,6 +14,7 @@ import time
 import os
 
 from api.performance.benchmarks.ttfa_benchmark import TTFABenchmark
+from api.performance.benchmarks.runner import BenchmarkRunner, BenchmarkConfig
 from api.utils.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -111,17 +112,11 @@ async def get_benchmark_report() -> Dict[str, str]:
         )
     
     try:
-        # TODO: Implement BenchmarkRunner class
-        # Generate report based on last results
-        # runner = BenchmarkRunner()
-        # report = runner.generate_performance_report(_benchmark_status["last_results"])
+        # Generate report based on last results using BenchmarkRunner
+        runner = BenchmarkRunner()
+        report = runner.generate_performance_report(_benchmark_status["last_results"])
         
-        return {
-            "report": "Performance report generation temporarily disabled",
-            "format": "markdown",
-            "generated_at": time.time(),
-            "benchmark_timestamp": _benchmark_status["last_results"].get("execution_timestamp")
-        }
+        return report
     except Exception as e:
         logger.error(f"Failed to generate benchmark report: {e}")
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
@@ -250,20 +245,42 @@ async def _execute_full_benchmark():
     _benchmark_status["current_test"] = "Full Spectrum Benchmark"
     _benchmark_status["progress"] = 0.1
     
-    # TODO: Implement BenchmarkRunner class
-    # runner = BenchmarkRunner()
-    # results = await runner.run_full_benchmark_suite()
-    results = {"error": "Full spectrum benchmark temporarily disabled"}
+    # Run full benchmark suite using BenchmarkRunner
+    config = BenchmarkConfig(
+        include_ttfa=True,
+        include_streaming=True,
+        include_provider_comparison=True,
+        include_full_spectrum=True,
+        save_results=True
+    )
+    runner = BenchmarkRunner(config)
+    execution_result = await runner.run_full_benchmark_suite()
+    
+    # Convert execution result to expected format
+    results = {
+        "execution_id": execution_result.execution_id,
+        "completed_successfully": execution_result.completed_successfully,
+        "execution_time_seconds": execution_result.execution_time_seconds,
+        "errors": execution_result.errors,
+        "ttfa_results": execution_result.ttfa_results,
+        "streaming_results": execution_result.streaming_results,
+        "provider_results": execution_result.provider_results,
+        "full_spectrum_results": execution_result.full_spectrum_results,
+        "execution_timestamp": execution_result.start_time.timestamp()
+    }
     
     _benchmark_status["progress"] = 0.9
     
-    # Save results if requested
+    # Results are already saved by BenchmarkRunner if save_results=True
+    # Additional saving can be done here if needed
     timestamp = int(time.time())
     results_dir = "reports/benchmarks"
     os.makedirs(results_dir, exist_ok=True)
     
     results_file = f"{results_dir}/benchmark_{timestamp}.json"
-    runner.save_benchmark_results(results, results_file)
+    with open(results_file, 'w') as f:
+        import json
+        json.dump(results, f, indent=2, default=str)
     
     _benchmark_status["last_results"] = results
     _benchmark_status["progress"] = 1.0

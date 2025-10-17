@@ -40,7 +40,11 @@ def cleanup_model():
     This function ensures proper cleanup of all model-related resources including
     sessions, memory managers, analyzers, and background threads.
     """
-    logger.info("Starting model cleanup...")
+    try:
+        logger.info("Starting model cleanup...")
+    except Exception:
+        # Ignore all logging errors during cleanup
+        pass
 
     try:
         # Clean up dual session manager
@@ -81,7 +85,11 @@ def cleanup_model():
         except Exception as e:
             logger.debug(f"Could not cleanup real-time optimizer: {e}")
 
-        logger.info("Model cleanup completed")
+        try:
+            logger.info("Model cleanup completed")
+        except Exception:
+            # Ignore all logging errors during cleanup
+            pass
 
     except Exception as e:
         logger.error(f"Error during model cleanup: {e}")

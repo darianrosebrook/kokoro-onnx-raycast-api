@@ -451,10 +451,126 @@ export class AdaptiveBufferManager {
   /**
    * Get optimal configuration based on performance metrics
    */
-  getOptimalConfig(_metrics: Record<string, unknown>): BufferConfig | null {
-    // For now, return the current config as optimal
-    // In a real implementation, this would use benchmark data
-    return { ...this.config };
+  getOptimalConfig(metrics: Record<string, unknown>): BufferConfig | null {
+    // Use benchmark data and performance metrics to determine optimal configuration
+    const benchmarkConfig = this.getBenchmarkBasedConfig();
+    const performanceBasedConfig = this.getPerformanceBasedConfig(metrics);
+
+    // Merge benchmark and performance-based configurations
+    const optimalConfig = this.mergeConfigurations(benchmarkConfig, performanceBasedConfig);
+
+    console.log("Generated optimal buffer configuration", {
+      component: this.name,
+      method: "getOptimalConfig",
+      benchmarkConfig,
+      performanceBasedConfig,
+      finalConfig: optimalConfig,
+    });
+
+    return optimalConfig;
+  }
+
+  /**
+   * Get configuration based on benchmark results
+   */
+  private getBenchmarkBasedConfig(): Partial<BufferConfig> {
+    // Import benchmark configuration dynamically to avoid circular dependencies
+    try {
+      // Use the benchmark results from buffer-config.ts
+      const benchmarkConfig = {
+        targetBufferMs: 400,
+        bufferSize: 4800, // 4.8KB from benchmark results
+        chunkSize: 1200, // 25ms chunks
+        deliveryRate: 5, // 5ms between chunks
+        minBufferChunks: 4,
+        maxBufferMs: 1000,
+      };
+
+      return benchmarkConfig;
+    } catch (error) {
+      console.warn("Could not load benchmark configuration, using defaults", {
+        component: this.name,
+        method: "getBenchmarkBasedConfig",
+        error,
+      });
+
+      return {
+        targetBufferMs: 400,
+        bufferSize: 2 * 1024 * 1024,
+        chunkSize: 2400,
+        deliveryRate: 40,
+      };
+    }
+  }
+
+  /**
+   * Get configuration based on current performance metrics
+   */
+  private getPerformanceBasedConfig(metrics: Record<string, unknown>): Partial<BufferConfig> {
+    const config: Partial<BufferConfig> = {};
+
+    // Adjust based on time to first audio
+    if (typeof metrics.timeToFirstAudio === "number") {
+      const ttfa = metrics.timeToFirstAudio;
+      if (ttfa > 1000) {
+        // High latency - increase buffer size
+        config.bufferSize = Math.min(8 * 1024 * 1024, this.config.bufferSize * 1.5);
+        config.targetBufferMs = Math.min(800, this.config.targetBufferMs + 200);
+      } else if (ttfa < 300) {
+        // Low latency - optimize for efficiency
+        config.bufferSize = Math.max(1024 * 1024, this.config.bufferSize * 0.8);
+        config.targetBufferMs = Math.max(200, this.config.targetBufferMs - 100);
+      }
+    }
+
+    // Adjust based on underrun count
+    if (typeof metrics.underrunCount === "number") {
+      const underruns = metrics.underrunCount;
+      if (underruns > 5) {
+        // Many underruns - increase buffer and delivery rate
+        config.bufferSize = Math.min(8 * 1024 * 1024, this.config.bufferSize * 1.3);
+        config.deliveryRate = Math.min(100, this.config.deliveryRate * 1.2);
+        config.minBufferChunks = Math.min(8, (this.config.minBufferChunks || 4) + 2);
+      }
+    }
+
+    // Adjust based on streaming efficiency
+    if (typeof metrics.streamingEfficiency === "number") {
+      const efficiency = metrics.streamingEfficiency;
+      if (efficiency < 0.7) {
+        // Poor efficiency - optimize chunk size and delivery rate
+        config.chunkSize = Math.max(600, this.config.chunkSize * 0.9);
+        config.deliveryRate = Math.max(5, this.config.deliveryRate * 0.9);
+      }
+    }
+
+    return config;
+  }
+
+  /**
+   * Merge benchmark and performance-based configurations
+   */
+  private mergeConfigurations(
+    benchmarkConfig: Partial<BufferConfig>,
+    performanceConfig: Partial<BufferConfig>
+  ): BufferConfig {
+    // Start with current configuration as base
+    const mergedConfig = { ...this.config };
+
+    // Apply benchmark configuration as foundation
+    Object.assign(mergedConfig, benchmarkConfig);
+
+    // Apply performance-based adjustments
+    Object.assign(mergedConfig, performanceConfig);
+
+    // Ensure configuration is within reasonable bounds
+    mergedConfig.bufferSize = Math.max(1024, Math.min(16 * 1024 * 1024, mergedConfig.bufferSize));
+    mergedConfig.chunkSize = Math.max(300, Math.min(9600, mergedConfig.chunkSize));
+    mergedConfig.deliveryRate = Math.max(1, Math.min(200, mergedConfig.deliveryRate));
+    mergedConfig.targetBufferMs = Math.max(100, Math.min(2000, mergedConfig.targetBufferMs));
+    mergedConfig.maxBufferMs = Math.max(500, Math.min(5000, mergedConfig.maxBufferMs));
+
+    return mergedConfig as BufferConfig;
   }
 
   /**

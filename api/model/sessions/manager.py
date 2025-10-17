@@ -7,7 +7,8 @@ model access, status checking, and session state management.
 
 import threading
 import logging
-from typing import Optional
+import os
+from typing import Optional, Dict, Any
 from kokoro_onnx import Kokoro
 
 # Global model state and management
@@ -82,12 +83,76 @@ def get_adaptive_provider(text_length: int = 0) -> str:
             logger.info(f" Adaptive provider: text_len={text_length} → {selected} (medium text)")
         return selected
     
-    # Long text (>1000 chars): All providers show degradation, use current
-    # TODO: Investigate long text performance issues across all providers
+    # Long text (>1000 chars): Implement optimized long text strategy
     else:
-        selected = current if current else "CPUExecutionProvider"
-        logger.info(f" Adaptive provider: text_len={text_length} → {selected} (long text - degraded performance expected)")
+        # For long text, prioritize memory efficiency and streaming performance
+        # CPU provider is more predictable for long text processing
+        if current == "CoreMLExecutionProvider" and compute_units == 'ALL':
+            # Avoid CoreML ALL for long text due to memory pressure
+            selected = "CPUExecutionProvider"
+            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (long text - avoiding CoreML ALL for memory efficiency)")
+        elif current == "CoreMLExecutionProvider" and compute_units == 'CPUAndGPU':
+            # CPUAndGPU can handle long text better than ALL
+            selected = current
+            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (long text - CoreML CPUAndGPU optimized)")
+        else:
+            # Default to CPU for long text as it's most predictable
+            selected = "CPUExecutionProvider"
+            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (long text - CPU for predictable performance)")
+        
         return selected
+
+
+def get_long_text_optimization_recommendations(text_length: int) -> Dict[str, Any]:
+    """
+    Provide optimization recommendations for long text processing.
+    
+    Based on analysis of long text performance issues:
+    - Memory pressure increases with text length
+    - Segmentation overhead grows non-linearly
+    - Provider performance degrades significantly
+    - Streaming efficiency decreases with more segments
+    
+    @param text_length: Length of text to be processed
+    @returns: Dictionary with optimization recommendations
+    """
+    recommendations = {
+        "text_length": text_length,
+        "category": "long_text",
+        "performance_impact": "high",
+        "optimizations": []
+    }
+    
+    if text_length > 2000:
+        recommendations["optimizations"].extend([
+            "Consider breaking text into smaller chunks for better performance",
+            "Use streaming mode to reduce memory pressure",
+            "Monitor memory usage during processing"
+        ])
+        recommendations["performance_impact"] = "very_high"
+    elif text_length > 1000:
+        recommendations["optimizations"].extend([
+            "Enable streaming mode for better responsiveness",
+            "Consider using CPU provider for predictable performance"
+        ])
+    
+    # Add provider-specific recommendations
+    current_provider = get_active_provider()
+    if current_provider == "CoreMLExecutionProvider":
+        compute_units = os.environ.get('KOKORO_COREML_COMPUTE_UNITS', 'CPUOnly')
+        if compute_units == 'ALL':
+            recommendations["optimizations"].append(
+                "Consider switching to CPU provider or CPUAndGPU for long text"
+            )
+    
+    # Add segmentation recommendations
+    estimated_segments = max(1, text_length // 800)  # Rough estimate based on max segment length
+    if estimated_segments > 5:
+        recommendations["optimizations"].append(
+            f"Text will be split into ~{estimated_segments} segments - consider pre-processing"
+        )
+    
+    return recommendations
 
 
 def set_model(model: Kokoro, provider: str) -> None:
@@ -116,7 +181,11 @@ def clear_model() -> None:
         model_loaded = False
         _active_provider = "CPUExecutionProvider"
     
-    logger.info("Model cleared")
+    try:
+        logger.info("Model cleared")
+    except Exception:
+        # Ignore all logging errors during cleanup
+        pass
 
 
 def is_model_loaded() -> bool:

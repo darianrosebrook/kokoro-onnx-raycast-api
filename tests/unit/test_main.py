@@ -300,21 +300,224 @@ class TestErrorHandling:
 
 class TestMiddleware:
     """Test middleware functionality."""
-    
+
     def test_cors_headers(self):
         """Test that CORS headers are present."""
         client = TestClient(app)
         response = client.options("/performance/health")
-        
+
         # CORS headers may not be present in test environment
         # Just check that the request doesn't fail
         assert response.status_code in [200, 405, 404]
-    
+
     def test_security_headers(self):
         """Test that security headers are present."""
         client = TestClient(app)
         response = client.get("/performance/health")
-        
+
         # Security headers may not be present in test environment
         # Just check that the request doesn't fail
         assert response.status_code in [200, 503]
+
+
+class TestTTSGeneration:
+    """Test the main TTS generation endpoint."""
+
+    @patch('api.main.model_initialization_complete', True)
+    @patch('api.main.stream_tts_audio')
+    def test_create_speech_streaming(self, mock_stream):
+        """Test TTS generation with streaming enabled."""
+        # Setup mock
+        mock_stream.return_value = iter([b"audio_chunk_1", b"audio_chunk_2"])
+        
+        client = TestClient(app)
+        response = client.post(
+            "/v1/audio/speech",
+            json={
+                "text": "Hello world",
+                "voice": "af_heart",
+                "speed": 1.25,
+                "lang": "en-us",
+                "stream": True,
+                "format": "wav"
+            }
+        )
+        
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "audio/wav"
+        mock_stream.assert_called_once()
+
+    @patch('api.main.model_initialization_complete', True)
+    @patch('api.main.segment_text')
+    @patch('api.main._generate_audio_segment')
+    def test_create_speech_non_streaming(self, mock_generate, mock_segment):
+        """Test TTS generation without streaming."""
+        # Setup mocks
+        mock_segment.return_value = ["Hello", "world"]
+        import numpy as np
+        mock_generate.return_value = (0, np.array([1, 2, 3, 4], dtype=np.float32), "CPU", "method")
+        
+        client = TestClient(app)
+        response = client.post(
+            "/v1/audio/speech",
+            json={
+                "text": "Hello world",
+                "voice": "af_heart",
+                "speed": 1.25,
+                "lang": "en-us",
+                "stream": False,
+                "format": "wav"
+            }
+        )
+        
+        # Should return 503 if model not ready, or 200 if ready
+        assert response.status_code in [200, 503]
+
+    @patch('api.main.model_initialization_complete', False)
+    def test_create_speech_model_not_ready(self):
+        """Test TTS generation when model is not ready."""
+        client = TestClient(app)
+        response = client.post(
+            "/v1/audio/speech",
+            json={
+                "text": "Hello world",
+                "voice": "af_heart",
+                "speed": 1.25,
+                "lang": "en-us",
+                "stream": True,
+                "format": "wav"
+            }
+        )
+        
+        assert response.status_code == 503
+        assert "model not loaded" in response.json()["detail"].lower()
+
+    def test_create_speech_invalid_request(self):
+        """Test TTS generation with invalid request data."""
+        client = TestClient(app)
+        response = client.post(
+            "/v1/audio/speech",
+            json={
+                "text": "",  # Empty text should be invalid
+                "voice": "af_heart",
+                "speed": 1.0
+            }
+        )
+        
+        # Should return 422 for validation error
+        assert response.status_code == 422
+
+    def test_create_speech_invalid_speed(self):
+        """Test TTS generation with invalid speed parameter."""
+        client = TestClient(app)
+        response = client.post(
+            "/v1/audio/speech",
+            json={
+                "text": "Hello world",
+                "voice": "af_heart",
+                "speed": 0.1,  # Too low, should be >= 1.25
+                "lang": "en-us"
+            }
+        )
+        
+        # Should return 422 for validation error
+        assert response.status_code == 422
+
+
+class TestCacheManagement:
+    """Test cache management endpoints."""
+
+    @patch('api.main.cleanup_cache')
+    def test_trigger_cache_cleanup(self, mock_cleanup):
+        """Test cache cleanup endpoint."""
+        mock_cleanup.return_value = {"cleaned": True}
+        
+        client = TestClient(app)
+        response = client.post("/cache-cleanup", json={"aggressive": False})
+        
+        assert response.status_code == 200
+        mock_cleanup.assert_called_once()
+
+    @patch('api.main.get_cache_info')
+    def test_get_cache_status(self, mock_cache_info):
+        """Test cache status endpoint."""
+        mock_cache_info.return_value = {"cache_size": 100, "entries": 5}
+        
+        client = TestClient(app)
+        response = client.get("/cache-status")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "cache_statistics" in data
+
+    @patch('api.main.cleanup_cache')
+    def test_clear_inference_cache(self, mock_cleanup):
+        """Test inference cache clearing endpoint."""
+        mock_cleanup.return_value = {"cleared": True}
+        
+        client = TestClient(app)
+        response = client.post("/clear-inference-cache")
+        
+        assert response.status_code == 200
+
+
+class TestPerformanceEndpoints:
+    """Test performance monitoring endpoints."""
+
+    @patch('api.main.get_performance_stats')
+    def test_get_ttfa_performance(self, mock_stats):
+        """Test TTFA performance endpoint."""
+        mock_stats.return_value = {"ttfa_avg": 250, "ttfa_p95": 500}
+        
+        client = TestClient(app)
+        response = client.get("/ttfa-performance")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "monitoring" in data
+
+    @patch('api.main.get_performance_stats')
+    def test_get_ttfa_measurements(self, mock_stats):
+        """Test TTFA measurements endpoint."""
+        mock_stats.return_value = [{"timestamp": "2025-01-01", "ttfa": 250}]
+        
+        client = TestClient(app)
+        response = client.get("/ttfa-measurements?limit=10")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "measurements" in data
+
+
+class TestSystemManagement:
+    """Test system management endpoints."""
+
+    @patch('api.main.get_cold_start_warmup_stats')
+    def test_get_startup_progress(self, mock_stats):
+        """Test startup progress endpoint."""
+        mock_stats.return_value = {"progress": 50, "status": "initializing"}
+        
+        client = TestClient(app)
+        response = client.get("/startup-progress")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "progress" in data
+
+    @patch('api.main.get_performance_stats')
+    def test_get_status_comprehensive(self, mock_stats):
+        """Test comprehensive status endpoint."""
+        mock_stats.return_value = {
+            "hardware": {"cpu_cores": 8},
+            "memory": {"used": 100, "total": 1000},
+            "model": {"loaded": True}
+        }
+        
+        client = TestClient(app)
+        response = client.get("/status")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "hardware" in data
+        assert "memory_fragmentation" in data

@@ -391,11 +391,15 @@ def setup_application_logging():
             original_emit = handler.emit
 
             def emit_with_flush(record):
-                original_emit(record)
-                if handler.stream:
-                    handler.stream.flush()
-                # Also force stdout flush
-                sys.stdout.flush()
+                try:
+                    original_emit(record)
+                    if handler.stream and not handler.stream.closed:
+                        handler.stream.flush()
+                    # Also force stdout flush
+                    sys.stdout.flush()
+                except Exception:
+                    # Ignore all logging errors during cleanup (e.g., "I/O operation on closed file")
+                    pass
             handler.emit = emit_with_flush
 
     # Ensure stdout is unbuffered
