@@ -465,7 +465,7 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
                 info = f"{provider} (cached)"
                 if preprocessing_info:
                     info += f" [{preprocessing_info}]"
-                return idx, samples, info
+                return idx, samples, info, "cached"
 
         # Primary path: Dual-session processing with corruption detection
         dsm = get_dual_session_manager()
@@ -490,7 +490,7 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
                     info = provider
                     if preprocessing_info:
                         info += f" [{preprocessing_info}]"
-                    return idx, validated_samples, info
+                    return idx, validated_samples, info, "dual-session"
                 
                 logger.warning(f"[{idx}] DualSession returned corrupted audio, falling back to single model")
                 
@@ -523,7 +523,7 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
         
         if validated_samples is None:
             logger.error(f"[{idx}] CRITICAL: Both DualSession and single model returned corrupted audio")
-            return idx, None, "All generation paths corrupted"
+            return idx, None, "All generation paths corrupted", "corrupted"
         
         dur = time.perf_counter() - start
         update_inference_stats(dur, provider)
@@ -536,16 +536,16 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
 
     except Exception as e:
         logger.error(f"[{idx}] TTS generation failed: {e}", exc_info=True)
-        return idx, None, str(e)
+        return idx, None, str(e), "error"
 
 
 def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, lang: str, 
-                                 request_id: str, no_cache: bool = False) -> Tuple[int, Optional[np.ndarray], str]:
+                                 request_id: str, no_cache: bool = False) -> Tuple[int, Optional[np.ndarray], str, str]:
     """
     Latency-optimized path for primer segments with corruption detection.
     """
     if not text or len(text.strip()) < 3:
-        return idx, None, "Text too short"
+        return idx, None, "Text too short", "none"
 
     try:
         processed_text = text.strip()
@@ -557,7 +557,7 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
             if cached:
                 samples, provider = cached
                 logger.debug(f"[{idx}] Fast path cache hit")
-                return idx, samples, f"{provider} (fast-cached)"
+                return idx, samples, f"{provider} (fast-cached)", "fast-cached"
 
         # Primer-fast path: force CPU provider to minimize TTFA and avoid CoreML startup overhead
         provider = "CPUExecutionProvider"
@@ -584,7 +584,7 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
         
         if validated_samples is None:
             logger.error(f"[{idx}] CRITICAL: Fast path completely corrupted")
-            return idx, None, "Fast generation corrupted"
+            return idx, None, "Fast generation corrupted", "corrupted"
         
         dur = time.perf_counter() - start
         update_inference_stats(dur, provider)
@@ -593,11 +593,11 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
             _cache_inference_result(cache_key, validated_samples, provider)
         
         logger.info(f"[{idx}] Fast segment in {dur:.4f}s via {provider}")
-        return idx, validated_samples, provider
+        return idx, validated_samples, provider, "fast"
 
     except Exception as e:
         logger.error(f"[{idx}] Fast TTS generation failed: {e}", exc_info=True)
-        return idx, None, str(e)
+        return idx, None, str(e), "error"
 
 
 async def stream_tts_audio(
@@ -800,7 +800,7 @@ async def stream_tts_audio(
 
         while current_index < n:
             try:
-                (idx, audio_np, provider), gen_time, use_fast = await current_future
+                (idx, audio_np, provider, method), gen_time, use_fast = await current_future
                 logger.debug(f"[{request_id}] Segment {current_index} generated in {gen_time:.3f}s via {provider}")
 
                 if audio_np is None:
