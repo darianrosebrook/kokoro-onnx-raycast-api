@@ -430,7 +430,7 @@ def _generate_audio_with_fallback(idx: int, text: str, voice: str, speed: float,
     Combines full-fidelity path with CoreML corruption handling.
     """
     if not text or len(text.strip()) < 3:
-        return idx, None, "Text too short"
+        return idx, None, "Text too short", "none"
 
     try:
         processed_text = text

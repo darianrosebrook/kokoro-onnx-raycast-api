@@ -164,9 +164,10 @@ class TestSegmentProcessing:
     @patch('api.tts.core.split_segments')
     @patch('api.tts.core.get_variation_handler')
     @patch('api.tts.core.server_tracker')
+    @patch('api.tts.core._fast_generate_audio_segment')
     @patch('api.tts.core._generate_audio_with_fallback')
     async def test_processes_single_segment(
-        self, mock_gen, mock_tracker, mock_variation, mock_split, mock_status, mock_kokoro
+        self, mock_gen, mock_fast_gen, mock_tracker, mock_variation, mock_split, mock_status, mock_kokoro
     ):
         """Test processing single segment."""
         # Setup
@@ -175,11 +176,14 @@ class TestSegmentProcessing:
         
         mock_handler = Mock()
         mock_handler.get_text_hash.return_value = "hash"
+        mock_handler.record_audio_size.return_value = {'is_consistent': True, 'variation_pct': 0.0, 'baseline_size': 1000, 'threshold_used': 5.0}
+        mock_handler.record_stream_health.return_value = None
         mock_variation.return_value = mock_handler
         
         # Mock audio generation
         audio = np.random.rand(1000).astype(np.float32) * 0.5
         mock_gen.return_value = (0, audio, "CPU", "method")
+        mock_fast_gen.return_value = (0, audio, "CPU-fast", "fast")
         
         # Mock Kokoro to prevent real instantiation
         mock_model = Mock()
@@ -198,7 +202,8 @@ class TestSegmentProcessing:
         # Assert
         assert len(chunks) > 0  # Should generate chunks
         assert all(isinstance(c, bytes) for c in chunks)
-        mock_gen.assert_called()
+        # For single segment, fast generation is used
+        mock_fast_gen.assert_called()
 
     @pytest.mark.asyncio
     @patch('api.tts.core.Kokoro')
@@ -302,9 +307,10 @@ class TestFormatHandling:
     @patch('api.tts.core.split_segments')
     @patch('api.tts.core.get_variation_handler')
     @patch('api.tts.core.server_tracker')
+    @patch('api.tts.core._fast_generate_audio_segment')
     @patch('api.tts.core._generate_audio_with_fallback')
     async def test_wav_format_includes_header(
-        self, mock_gen, mock_tracker, mock_variation, mock_split, mock_status, mock_kokoro
+        self, mock_gen, mock_fast_gen, mock_tracker, mock_variation, mock_split, mock_status, mock_kokoro
     ):
         """Test that WAV format includes header."""
         # Setup
@@ -313,10 +319,13 @@ class TestFormatHandling:
         
         mock_handler = Mock()
         mock_handler.get_text_hash.return_value = "hash"
+        mock_handler.record_audio_size.return_value = {'is_consistent': True, 'variation_pct': 0.0, 'baseline_size': 1000, 'threshold_used': 5.0}
+        mock_handler.record_stream_health.return_value = None
         mock_variation.return_value = mock_handler
         
         audio = np.random.rand(1000).astype(np.float32) * 0.5
         mock_gen.return_value = (0, audio, "CPU", "method")
+        mock_fast_gen.return_value = (0, audio, "CPU-fast", "fast")
         
         # Mock Kokoro
         mock_model = Mock()

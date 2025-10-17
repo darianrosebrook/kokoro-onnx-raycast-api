@@ -39,7 +39,7 @@ class TestGenerateAudioWithFallback:
         mock_get_cached.return_value = (cached_audio, "CoreMLExecutionProvider")
 
         # Test
-        idx, audio, info = core._generate_audio_with_fallback(
+        idx, audio, info, method = core._generate_audio_with_fallback(
             0, "Hello", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -69,7 +69,7 @@ class TestGenerateAudioWithFallback:
         mock_dsm_getter.return_value = mock_dsm
 
         # Test
-        idx, audio, info = core._generate_audio_with_fallback(
+        idx, audio, info, method = core._generate_audio_with_fallback(
             0, "Hello world", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -125,7 +125,7 @@ class TestGenerateAudioWithFallback:
     def test_rejects_empty_text(self):
         """Test that empty text is rejected."""
         # Test empty string
-        idx, audio, info = core._generate_audio_with_fallback(
+        idx, audio, info, method = core._generate_audio_with_fallback(
             0, "", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -136,7 +136,7 @@ class TestGenerateAudioWithFallback:
     def test_rejects_very_short_text(self):
         """Test that very short text is rejected."""
         # Test text less than 3 chars
-        idx, audio, info = core._generate_audio_with_fallback(
+        idx, audio, info, method = core._generate_audio_with_fallback(
             0, "Hi", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -176,7 +176,7 @@ class TestGenerateAudioWithFallback:
         mock_dsm.return_value = mock_dsm_instance
 
         # Test with complex text (numbers, punctuation)
-        idx, result_audio, info = core._generate_audio_with_fallback(
+        idx, result_audio, info, method = core._generate_audio_with_fallback(
             0, "Hello! How are you? $5.99", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -242,7 +242,7 @@ class TestFastGenerateAudioSegment:
 
     def test_rejects_empty_text(self):
         """Test fast path rejects empty text."""
-        idx, audio, info = core._fast_generate_audio_segment(
+        idx, audio, info, method = core._fast_generate_audio_segment(
             0, "", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -252,7 +252,7 @@ class TestFastGenerateAudioSegment:
 
     def test_rejects_very_short_text(self):
         """Test fast path rejects very short text."""
-        idx, audio, info = core._fast_generate_audio_segment(
+        idx, audio, info, method = core._fast_generate_audio_segment(
             0, "Hi", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -269,7 +269,7 @@ class TestFastGenerateAudioSegment:
         mock_get_cached.return_value = (cached_audio, "CPUExecutionProvider")
 
         # Test
-        idx, audio, info = core._fast_generate_audio_segment(
+        idx, audio, info, method = core._fast_generate_audio_segment(
             0, "Hello", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -296,7 +296,7 @@ class TestFastGenerateAudioSegment:
         mock_get_model.return_value = mock_model
 
         # Test
-        idx, result_audio, info = core._fast_generate_audio_segment(
+        idx, result_audio, info, method = core._fast_generate_audio_segment(
             0, "Hello world", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -351,7 +351,7 @@ class TestFastGenerateAudioSegment:
         mock_get_model.return_value = mock_model
 
         # Test
-        idx, audio, info = core._fast_generate_audio_segment(
+        idx, audio, info, method = core._fast_generate_audio_segment(
             0, "Test", "af_heart", 1.0, "en-us", "req-123"
         )
 
@@ -421,7 +421,7 @@ class TestIntegrationScenarios:
         mock_dsm.return_value = mock_dsm_instance
 
         # Test
-        idx, audio, info = core._generate_audio_with_fallback(
+        idx, audio, info, method = core._generate_audio_with_fallback(
             0, "Complete workflow test", "af_heart", 1.0, "en-us", "req-workflow"
         )
 
@@ -449,7 +449,7 @@ class TestIntegrationScenarios:
         mock_get_model.return_value = mock_model
 
         # Test - short text for primer
-        idx, audio, info = core._fast_generate_audio_segment(
+        idx, audio, info, method = core._fast_generate_audio_segment(
             0, "Hello there", "af_heart", 1.2, "en-us", "req-primer"
         )
 
@@ -487,7 +487,7 @@ class TestPerformanceTracking:
 
         # Test
         start = time.perf_counter()
-        idx, audio, info = core._fast_generate_audio_segment(
+        idx, audio, info, method = core._fast_generate_audio_segment(
             0, "Timing test", "af_heart", 1.0, "en-us", "req-timing"
         )
         total_duration = time.perf_counter() - start
@@ -534,7 +534,7 @@ class TestErrorHandling:
         mock_get_model.return_value = mock_model
 
         # Test
-        idx, audio, info = core._generate_audio_with_fallback(
+        idx, audio, info, method = core._generate_audio_with_fallback(
             0, "Test", "af_heart", 1.0, "en-us", "req-corrupt"
         )
 
@@ -546,7 +546,7 @@ class TestErrorHandling:
 
     def test_handles_whitespace_only_text(self):
         """Test handling of whitespace-only text."""
-        idx, audio, info = core._generate_audio_with_fallback(
+        idx, audio, info, method = core._generate_audio_with_fallback(
             0, "   ", "af_heart", 1.0, "en-us", "req-whitespace"
         )
 
@@ -602,7 +602,7 @@ class TestAcceptanceCriteriaAlignment:
 
         # Test - measure actual generation time
         start = time.perf_counter()
-        idx, result, info = core._fast_generate_audio_segment(
+        idx, result, info, method = core._fast_generate_audio_segment(
             0, "Short text", "af_heart", 1.0, "en-us", "req-a1"
         )
         duration = time.perf_counter() - start
@@ -631,7 +631,7 @@ class TestAcceptanceCriteriaAlignment:
         # Test - generate multiple segments (simulating streaming)
         segments = []
         for i in range(3):
-            idx, seg_audio, info = core._generate_audio_with_fallback(
+            idx, seg_audio, info, method = core._generate_audio_with_fallback(
                 i, f"Segment {i}", "af_heart", 1.0, "en-us", f"req-a2-{i}"
             )
             if seg_audio is not None:
@@ -667,7 +667,7 @@ class TestAcceptanceCriteriaAlignment:
 
         # Test - should not raise exception
         try:
-            idx, audio, info = core._generate_audio_with_fallback(
+            idx, audio, info, method = core._generate_audio_with_fallback(
                 0, "Error test", "af_heart", 1.0, "en-us", "req-a3"
             )
             
