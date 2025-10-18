@@ -315,57 +315,16 @@ def initialize_model_fast():
     if not is_model_loaded():
         raise RuntimeError("Fast initialization failed for all providers")
 
-    # Enhanced session warming to eliminate cold start penalty
+    # Optimized session warming to eliminate cold start penalty
     try:
         with step_timer("enhanced_session_warming"):
             model = get_model()
             if model:
-                # Perform multiple warming inferences to pre-compile execution paths
-                warming_texts = [
-                    "Hi",  # Very short - forces fast path compilation  
-                    "Hello world",  # Short - typical quick request
-                    "This is a test sentence to warm up the model."  # Medium - more graph paths
-                ]
+                # Apply optimized startup optimizations
+                from api.model.optimization.startup_optimizer_v2 import apply_startup_optimizations
+                apply_startup_optimizations(model, capabilities)
                 
-                for i, text in enumerate(warming_texts):
-                    try:
-                        start_warmup = time.perf_counter()
-                        model.create(text, "af_heart", 1.0, "en-us")
-                        warmup_time = (time.perf_counter() - start_warmup) * 1000
-                        logger.debug(f"Warming {i+1}/3: '{text[:20]}...' took {warmup_time:.1f}ms")
-                    except Exception as warmup_err:
-                        logger.debug(f"Warming {i+1}/3 failed: {warmup_err}")
-
-                logger.info("✅ Enhanced session warming completed - cold start eliminated")
-                
-                # CRITICAL: Pre-warm ALL model caches used by adaptive provider
-                # This prevents 2+ second cache misses when streaming switches providers
-                try:
-                    from api.tts.core import _get_cached_model
-                    logger.info(" Pre-warming model cache for adaptive provider scenarios...")
-                    adaptive_start = time.perf_counter()
-                    
-                    # Get the current active provider (already initialized)
-                    current_provider = "CoreMLExecutionProvider" if "CoreML" in str(model.__class__) else "CPUExecutionProvider"
-                    logger.debug(f"Current provider: {current_provider}")
-                    
-                    # ALWAYS pre-warm CPU model (for short text < 200 chars via adaptive provider)
-                    logger.info(" Pre-warming CPU model for short text...")
-                    cpu_model = _get_cached_model("CPUExecutionProvider")
-                    cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
-                    logger.debug("✅ CPU model cache ready")
-                    
-                    # ALWAYS pre-warm CoreML model (for medium/long text > 200 chars via adaptive provider)
-                    logger.info(" Pre-warming CoreML model for medium/long text...")
-                    coreml_model = _get_cached_model("CoreMLExecutionProvider")
-                    coreml_model.create("This is a longer test to warm up CoreML", "af_heart", 1.0, "en-us")
-                    logger.debug("✅ CoreML model cache ready")
-                    
-                    adaptive_time = (time.perf_counter() - adaptive_start) * 1000
-                    logger.info(f"✅ Adaptive provider cache pre-warming completed in {adaptive_time:.1f}ms")
-                    
-                except Exception as adaptive_err:
-                    logger.debug(f"Adaptive provider cache pre-warming failed: {adaptive_err}")
+                logger.info("✅ Optimized session warming completed - cold start eliminated")
     except Exception as e:
         logger.debug(f"Enhanced session warming failed: {e}")
 
@@ -416,7 +375,8 @@ def initialize_model_fast():
             logger.info(" Use KOKORO_DEFER_BACKGROUND_INIT=false to enable background initialization")
         else:
             logger.info(f" Starting dual session manager initialization (disable_dual_sessions={disable_dual_sessions})")
-            _initialize_heavy_components_async(capabilities)
+            # Heavy components initialization is now handled by the optimized startup manager
+            logger.debug("Heavy components initialization delegated to optimized startup manager")
     else:
         logger.info(f" Dual session manager initialization skipped (disable_dual_sessions={disable_dual_sessions})")
     
