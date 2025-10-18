@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service identification -->
+    <key>Label</key>
+    <string>com.kokoro.tts</string>
+    
+    <!-- Service description -->
+    <key>Description</key>
+    <string>Kokoro TTS Service - Text-to-Speech API Server</string>
+    
+    <!-- Program to execute -->
+    <key>Program</key>
+    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/scripts/autostart/kokoro-tts-startup.sh</string>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx</string>
+    
+    <!-- Run at load (when service is loaded) -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep the service running (restart if it crashes) -->
+    <key>KeepAlive</key>
+    <true/>
+    
+    <!-- Standard output and error logging -->
+    <key>StandardOutPath</key>
+    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/logs/launchd.out.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/logs/launchd.err.log</string>
+    
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>/Users/darianrosebrook</string>
+        <key>USER</key>
+        <string>darianrosebrook</string>
+        <key>KOKORO_AUTOSTART</key>
+        <string>true</string>
+        <key>KOKORO_PRODUCTION</key>
+        <string>true</string>
+    </dict>
+    
+    <!-- Process type -->
+    <key>ProcessType</key>
+    <string>Background</string>
+    
+    <!-- Nice level (lower priority to not interfere with system) -->
+    <key>Nice</key>
+    <integer>1</integer>
+    
+    <!-- Start only after network is available -->
+    <key>LaunchOnlyOnce</key>
+    <false/>
+    
+    <!-- Wait for network before starting -->
+    <key>LaunchOnlyOnce</key>
+    <false/>
+    
+    <!-- Throttle interval for restart attempts -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <!-- Exit timeout (seconds to wait for graceful shutdown) -->
+    <key>ExitTimeOut</key>
+    <integer>30</integer>
+</dict>
+</plist>
