@@ -393,13 +393,17 @@ def setup_application_logging():
 
             def emit_with_flush(record):
                 try:
+                    # Check if stream is closed before attempting to emit
+                    if handler.stream and handler.stream.closed:
+                        return
                     original_emit(record)
                     if handler.stream and not handler.stream.closed:
                         handler.stream.flush()
                     # Also force stdout flush
                     sys.stdout.flush()
-                except Exception:
+                except (ValueError, OSError, AttributeError) as e:
                     # Ignore all logging errors during cleanup (e.g., "I/O operation on closed file")
+                    # These are expected during test cleanup when file handles are closed
                     pass
             handler.emit = emit_with_flush
 
