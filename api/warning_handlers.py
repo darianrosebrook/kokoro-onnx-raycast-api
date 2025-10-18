@@ -550,7 +550,7 @@ def setup_coreml_warning_handler():
     To enable detailed warning logging for debugging:
     ```python
     import logging
-    logging.getLogger("api.warnings").setLevel(logging.DEBUG)
+    logging.getLogger("api.warning_handlers").setLevel(logging.DEBUG)
     ```
     
     ### Monitoring

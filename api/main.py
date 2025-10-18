@@ -206,7 +206,7 @@ from api.security import SecurityMiddleware, SecurityConfig
 import soundfile as sf
 
 from api.config import TTSConfig, TTSRequest
-from api.warnings import setup_coreml_warning_handler, configure_onnx_runtime_logging, suppress_phonemizer_warnings
+from api.warning_handlers import setup_coreml_warning_handler, configure_onnx_runtime_logging, suppress_phonemizer_warnings
 from api.model.patch import apply_all_patches, get_patch_status
 from api.model.loader import (
     initialize_model_fast as initialize_model_sync,
@@ -219,7 +219,7 @@ from api.tts.core import _generate_audio_segment, stream_tts_audio, get_tts_proc
 from api.tts.core import get_primer_microcache_stats
 from api.utils.cache_cleanup import cleanup_cache, get_cache_info
 from api.tts.text_processing import segment_text
-from api.warnings import suppress_phonemizer_warnings, configure_onnx_runtime_logging
+from api.warning_handlers import suppress_phonemizer_warnings, configure_onnx_runtime_logging
 from functools import lru_cache
 
 
@@ -1777,7 +1777,7 @@ async def get_coreml_memory_status():
     """
     try:
         from api.model.providers.coreml import get_coreml_memory_status
-        from api.warnings import get_context_leak_suppression_status
+        from api.warning_handlers import get_context_leak_suppression_status
         from api.performance.stats import get_performance_stats
         
         # Get memory management status
@@ -1988,7 +1988,7 @@ async def get_warning_statistics():
     @returns JSON object with warning suppression statistics
     """
     try:
-        from api.warnings import get_warning_suppression_stats
+        from api.warning_handlers import get_warning_suppression_stats
 
         stats = get_warning_suppression_stats()
 
@@ -2103,7 +2103,7 @@ async def get_status():
 
         # Add warning suppression information
         try:
-            from api.warnings import get_warning_suppression_stats
+            from api.warning_handlers import get_warning_suppression_stats
             warning_stats = get_warning_suppression_stats()
             status["warning_suppression"] = {
                 "active": warning_stats.get("stderr_interceptor_active", False),
