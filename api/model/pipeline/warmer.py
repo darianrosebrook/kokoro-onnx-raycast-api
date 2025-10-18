@@ -436,7 +436,7 @@ class InferencePipelineWarmer:
                 try:
                     optimization_stats = dynamic_memory_manager.get_optimization_stats()
                     results['memory_efficiency'] = optimization_stats.get(
-                        'optimization_factors', {}).get('workload_multiplier', 0.0)
+                        'recent_avg_performance', 0.0)
                     results['current_arena_size'] = optimization_stats.get(
                         'current_arena_size_mb', 0)
                 except Exception as e:
