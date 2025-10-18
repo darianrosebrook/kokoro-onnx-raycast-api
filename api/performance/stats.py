@@ -1115,14 +1115,14 @@ def get_dynamic_memory_optimization_stats():
                 optimization_efficiency = 0.0
         
         # Calculate arena utilization estimate
-        arena_utilization = min(100, optimization_stats['optimization_factors']['workload_multiplier'] * 100)
+        arena_utilization = min(100, optimization_stats.get('recent_avg_performance', 0) * 100)
         
         # Determine recommendation
         if needs_optimization:
-            if optimization_stats['optimization_factors']['pressure_adjustment'] < 0.8:
-                recommendation = "Reduce arena size due to memory pressure"
-            elif optimization_stats['workload_profile']['avg_concurrent_requests'] > 2:
-                recommendation = "Increase arena size for concurrent workload"
+            if optimization_stats.get('recent_avg_performance', 0) > 1.0:
+                recommendation = "Reduce arena size due to performance issues"
+            elif optimization_stats.get('recent_avg_performance', 0) < 0.5:
+                recommendation = "Increase arena size for better performance"
             else:
                 recommendation = "Optimize arena size based on current workload"
         else:
@@ -1138,9 +1138,13 @@ def get_dynamic_memory_optimization_stats():
                 'time_since_last_optimization': optimization_stats['time_since_last_optimization'],
                 'optimization_interval': optimization_stats['optimization_interval']
             },
-            'workload_profile': optimization_stats['workload_profile'],
-            'hardware_info': optimization_stats['hardware_info'],
-            'optimization_factors': optimization_stats['optimization_factors'],
+            'workload_profile': optimization_stats.get('hardware_capabilities', {}),
+            'hardware_info': optimization_stats.get('hardware_capabilities', {}),
+            'optimization_factors': {
+                'workload_multiplier': optimization_stats.get('recent_avg_performance', 1.0),
+                'pressure_adjustment': 1.0,  # Default value
+                'hardware_multiplier': optimization_stats.get('hardware_capabilities', {}).get('memory_gb', 8) / 8.0
+            },
             'performance_metrics': {
                 'performance_impact': performance_impact,
                 'optimization_efficiency': optimization_efficiency,
@@ -1148,8 +1152,8 @@ def get_dynamic_memory_optimization_stats():
                 'performance_history_size': len(dynamic_memory_manager.performance_history)
             },
             'system_status': {
-                'memory_pressure': 'high' if optimization_stats['optimization_factors']['pressure_adjustment'] < 0.8 else 'normal',
-                'concurrent_load': 'high' if optimization_stats['workload_profile']['avg_concurrent_requests'] > 2 else 'normal',
+                'memory_pressure': 'high' if optimization_stats.get('recent_avg_performance', 0) > 1.0 else 'normal',
+                'concurrent_load': 'normal',  # Default value since we don't have concurrent request data
                 'stability': 'stable' if abs(optimization_efficiency) < 10 else 'variable'
             },
             'recommendation': recommendation

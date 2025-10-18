@@ -61,6 +61,11 @@ class MemoryFragmentationWatchdog:
         self.cleanup_interval = 14400.0  # 4 hours (was 1 hour)
         self.memory_pressure_threshold = 0.95  # 95% memory usage (was 85%)
         self.logger = logging.getLogger(__name__ + ".MemoryFragmentationWatchdog")
+        
+        # Add missing attributes for compatibility
+        self.memory_usage_history = []
+        self.request_count = 0
+        self.cleanup_count = 0
     
     def check_memory_pressure(self) -> bool:
         """Check if system is under memory pressure."""
@@ -121,6 +126,29 @@ class MemoryFragmentationWatchdog:
             
         except Exception as e:
             self.logger.warning(f"Memory cleanup failed: {e}")
+    
+    def _get_memory_usage(self) -> float:
+        """
+        Get current memory usage in MB.
+        
+        @returns float: Memory usage in MB
+        """
+        try:
+            import psutil
+            process = psutil.Process()
+            memory_mb = process.memory_info().rss / (1024 * 1024)  # Convert to MB
+            
+            # Track memory usage history for trend analysis
+            self.memory_usage_history.append(memory_mb)
+            if len(self.memory_usage_history) > 100:  # Keep last 100 readings
+                self.memory_usage_history.pop(0)
+            
+            return memory_mb
+        except ImportError:
+            return 0.0
+        except Exception as e:
+            self.logger.debug(f"Could not get memory usage: {e}")
+            return 0.0
 
 
 class DualSessionManager:

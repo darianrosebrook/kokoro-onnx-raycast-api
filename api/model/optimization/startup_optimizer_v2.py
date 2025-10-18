@@ -314,12 +314,41 @@ class OptimizedStartupManager:
     def _init_pipeline_warmer(self) -> None:
         """Initialize pipeline warmer."""
         from api.model.pipeline.warmer import initialize_pipeline_warmer
+        from api.model.optimization.pipeline_warmer_fix import fix_pipeline_warmer_initialization
+        
+        # Initialize the pipeline warmer
         initialize_pipeline_warmer()
+        
+        # Fix the initialization by triggering warm-up
+        fix_result = fix_pipeline_warmer_initialization()
+        if fix_result.get("status") == "completed":
+            self.logger.info("✅ Pipeline warmer initialization fixed and completed")
+        elif fix_result.get("status") == "scheduled":
+            self.logger.info("🔄 Pipeline warmer initialization scheduled in background")
+        else:
+            self.logger.debug(f"Pipeline warmer fix result: {fix_result}")
     
     def _init_real_time_optimizer(self) -> None:
         """Initialize real-time optimizer."""
         from api.performance.optimization import initialize_real_time_optimizer
+        from api.model.optimization.real_time_optimizer_fix import fix_real_time_optimizer_initialization, trigger_initial_optimization
+        
+        # Initialize the real-time optimizer
         initialize_real_time_optimizer()
+        
+        # Fix the initialization by activating it
+        fix_result = fix_real_time_optimizer_initialization()
+        if fix_result.get("status") == "activated":
+            self.logger.info("✅ Real-time optimizer activated successfully")
+            
+            # Trigger initial optimization with baseline metrics
+            init_result = trigger_initial_optimization()
+            if init_result.get("status") == "baseline_recorded":
+                self.logger.info("✅ Baseline metrics recorded for real-time optimizer")
+        elif fix_result.get("status") == "already_active":
+            self.logger.info("✅ Real-time optimizer already active")
+        else:
+            self.logger.debug(f"Real-time optimizer fix result: {fix_result}")
     
     def get_optimization_summary(self) -> Dict[str, Any]:
         """Get summary of applied optimizations."""
