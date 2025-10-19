@@ -2711,17 +2711,111 @@ async def create_speech_merged(request: Request, tts_request: TTSRequest, config
 
         return StreamingResponse(generator, media_type=media_type)
 
-    # TODO: Implement non-streaming mode for merged endpoint
-    # - [ ] Implement buffering logic for non-streaming audio generation
-    # - [ ] Add format conversion and validation for non-streaming responses
-    # - [ ] Implement proper error handling for non-streaming failures
-    # - [ ] Add performance monitoring for non-streaming requests
-    # - [ ] Update API documentation to reflect non-streaming support
+    # Non-streaming mode: Generate complete audio and return as single response
     else:
-        raise HTTPException(
-            status_code=501,
-            detail="Non-streaming mode not implemented for merged endpoint. Use stream=true."
-        )
+        try:
+            # Performance monitoring start
+            start_time = time.time()
+            logger.info(f"Starting non-streaming TTS request for {len(tts_request.text)} characters")
+
+            # Normalize language to avoid espeak backend errors
+            normalized_lang = (tts_request.lang or "en-us").lower()
+            if normalized_lang in ("en", "en_us", "en-us-001"):
+                normalized_lang = "en-us"
+
+            # Generate complete audio using merged core implementation
+            audio_data = await generate_complete_audio_non_streaming(
+                text=tts_request.text,
+                voice=tts_request.voice,
+                speed=tts_request.speed,
+                lang=normalized_lang,
+                format=tts_request.format,
+                no_cache=tts_request.no_cache,
+                request=request
+            )
+
+            # Performance monitoring end
+            processing_time = time.time() - start_time
+            audio_size_mb = len(audio_data) / (1024 * 1024)
+
+            logger.info(
+                f"Non-streaming TTS completed: {processing_time:.2f}s, "
+                f"{audio_size_mb:.2f}MB audio generated"
+            )
+
+            # Determine appropriate MIME type
+            media_type = (
+                "audio/wav"
+                if tts_request.format == "wav"
+                else "audio/L16;rate=24000;channels=1"
+            )
+
+            # Return complete audio response
+            return Response(
+                content=audio_data,
+                media_type=media_type,
+                headers={
+                    "X-Processing-Time": f"{processing_time:.2f}s",
+                    "X-Audio-Size": f"{audio_size_mb:.2f}MB",
+                    "X-Characters-Processed": str(len(tts_request.text)),
+                    "X-TTS-Format": tts_request.format,
+                    "X-TTS-Voice": tts_request.voice
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Non-streaming TTS generation failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"TTS generation failed: {str(e)}"
+            )
+
+
+async def generate_complete_audio_non_streaming(
+    text: str,
+    voice: str,
+    speed: float,
+    lang: str,
+    format: str,
+    no_cache: bool,
+    request: Request
+) -> bytes:
+    """
+    Generate complete TTS audio data without streaming for non-streaming responses.
+
+    This function collects all audio chunks from the streaming generator and
+    returns them as a single complete audio file.
+
+    @param text: Text to convert to speech
+    @param voice: Voice identifier to use
+    @param speed: Speech speed multiplier
+    @param lang: Language code for text processing
+    @param format: Audio format (wav or pcm)
+    @param no_cache: Whether to bypass audio caching
+    @param request: FastAPI request object for tracking
+    @returns bytes: Complete audio data
+    """
+    logger.debug(f"Generating complete non-streaming audio for {len(text)} characters")
+
+    # Use the existing streaming generator but collect all chunks
+    audio_chunks = []
+    total_size = 0
+
+    try:
+        async for chunk in stream_tts_audio(text, voice, speed, lang, format, request, no_cache):
+            audio_chunks.append(chunk)
+            total_size += len(chunk)
+            logger.debug(f"Collected audio chunk: {len(chunk)} bytes (total: {total_size:,} bytes)")
+
+        # Combine all chunks into complete audio data
+        complete_audio = b''.join(audio_chunks)
+
+        logger.info(f"Non-streaming audio generation complete: {len(complete_audio):,} bytes total")
+        return complete_audio
+
+    except Exception as e:
+        logger.error(f"Failed to generate complete non-streaming audio: {e}")
+        raise
 
 
 # Add compatibility endpoints for Open WebUI

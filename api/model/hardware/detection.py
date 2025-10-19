@@ -206,9 +206,14 @@ def detect_apple_silicon_capabilities() -> Dict[str, Any]:
         capabilities['provider_priority'] = ['CPUExecutionProvider']
         capabilities['recommended_provider'] = 'CPUExecutionProvider'
 
+    # Determine optimization level based on hardware capabilities
+    optimization_level = determine_optimization_level(capabilities)
+    capabilities['optimization_level'] = optimization_level
+    capabilities['quantization_enabled'] = should_enable_quantization(capabilities)
+
     # Log key capabilities (condensed for cleaner output)
     logger.info(
-        f" Hardware: {capabilities.get('chip_family', 'Unknown')} | Neural Engine: {'✅' if capabilities['has_neural_engine'] else ''} | Provider: {capabilities['recommended_provider']}")
+        f" Hardware: {capabilities.get('chip_family', 'Unknown')} | Neural Engine: {'✅' if capabilities['has_neural_engine'] else ''} | Provider: {capabilities['recommended_provider']} | Optimization: {optimization_level}")
 
     if capabilities['hardware_issues']:
         logger.warning(
@@ -242,6 +247,75 @@ def clear_hardware_capabilities_cache() -> None:
     global _capabilities_cache
     _capabilities_cache = None
     logging.getLogger(__name__).debug(" Cleared hardware capabilities cache")
+
+
+def determine_optimization_level(capabilities: Dict[str, Any]) -> str:
+    """
+    Determine the appropriate optimization level based on hardware capabilities.
+
+    @param capabilities: Hardware capabilities dictionary
+    @returns str: Optimization level ('basic', 'standard', 'aggressive', 'maximum')
+    """
+    try:
+        # Base level on hardware capabilities
+        neural_engine_cores = capabilities.get('neural_engine_cores', 0)
+        memory_gb = capabilities.get('memory_gb', 8)
+        cpu_cores = capabilities.get('cpu_cores', 4)
+        has_cuda = capabilities.get('has_cuda', False)
+        has_tensorrt = capabilities.get('has_tensorrt', False)
+
+        # Maximum optimization for high-end hardware
+        if neural_engine_cores >= 32 or (has_cuda and memory_gb >= 16) or has_tensorrt:
+            return 'maximum'
+
+        # Aggressive optimization for good hardware
+        if neural_engine_cores >= 16 or (has_cuda and memory_gb >= 8) or memory_gb >= 32:
+            return 'aggressive'
+
+        # Standard optimization for decent hardware
+        if neural_engine_cores >= 8 or cpu_cores >= 8 or memory_gb >= 16:
+            return 'standard'
+
+        # Basic optimization for minimal hardware
+        return 'basic'
+
+    except Exception as e:
+        logger.debug(f"Failed to determine optimization level: {e}")
+        return 'basic'
+
+
+def should_enable_quantization(capabilities: Dict[str, Any]) -> bool:
+    """
+    Determine if quantization should be enabled based on hardware capabilities.
+
+    @param capabilities: Hardware capabilities dictionary
+    @returns bool: Whether to enable quantization
+    """
+    try:
+        # Enable quantization for capable systems
+        neural_engine_cores = capabilities.get('neural_engine_cores', 0)
+        has_cuda = capabilities.get('has_cuda', False)
+        cpu_cores = capabilities.get('cpu_cores', 4)
+        memory_gb = capabilities.get('memory_gb', 8)
+
+        # Always enable for Apple Silicon with Neural Engine
+        if neural_engine_cores > 0:
+            return True
+
+        # Enable for high-end GPUs
+        if has_cuda and memory_gb >= 8:
+            return True
+
+        # Enable for multi-core CPUs with sufficient memory
+        if cpu_cores >= 8 and memory_gb >= 16:
+            return True
+
+        # Conservative: disable quantization for basic hardware
+        return False
+
+    except Exception as e:
+        logger.debug(f"Failed to determine quantization setting: {e}")
+        return False
 
 
 @lru_cache(maxsize=8)
