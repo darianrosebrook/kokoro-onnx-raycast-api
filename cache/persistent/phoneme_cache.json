@@ -1,6 +1,6 @@
 {
   "cache_type": "phoneme_cache",
-  "timestamp": 1760914195.913223,
+  "timestamp": 1760914795.93506,
   "entries_count": 14,
   "version": "1.0",
   "data": {
@@ -322,5 +322,5 @@
       "fast_path"
     ]
   },
-  "checksum": "a8de47f16c0f6e8a5ddf6f5f1bcab89b6ec8790ecdfe1f08ea481243387774b1"
+  "checksum": "e95cb469fae8007edc6106a0dd9a900265538bcda04640588405bf8bc1984cd8"
 }

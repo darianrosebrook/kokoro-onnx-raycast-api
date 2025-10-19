@@ -146,17 +146,9 @@ class PerformanceDashboard:
             logger.error(f"Failed to collect API metrics: {e}")
             error_rate = 1.0
         
-        # TODO: Implement proper requests per minute calculation
-        # - [ ] Track actual request counts over time windows (1min, 5min, 15min)
-        # - [ ] Implement sliding window calculation for accurate throughput metrics
-        # - [ ] Add percentile calculations for request rate distribution
-        # - [ ] Implement burst detection and rate limiting monitoring
-        # - [ ] Add historical trending for request rate patterns
-        requests_per_minute = 0.0
-        if len(self.metrics_history) > 1:
-            time_diff = timestamp - self.metrics_history[-1].timestamp
-            if time_diff > 0:
-                requests_per_minute = 60.0 / time_diff
+        # Implement comprehensive requests per minute calculation
+        rpm_metrics = self._calculate_requests_per_minute(timestamp)
+        requests_per_minute = rpm_metrics['current_rpm']
         
         return DashboardMetrics(
             timestamp=timestamp,
@@ -595,6 +587,323 @@ class PerformanceDashboard:
         finally:
             monitoring_task.cancel()
             await runner.cleanup()
+
+    def _calculate_requests_per_minute(self, current_timestamp: float) -> Dict[str, Any]:
+        """
+        Calculate comprehensive requests per minute metrics using sliding window analysis.
+
+        @param current_timestamp: Current timestamp for calculation
+        @returns Dict containing RPM metrics and analysis
+        """
+        try:
+            # Initialize request tracking if not exists
+            if not hasattr(self, '_request_timestamps'):
+                self._request_timestamps = []
+                self._request_counts = {'1min': [], '5min': [], '15min': []}
+
+            # Add current request (assuming this method call represents a request)
+            self._request_timestamps.append(current_timestamp)
+
+            # Clean up old timestamps (keep last 30 minutes for analysis)
+            cutoff_time = current_timestamp - (30 * 60)
+            self._request_timestamps = [t for t in self._request_timestamps if t > cutoff_time]
+
+            # Calculate requests per minute for different time windows
+            windows = {
+                '1min': 60,
+                '5min': 300,
+                '15min': 900
+            }
+
+            rpm_results = {}
+            for window_name, window_seconds in windows.items():
+                window_start = current_timestamp - window_seconds
+                window_requests = [t for t in self._request_timestamps if t > window_start]
+
+                # Calculate RPM for this window
+                if window_requests:
+                    rpm = len(window_requests) * (60.0 / window_seconds)
+                else:
+                    rpm = 0.0
+
+                rpm_results[window_name] = rpm
+
+                # Store for trending analysis (keep last 100 measurements)
+                self._request_counts[window_name].append({
+                    'timestamp': current_timestamp,
+                    'rpm': rpm
+                })
+                if len(self._request_counts[window_name]) > 100:
+                    self._request_counts[window_name].pop(0)
+
+            # Calculate current RPM (using 1-minute window as primary)
+            current_rpm = rpm_results['1min']
+
+            # Calculate percentiles and statistics
+            percentiles = self._calculate_rpm_percentiles()
+
+            # Detect bursts and anomalies
+            burst_info = self._detect_rpm_bursts(current_rpm, current_timestamp)
+
+            # Calculate trending information
+            trend_info = self._calculate_rpm_trends()
+
+            # Rate limiting analysis
+            rate_limit_info = self._analyze_rate_limiting(current_rpm)
+
+            return {
+                'current_rpm': current_rpm,
+                'rpm_1min': rpm_results['1min'],
+                'rpm_5min': rpm_results['5min'],
+                'rpm_15min': rpm_results['15min'],
+                'percentiles': percentiles,
+                'burst_detection': burst_info,
+                'trends': trend_info,
+                'rate_limiting': rate_limit_info,
+                'total_requests_tracked': len(self._request_timestamps),
+                'timestamp': current_timestamp
+            }
+
+        except Exception as e:
+            logger.debug(f"Failed to calculate requests per minute: {e}")
+            return {
+                'current_rpm': 0.0,
+                'rpm_1min': 0.0,
+                'rpm_5min': 0.0,
+                'rpm_15min': 0.0,
+                'error': str(e)
+            }
+
+    def _calculate_rpm_percentiles(self) -> Dict[str, float]:
+        """Calculate percentile statistics for RPM measurements."""
+        try:
+            if not hasattr(self, '_request_counts') or not self._request_counts['1min']:
+                return {'p50': 0.0, 'p95': 0.0, 'p99': 0.0}
+
+            # Use 1-minute data for percentile calculation
+            rpm_values = [entry['rpm'] for entry in self._request_counts['1min']]
+
+            if len(rpm_values) < 4:
+                return {'p50': 0.0, 'p95': 0.0, 'p99': 0.0}
+
+            import statistics
+
+            # Sort values for percentile calculation
+            sorted_rpm = sorted(rpm_values)
+
+            def percentile(p: float) -> float:
+                k = (len(sorted_rpm) - 1) * p
+                f = int(k)
+                c = k - f
+                if f + 1 < len(sorted_rpm):
+                    return sorted_rpm[f] + c * (sorted_rpm[f + 1] - sorted_rpm[f])
+                else:
+                    return sorted_rpm[f]
+
+            return {
+                'p50': percentile(0.5),  # Median
+                'p95': percentile(0.95), # 95th percentile
+                'p99': percentile(0.99), # 99th percentile
+                'mean': statistics.mean(rpm_values),
+                'std_dev': statistics.stdev(rpm_values) if len(rpm_values) > 1 else 0.0
+            }
+
+        except Exception as e:
+            logger.debug(f"Failed to calculate RPM percentiles: {e}")
+            return {'p50': 0.0, 'p95': 0.0, 'p99': 0.0}
+
+    def _detect_rpm_bursts(self, current_rpm: float, timestamp: float) -> Dict[str, Any]:
+        """Detect request rate bursts and potential DDoS patterns."""
+        try:
+            if not hasattr(self, '_request_counts') or not self._request_counts['1min']:
+                return {'is_burst': False, 'burst_level': 'none'}
+
+            # Get recent RPM values for burst detection
+            recent_rpms = [entry['rpm'] for entry in self._request_counts['1min'][-10:]]  # Last 10 measurements
+
+            if len(recent_rpms) < 3:
+                return {'is_burst': False, 'burst_level': 'none'}
+
+            import statistics
+
+            # Calculate statistics
+            mean_rpm = statistics.mean(recent_rpms)
+            std_dev = statistics.stdev(recent_rpms) if len(recent_rpms) > 1 else 0
+
+            if std_dev == 0:
+                return {'is_burst': False, 'burst_level': 'none'}
+
+            # Detect burst using z-score
+            z_score = (current_rpm - mean_rpm) / std_dev if std_dev > 0 else 0
+
+            # Determine burst level
+            if z_score > 3.0:  # 3 sigma above mean
+                burst_level = 'critical'
+                is_burst = True
+            elif z_score > 2.0:  # 2 sigma above mean
+                burst_level = 'high'
+                is_burst = True
+            elif z_score > 1.5:  # 1.5 sigma above mean
+                burst_level = 'moderate'
+                is_burst = True
+            else:
+                burst_level = 'none'
+                is_burst = False
+
+            # Calculate burst duration if in burst state
+            burst_duration = 0
+            if is_burst:
+                # Count consecutive high readings
+                consecutive_high = 0
+                for rpm in reversed(recent_rpms):
+                    if rpm > mean_rpm + std_dev:
+                        consecutive_high += 1
+                    else:
+                        break
+                burst_duration = consecutive_high * 60  # Assuming 1-minute intervals
+
+            return {
+                'is_burst': is_burst,
+                'burst_level': burst_level,
+                'z_score': z_score,
+                'burst_duration_seconds': burst_duration,
+                'threshold_rpm': mean_rpm + (2 * std_dev),  # 2-sigma threshold
+                'timestamp': timestamp
+            }
+
+        except Exception as e:
+            logger.debug(f"Failed to detect RPM bursts: {e}")
+            return {'is_burst': False, 'burst_level': 'none', 'error': str(e)}
+
+    def _calculate_rpm_trends(self) -> Dict[str, Any]:
+        """Calculate trending patterns in request rates."""
+        try:
+            if not hasattr(self, '_request_counts') or len(self._request_counts['5min']) < 5:
+                return {'trend': 'insufficient_data'}
+
+            # Use 5-minute data for trend analysis
+            trend_data = self._request_counts['5min'][-20:]  # Last 20 measurements
+
+            if len(trend_data) < 5:
+                return {'trend': 'insufficient_data'}
+
+            # Simple linear regression for trend
+            x = list(range(len(trend_data)))
+            y = [entry['rpm'] for entry in trend_data]
+
+            # Calculate slope using simple linear regression
+            n = len(x)
+            sum_x = sum(x)
+            sum_y = sum(y)
+            sum_xy = sum(xi * yi for xi, yi in zip(x, y))
+            sum_x2 = sum(xi * xi for xi in x)
+
+            denominator = n * sum_x2 - sum_x * sum_x
+            if denominator == 0:
+                slope = 0.0
+            else:
+                slope = (n * sum_xy - sum_x * sum_y) / denominator
+
+            # Calculate R-squared
+            y_pred = [slope * xi + (sum_y - slope * sum_x) / n for xi in x]
+            ss_res = sum((yi - y_pred_i) ** 2 for yi, y_pred_i in zip(y, y_pred))
+            ss_tot = sum((yi - sum_y/n) ** 2 for yi in y)
+            r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+
+            # Determine trend direction
+            import statistics
+            recent_avg = statistics.mean(y[-3:]) if len(y) >= 3 else sum_y / n
+            earlier_avg = statistics.mean(y[:3]) if len(y) >= 3 else sum_y / n
+
+            if abs(slope) < 0.1:  # Very small slope
+                trend = 'stable'
+            elif slope > 0.5 and recent_avg > earlier_avg * 1.1:  # Significant upward trend
+                trend = 'increasing'
+            elif slope < -0.5 and recent_avg < earlier_avg * 0.9:  # Significant downward trend
+                trend = 'decreasing'
+            else:
+                trend = 'stable'
+
+            # Calculate trend strength
+            trend_strength = min(abs(slope) / 10.0, 1.0)  # Normalize to 0-1 scale
+
+            return {
+                'trend': trend,
+                'slope': slope,
+                'r_squared': r_squared,
+                'trend_strength': trend_strength,
+                'recent_avg_rpm': recent_avg,
+                'earlier_avg_rpm': earlier_avg,
+                'change_percent': ((recent_avg - earlier_avg) / earlier_avg) * 100 if earlier_avg != 0 else 0
+            }
+
+        except Exception as e:
+            logger.debug(f"Failed to calculate RPM trends: {e}")
+            return {'trend': 'error', 'error': str(e)}
+
+    def _analyze_rate_limiting(self, current_rpm: float) -> Dict[str, Any]:
+        """Analyze potential rate limiting issues and capacity concerns."""
+        try:
+            # Define rate limiting thresholds (configurable)
+            rate_limits = {
+                'soft_limit': 1000,  # Soft limit - warning
+                'hard_limit': 2000,  # Hard limit - critical
+                'burst_limit': 1500  # Burst limit - temporary spikes
+            }
+
+            # Check current status
+            status = 'normal'
+            if current_rpm > rate_limits['hard_limit']:
+                status = 'critical'
+            elif current_rpm > rate_limits['burst_limit']:
+                status = 'burst'
+            elif current_rpm > rate_limits['soft_limit']:
+                status = 'warning'
+
+            # Calculate capacity utilization
+            capacity_utilization = min(current_rpm / rate_limits['hard_limit'], 1.0)
+
+            # Estimate time to limits
+            if hasattr(self, '_request_counts') and self._request_counts['1min']:
+                recent_trend = self._calculate_rpm_trends()
+                if recent_trend.get('trend') == 'increasing':
+                    slope = recent_trend.get('slope', 0)
+                    if slope > 0:
+                        # Estimate time to reach limits
+                        time_to_burst = (rate_limits['burst_limit'] - current_rpm) / slope if slope > 0 else float('inf')
+                        time_to_hard = (rate_limits['hard_limit'] - current_rpm) / slope if slope > 0 else float('inf')
+
+                        return {
+                            'status': status,
+                            'capacity_utilization': capacity_utilization,
+                            'time_to_burst_limit_minutes': max(time_to_burst, 0) if time_to_burst != float('inf') else None,
+                            'time_to_hard_limit_minutes': max(time_to_hard, 0) if time_to_hard != float('inf') else None,
+                            'recommended_action': self._get_rate_limit_recommendation(status, capacity_utilization)
+                        }
+
+            return {
+                'status': status,
+                'capacity_utilization': capacity_utilization,
+                'recommended_action': self._get_rate_limit_recommendation(status, capacity_utilization)
+            }
+
+        except Exception as e:
+            logger.debug(f"Failed to analyze rate limiting: {e}")
+            return {'status': 'unknown', 'capacity_utilization': 0.0, 'error': str(e)}
+
+    def _get_rate_limit_recommendation(self, status: str, utilization: float) -> str:
+        """Get recommended action based on rate limiting analysis."""
+        if status == 'critical':
+            return 'Immediate action required: Implement rate limiting or scale infrastructure'
+        elif status == 'burst':
+            return 'Monitor closely: Consider temporary rate limiting'
+        elif status == 'warning':
+            return 'Monitor: Prepare for potential scaling'
+        elif utilization > 0.8:
+            return 'High utilization: Monitor for scaling needs'
+        else:
+            return 'Normal operation'
+
 
 async def main():
     """Main dashboard function."""

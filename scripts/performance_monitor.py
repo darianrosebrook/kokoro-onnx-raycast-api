@@ -323,11 +323,18 @@ class PerformanceMonitor:
         if not recent_metrics:
             return {"error": "No recent metrics available"}
         
+        # Initialize historical data collection
+        self._ensure_historical_storage()
+
+        # Store current metrics in historical database
+        self._store_metrics_historical(recent_metrics)
+
         summary = {
             "window_minutes": window_minutes,
             "sample_count": len(recent_metrics),
             "timestamp": time.time(),
-            "metrics": {}
+            "metrics": {},
+            "historical_trends": self._calculate_historical_trends(window_minutes)
         }
         
         # Calculate statistics for each metric
@@ -357,6 +364,374 @@ class PerformanceMonitor:
             json.dump(metrics_data, f, indent=2)
         
         logger.info(f"Metrics saved to {output_file}")
+
+    def _ensure_historical_storage(self) -> None:
+        """Ensure historical data storage is initialized."""
+        try:
+            import os
+            from pathlib import Path
+
+            # Create historical data directory
+            historical_dir = Path('cache/persistent/historical')
+            historical_dir.mkdir(parents=True, exist_ok=True)
+
+            # Initialize historical database if it doesn't exist
+            db_path = historical_dir / 'metrics_history.db'
+            if not db_path.exists():
+                self._initialize_historical_database(db_path)
+
+        except Exception as e:
+            logger.debug(f"Failed to ensure historical storage: {e}")
+
+    def _initialize_historical_database(self, db_path: Path) -> None:
+        """Initialize the historical metrics database."""
+        try:
+            import sqlite3
+
+            with sqlite3.connect(str(db_path)) as conn:
+                cursor = conn.cursor()
+
+                # Create metrics table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS metrics (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp REAL NOT NULL,
+                        metric_name TEXT NOT NULL,
+                        value REAL NOT NULL,
+                        metadata TEXT,
+                        created_at REAL DEFAULT (strftime('%s', 'now'))
+                    )
+                ''')
+
+                # Create trends table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS trends (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        metric_name TEXT NOT NULL,
+                        period_start REAL NOT NULL,
+                        period_end REAL NOT NULL,
+                        trend_type TEXT NOT NULL,
+                        slope REAL,
+                        r_squared REAL,
+                        significance REAL,
+                        created_at REAL DEFAULT (strftime('%s', 'now'))
+                    )
+                ''')
+
+                # Create indexes for performance
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_metrics_name ON metrics(metric_name)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_trends_metric ON trends(metric_name)')
+
+                conn.commit()
+
+        except Exception as e:
+            logger.error(f"Failed to initialize historical database: {e}")
+
+    def _store_metrics_historical(self, metrics: List[PerformanceMetrics]) -> None:
+        """Store metrics in historical database."""
+        try:
+            import sqlite3
+            from pathlib import Path
+
+            db_path = Path('cache/persistent/historical/metrics_history.db')
+
+            with sqlite3.connect(str(db_path)) as conn:
+                cursor = conn.cursor()
+
+                # Prepare metrics data for batch insert
+                metrics_data = []
+                for metric in metrics:
+                    metrics_data.extend([
+                        (metric.timestamp, 'ttfa_ms', metric.ttfa_ms, json.dumps({'request_id': getattr(metric, 'request_id', None)})),
+                        (metric.timestamp, 'api_latency_ms', metric.api_latency_ms, json.dumps({'request_id': getattr(metric, 'request_id', None)})),
+                        (metric.timestamp, 'memory_mb', metric.memory_mb, None),
+                        (metric.timestamp, 'cpu_percent', metric.cpu_percent, None),
+                        (metric.timestamp, 'error_rate', metric.error_rate, None),
+                        (metric.timestamp, 'active_connections', getattr(metric, 'active_connections', 0), None),
+                    ])
+
+                # Batch insert metrics
+                cursor.executemany('''
+                    INSERT INTO metrics (timestamp, metric_name, value, metadata)
+                    VALUES (?, ?, ?, ?)
+                ''', metrics_data)
+
+                conn.commit()
+
+                # Clean up old data (keep last 30 days)
+                cutoff_time = time.time() - (30 * 24 * 60 * 60)
+                cursor.execute('DELETE FROM metrics WHERE timestamp < ?', (cutoff_time,))
+                cursor.execute('DELETE FROM trends WHERE period_end < ?', (cutoff_time,))
+
+                conn.commit()
+
+        except Exception as e:
+            logger.debug(f"Failed to store historical metrics: {e}")
+
+    def _calculate_historical_trends(self, window_minutes: int) -> Dict[str, Any]:
+        """Calculate historical trends for the specified window."""
+        try:
+            import sqlite3
+            from pathlib import Path
+
+            db_path = Path('cache/persistent/historical/metrics_history.db')
+            if not db_path.exists():
+                return {}
+
+            trends = {}
+            end_time = time.time()
+            start_time = end_time - (window_minutes * 60)
+
+            with sqlite3.connect(str(db_path)) as conn:
+                cursor = conn.cursor()
+
+                # Calculate trends for each metric
+                for metric_name in ['ttfa_ms', 'api_latency_ms', 'memory_mb', 'cpu_percent', 'error_rate']:
+                    cursor.execute('''
+                        SELECT timestamp, value
+                        FROM metrics
+                        WHERE metric_name = ? AND timestamp BETWEEN ? AND ?
+                        ORDER BY timestamp
+                    ''', (metric_name, start_time, end_time))
+
+                    rows = cursor.fetchall()
+                    if len(rows) >= 5:  # Need minimum data points for trend analysis
+                        timestamps, values = zip(*rows)
+                        trend_result = self._analyze_metric_trend(list(values), list(timestamps))
+                        trends[metric_name] = trend_result
+
+            return trends
+
+        except Exception as e:
+            logger.debug(f"Failed to calculate historical trends: {e}")
+            return {}
+
+    def _analyze_metric_trend(self, values: List[float], timestamps: List[float]) -> Dict[str, Any]:
+        """Analyze trend for a specific metric."""
+        try:
+            import statistics
+
+            if len(values) < 3:
+                return {'trend': 'insufficient_data'}
+
+            # Calculate basic statistics
+            mean_value = statistics.mean(values)
+            std_dev = statistics.stdev(values) if len(values) > 1 else 0
+
+            # Simple linear trend
+            n = len(values)
+            x = list(range(n))  # Time indices
+
+            # Calculate slope using simple linear regression
+            sum_x = sum(x)
+            sum_y = sum(values)
+            sum_xy = sum(xi * yi for xi, yi in zip(x, values))
+            sum_x2 = sum(xi * xi for xi in x)
+
+            denominator = n * sum_x2 - sum_x * sum_x
+            if denominator == 0:
+                slope = 0.0
+            else:
+                slope = (n * sum_xy - sum_x * sum_y) / denominator
+
+            # Calculate R-squared (simplified)
+            y_pred = [slope * xi + (sum_y - slope * sum_x) / n for xi in x]
+            ss_res = sum((yi - y_pred_i) ** 2 for yi, y_pred_i in zip(values, y_pred))
+            ss_tot = sum((yi - mean_value) ** 2 for yi in values)
+            r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+
+            # Determine trend direction and significance
+            if abs(slope) < std_dev * 0.1:  # Slope less than 10% of standard deviation
+                trend = 'stable'
+                significance = 'low'
+            elif slope > std_dev * 0.2:  # Significant upward trend
+                trend = 'degrading'
+                significance = 'high' if r_squared > 0.7 else 'medium'
+            elif slope < -std_dev * 0.2:  # Significant downward trend
+                trend = 'improving'
+                significance = 'high' if r_squared > 0.7 else 'medium'
+            else:
+                trend = 'stable'
+                significance = 'low'
+
+            # Calculate change percentage
+            first_quarter = values[:n//4] if n >= 4 else values[:n//2]
+            last_quarter = values[-(n//4):] if n >= 4 else values[-(n//2):]
+
+            if first_quarter and last_quarter:
+                first_avg = statistics.mean(first_quarter)
+                last_avg = statistics.mean(last_quarter)
+                change_percent = ((last_avg - first_avg) / first_avg) * 100 if first_avg != 0 else 0
+            else:
+                change_percent = 0
+
+            return {
+                'trend': trend,
+                'significance': significance,
+                'slope': slope,
+                'r_squared': r_squared,
+                'change_percent': change_percent,
+                'mean_value': mean_value,
+                'std_dev': std_dev,
+                'sample_count': n,
+                'time_range_hours': (max(timestamps) - min(timestamps)) / 3600 if timestamps else 0
+            }
+
+        except Exception as e:
+            logger.debug(f"Failed to analyze metric trend: {e}")
+            return {'trend': 'error', 'error': str(e)}
+
+    def get_historical_summary(self, days: int = 7) -> Dict[str, Any]:
+        """Get comprehensive historical summary for the specified number of days."""
+        try:
+            import sqlite3
+            from pathlib import Path
+            from collections import defaultdict
+
+            db_path = Path('cache/persistent/historical/metrics_history.db')
+            if not db_path.exists():
+                return {'error': 'No historical data available'}
+
+            end_time = time.time()
+            start_time = end_time - (days * 24 * 60 * 60)
+
+            summary = {
+                'period_days': days,
+                'start_time': start_time,
+                'end_time': end_time,
+                'metrics': {},
+                'trends': {},
+                'anomalies': [],
+                'data_quality': {}
+            }
+
+            with sqlite3.connect(str(db_path)) as conn:
+                cursor = conn.cursor()
+
+                # Get data quality metrics
+                cursor.execute('''
+                    SELECT COUNT(*) as total_samples,
+                           COUNT(DISTINCT date(timestamp, 'unixepoch')) as days_with_data,
+                           AVG(timestamp) as avg_timestamp
+                    FROM metrics
+                    WHERE timestamp BETWEEN ? AND ?
+                ''', (start_time, end_time))
+
+                quality_row = cursor.fetchone()
+                if quality_row:
+                    total_samples, days_with_data, avg_timestamp = quality_row
+                    summary['data_quality'] = {
+                        'total_samples': total_samples,
+                        'days_with_data': days_with_data,
+                        'data_completeness': days_with_data / days if days > 0 else 0,
+                        'avg_samples_per_day': total_samples / days if days > 0 else 0
+                    }
+
+                # Analyze each metric
+                for metric_name in ['ttfa_ms', 'api_latency_ms', 'memory_mb', 'cpu_percent', 'error_rate']:
+                    cursor.execute('''
+                        SELECT timestamp, value
+                        FROM metrics
+                        WHERE metric_name = ? AND timestamp BETWEEN ? AND ?
+                        ORDER BY timestamp
+                    ''', (metric_name, start_time, end_time))
+
+                    rows = cursor.fetchall()
+                    if rows:
+                        timestamps, values = zip(*rows)
+
+                        # Calculate statistics
+                        metric_stats = self._calculate_metric_statistics(values, timestamps)
+                        summary['metrics'][metric_name] = metric_stats
+
+                        # Calculate trend
+                        if len(values) >= 5:
+                            trend_analysis = self._analyze_metric_trend(list(values), list(timestamps))
+                            summary['trends'][metric_name] = trend_analysis
+
+                            # Detect anomalies
+                            anomalies = self._detect_metric_anomalies(values, metric_stats)
+                            if anomalies:
+                                summary['anomalies'].extend([
+                                    {'metric': metric_name, **anomaly} for anomaly in anomalies
+                                ])
+
+            return summary
+
+        except Exception as e:
+            logger.error(f"Failed to generate historical summary: {e}")
+            return {'error': str(e)}
+
+    def _calculate_metric_statistics(self, values: List[float], timestamps: List[float]) -> Dict[str, Any]:
+        """Calculate comprehensive statistics for a metric."""
+        try:
+            import statistics
+            from scipy import stats as scipy_stats
+
+            stats = {
+                'count': len(values),
+                'mean': statistics.mean(values),
+                'median': statistics.median(values),
+                'std_dev': statistics.stdev(values) if len(values) > 1 else 0,
+                'min': min(values),
+                'max': max(values),
+                'range': max(values) - min(values)
+            }
+
+            # Calculate percentiles
+            if len(values) >= 4:
+                percentiles = statistics.quantiles(values, n=100)
+                stats.update({
+                    'p25': percentiles[24],  # 25th percentile
+                    'p75': percentiles[74],  # 75th percentile
+                    'p95': percentiles[94],  # 95th percentile
+                    'p99': percentiles[98],  # 99th percentile
+                    'iqr': percentiles[74] - percentiles[24]  # Interquartile range
+                })
+
+            # Calculate time-based statistics
+            if len(timestamps) > 1:
+                time_span = max(timestamps) - min(timestamps)
+                stats.update({
+                    'time_span_hours': time_span / 3600,
+                    'avg_sampling_interval': time_span / (len(timestamps) - 1) / 60,  # minutes
+                })
+
+            return stats
+
+        except Exception as e:
+            logger.debug(f"Failed to calculate metric statistics: {e}")
+            return {'error': str(e)}
+
+    def _detect_metric_anomalies(self, values: List[float], stats: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Detect anomalies in metric values."""
+        try:
+            anomalies = []
+            mean = stats.get('mean', 0)
+            std_dev = stats.get('std_dev', 0)
+
+            if std_dev == 0:
+                return anomalies
+
+            # Use 3-sigma rule for anomaly detection
+            threshold_high = mean + 3 * std_dev
+            threshold_low = mean - 3 * std_dev
+
+            for i, value in enumerate(values):
+                if value > threshold_high or value < threshold_low:
+                    anomalies.append({
+                        'index': i,
+                        'value': value,
+                        'deviation_sigma': abs(value - mean) / std_dev,
+                        'type': 'high' if value > threshold_high else 'low'
+                    })
+
+            return anomalies
+
+        except Exception as e:
+            logger.debug(f"Failed to detect anomalies: {e}")
+            return []
 
     async def get_active_connection_count(self, server_url: str) -> int:
         """Get the count of active connections to the server."""

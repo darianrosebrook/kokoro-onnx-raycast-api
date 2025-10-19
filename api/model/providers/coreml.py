@@ -28,7 +28,7 @@ import glob
 import time
 import logging
 import shutil
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 from functools import lru_cache
 
 # Cache for provider options to avoid duplicate creation and logging

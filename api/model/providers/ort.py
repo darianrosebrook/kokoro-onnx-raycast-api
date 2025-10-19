@@ -8,7 +8,15 @@ session options, memory management, and cross-platform optimizations.
 import os
 import logging
 import onnxruntime as ort
+from pathlib import Path
 from typing import Dict, Any, Optional, List
+
+try:
+    import onnx
+    ONNX_AVAILABLE = True
+except ImportError:
+    ONNX_AVAILABLE = False
+    onnx = None
 
 logger = logging.getLogger(__name__)
 
