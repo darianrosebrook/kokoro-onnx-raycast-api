@@ -484,8 +484,11 @@ def test_mlcompute_units_configuration(capabilities: Dict[str, Any]) -> str:
         test_configs = ['CPUOnly']
         logger.info(" Non-Apple Silicon: Using CPU-only configuration")
     
-    # For now, return the first (optimal) configuration
-    # In a full implementation, we would actually benchmark each configuration
+    # TODO: Implement MLComputeUnits configuration benchmarking
+    # - [ ] Create benchmark suite for each MLComputeUnits option
+    # - [ ] Measure TTFA and RTF for different configurations
+    # - [ ] Profile memory usage and power consumption
+    # - [ ] Select optimal configuration based on performance metrics
     optimal_config = test_configs[0]
     logger.info(f"✅ Selected optimal MLComputeUnits configuration: {optimal_config}")
     

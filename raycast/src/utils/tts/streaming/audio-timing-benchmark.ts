@@ -287,7 +287,12 @@ export class AudioTimingBenchmark {
   }
 
   /**
-   * Simulate chunked audio delivery with timing analysis
+   * TODO: Implement real chunked delivery benchmarking
+   * - [ ] Integrate with actual streaming audio pipeline
+   * - [ ] Add network condition simulation (latency, bandwidth, jitter)
+   * - [ ] Implement real-time chunking and delivery measurement
+   * - [ ] Add audio quality degradation analysis under network stress
+   * - [ ] Implement adaptive streaming quality monitoring
    */
   private async simulateChunkedDelivery(
     audioData: Uint8Array,
@@ -344,7 +349,12 @@ export class AudioTimingBenchmark {
   }
 
   /**
-   * Simulate daemon lifecycle with premature termination detection
+   * TODO: Implement real daemon lifecycle testing
+   * - [ ] Test actual daemon process management and monitoring
+   * - [ ] Implement crash detection and recovery testing
+   * - [ ] Add resource usage monitoring during daemon operation
+   * - [ ] Implement graceful shutdown and cleanup verification
+   * - [ ] Add daemon health check and heartbeat monitoring
    */
   private async simulateDaemonLifecycle(
     config: AudioTestConfig,

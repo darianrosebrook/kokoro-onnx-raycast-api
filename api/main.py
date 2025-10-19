@@ -2571,7 +2571,12 @@ async def create_speech_merged(request: Request, tts_request: TTSRequest, config
 
         return StreamingResponse(generator, media_type=media_type)
 
-    # Handle non-streaming requests - use original implementation for now
+    # TODO: Implement non-streaming mode for merged endpoint
+    # - [ ] Implement buffering logic for non-streaming audio generation
+    # - [ ] Add format conversion and validation for non-streaming responses
+    # - [ ] Implement proper error handling for non-streaming failures
+    # - [ ] Add performance monitoring for non-streaming requests
+    # - [ ] Update API documentation to reflect non-streaming support
     else:
         raise HTTPException(
             status_code=501,

@@ -318,12 +318,20 @@ class PerformanceBudgetValidator:
                                     audio_io = io.BytesIO(audio_data)
                                     audio, sample_rate = sf.read(audio_io)
                                     
-                                    # Calculate LUFS (simplified)
+                                    # TODO: Implement proper audio level measurements
+                                    # - [ ] Implement ITU-R BS.1770-4 compliant LUFS calculation
+                                    # - [ ] Add proper gating and filtering for accurate loudness measurement
+                                    # - [ ] Implement integrated loudness over time windows
+                                    # - [ ] Add momentary and short-term loudness calculations
                                     rms = np.sqrt(np.mean(audio**2))
                                     lufs = 20 * np.log10(rms) if rms > 0 else -60
                                     lufs_values.append(lufs)
                                     
-                                    # Calculate dBTP (simplified)
+                                    # TODO: Implement accurate peak level measurement
+                                    # - [ ] Implement true peak detection with oversampling
+                                    # - [ ] Add crest factor calculation and monitoring
+                                    # - [ ] Implement dynamic range measurements
+                                    # - [ ] Add peak-to-average ratio calculations
                                     peak = np.max(np.abs(audio))
                                     dbtp = 20 * np.log10(peak) if peak > 0 else -60
                                     dbtp_values.append(dbtp)

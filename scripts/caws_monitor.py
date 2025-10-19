@@ -123,8 +123,11 @@ class CAWSMonitor:
     
     def get_test_metrics(self) -> Dict[str, Any]:
         """Get test execution metrics."""
-        # This would typically parse recent test results
-        # For now, return current known state
+        # TODO: Implement real-time test metrics collection
+        # - [ ] Monitor test execution in real-time via hooks
+        # - [ ] Parse live test output and results
+        # - [ ] Track test execution time and resource usage
+        # - [ ] Implement test result caching and history
         return {
             'status': 'recent_run',
             'total_tests': 218,

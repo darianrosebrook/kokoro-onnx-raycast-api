@@ -88,8 +88,11 @@ def get_mutation_status() -> Dict[str, Any]:
 
 def get_test_status() -> Dict[str, Any]:
     """Get test execution status."""
-    # This would typically parse recent test results
-    # For now, return status based on what we know
+    # TODO: Implement test result parsing from CI/artifacts
+    # - [ ] Parse pytest/junit XML output files
+    # - [ ] Extract test counts, failures, and timing data
+    # - [ ] Calculate flake rates from historical runs
+    # - [ ] Integrate with CI systems for real-time status
     return {
         'status': 'recent_run',
         'total_tests': 218,

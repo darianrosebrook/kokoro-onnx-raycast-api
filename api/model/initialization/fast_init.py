@@ -44,8 +44,11 @@ def read_cached_provider_strategy() -> Optional[Dict[str, Any]]:
     if _cached_provider_strategy is not None:
         return _cached_provider_strategy
     
-    # Implementation would read from cache file
-    # For now, return None to use default strategy
+    # TODO: Implement persistent cache for provider strategies
+    # - [ ] Create cache file format for provider performance data
+    # - [ ] Implement cache file reading with validation
+    # - [ ] Add cache invalidation logic for model updates
+    # - [ ] Handle cache corruption gracefully with fallback
     return None
 
 

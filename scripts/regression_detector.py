@@ -239,7 +239,13 @@ class RegressionDetector:
             if len(values) < window_size * 2:
                 continue
             
-            # Calculate trend using linear regression (simplified)
+            # TODO: Implement proper statistical trend analysis
+            # - [ ] Implement actual linear regression with slope calculation
+            # - [ ] Add R-squared and p-value calculations for trend significance
+            # - [ ] Implement multiple trend detection methods (Mann-Kendall, Theil-Sen)
+            # - [ ] Add seasonal decomposition for periodic pattern removal
+            # - [ ] Implement change point detection algorithms
+            # - [ ] Add confidence intervals for trend estimates
             first_half = values[:len(values)//2]
             second_half = values[len(values)//2:]
             

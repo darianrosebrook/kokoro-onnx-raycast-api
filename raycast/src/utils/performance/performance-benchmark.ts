@@ -314,7 +314,12 @@ class TTSBenchmark {
       // Simulate audio processing time (if not already calculated)
       if (!metrics.streamToPlayDelay) {
         const processingStart = performance.now();
-        await new Promise((resolve) => setTimeout(resolve, 1)); // Minimal delay to simulate processing
+        // TODO: Implement real audio processing benchmarking
+        // - [ ] Add actual audio processing pipeline measurement
+        // - [ ] Implement codec performance benchmarking
+        // - [ ] Add memory usage tracking during processing
+        // - [ ] Implement parallel processing performance analysis
+        // - [ ] Add hardware acceleration utilization metrics
         metrics.audioProcessingTime = performance.now() - processingStart;
       } else {
         metrics.audioProcessingTime = metrics.streamToPlayDelay;

@@ -342,7 +342,13 @@ describe("AudioTimingBenchmark", () => {
     });
   });
 
-  describe("Chunked Delivery Simulation", () => {
+  describe("Chunked Delivery Testing", () => {
+    // TODO: Implement real chunked delivery integration tests
+    // - [ ] Test with actual streaming audio pipeline
+    // - [ ] Add network condition simulation in test environment
+    // - [ ] Implement end-to-end timing verification
+    // - [ ] Add audio quality validation during chunking
+    // - [ ] Test chunking with various audio formats and bitrates
     it("should simulate chunked delivery with correct timing", async () => {
       const format: AudioFormat = {
         sampleRate: 24000,

@@ -22,7 +22,7 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -48,6 +48,10 @@ class SecurityConfig:
 
     # IP blocking settings
     block_suspicious_ips: bool = True
+
+    # Anomaly detection settings
+    anomaly_threshold: float = 0.7  # Score threshold for logging
+    block_anomaly_threshold: float = 0.9  # Score threshold for blocking
     suspicious_request_threshold: int = 11  # Requests before considering IP suspicious
     block_duration_minutes: int = 61  # How long to block suspicious IPs
 
@@ -140,6 +144,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Rate limiting storage
         self.request_counts: Dict[str, deque] = defaultdict(lambda: deque())
         self.blocked_ips: Dict[str, datetime] = {}
+
+        # Anomaly detection storage
+        self.request_fingerprints: Dict[str, List[float]] = {}
 
         # Statistics
         self.blocked_requests = 0
@@ -299,37 +306,245 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         self._mark_suspicious_ip(ip)
     
     def _process_request(self, request: Request):
-        """Process a request through security checks (test compatibility method)."""
-        # This is a simplified version for testing
+        """Process a request through comprehensive security checks."""
         client_ip = self._get_client_ip(request)
         user_agent = request.headers.get("user-agent", "")
-        
+
+        # Generate correlation ID for request tracking
+        correlation_id = self._generate_correlation_id()
+
+        # Add input validation and sanitization
+        validation_result = self._validate_and_sanitize_request(request)
+        if not validation_result["valid"]:
+            self._log_security_event(
+                "input_validation_failed",
+                client_ip,
+                correlation_id,
+                details=validation_result["errors"]
+            )
+            return self._create_security_response(400, "Invalid request parameters")
+
+        # Validate security headers
+        header_validation = self._validate_security_headers(request)
+        if not header_validation["valid"]:
+            self._log_security_event(
+                "security_header_violation",
+                client_ip,
+                correlation_id,
+                details=header_validation["violations"]
+            )
+            if header_validation["block"]:
+                self._mark_suspicious_ip(client_ip)
+                return self._create_security_response(403, "Security policy violation")
+
+        # Generate request fingerprint for anomaly detection
+        fingerprint = self._generate_request_fingerprint(request)
+        anomaly_score = self._calculate_anomaly_score(fingerprint, client_ip)
+
+        if anomaly_score > self.config.anomaly_threshold:
+            self._log_security_event(
+                "anomaly_detected",
+                client_ip,
+                correlation_id,
+                details={"anomaly_score": anomaly_score, "fingerprint": fingerprint}
+            )
+            if anomaly_score > self.config.block_anomaly_threshold:
+                self._mark_suspicious_ip(client_ip)
+                return self._create_security_response(403, "Suspicious activity detected")
+
         # Track the request for rate limiting
         self.request_counts[client_ip].append(time.time())
-        
+
         # Check if IP is blocked
         if self._should_block_ip(client_ip):
-            from unittest.mock import Mock
-            response = Mock()
-            response.status_code = 403
-            return response
-        
+            self._log_security_event("blocked_ip_access", client_ip, correlation_id)
+            return self._create_security_response(403, "Access denied")
+
         # Check rate limiting
         if self._is_rate_limited(client_ip, user_agent):
-            from unittest.mock import Mock
-            response = Mock()
-            response.status_code = 429
-            return response
-        
+            self._log_security_event("rate_limit_exceeded", client_ip, correlation_id)
+            return self._create_security_response(429, "Rate limit exceeded")
+
         # Check for malicious requests
         if self._is_malicious_request(request.url.path, user_agent):
+            self._log_security_event("malicious_request_detected", client_ip, correlation_id)
             self._mark_suspicious_ip(client_ip)
-            from unittest.mock import Mock
-            response = Mock()
-            response.status_code = 403
-            return response
-        
+            return self._create_security_response(403, "Request blocked")
+
+        # Log successful request with correlation ID
+        self._log_request_success(client_ip, correlation_id, fingerprint)
+
         return None  # Request passes through
+
+    def _generate_correlation_id(self) -> str:
+        """Generate a unique correlation ID for request tracking."""
+        import uuid
+        return str(uuid.uuid4())
+
+    def _validate_and_sanitize_request(self, request: Request) -> Dict:
+        """Validate and sanitize request parameters."""
+        errors = []
+        sanitized_data = {}
+
+        try:
+            # Validate path
+            path = request.url.path
+            if not re.match(r'^/[a-zA-Z0-9/_-]+$', path):
+                errors.append("Invalid path format")
+
+            # Validate query parameters
+            for key, values in request.query_params.multi_items():
+                if not re.match(r'^[a-zA-Z0-9_.-]+$', key):
+                    errors.append(f"Invalid query parameter name: {key}")
+                for value in values:
+                    # Basic sanitization - remove potentially dangerous characters
+                    sanitized_value = re.sub(r'[<>]', '', value)
+                    sanitized_data[f"query_{key}"] = sanitized_value
+
+            # Validate headers (basic checks)
+            suspicious_headers = ['x-forwarded-for', 'x-real-ip']
+            for header in suspicious_headers:
+                if header in request.headers and len(request.headers.getlist(header)) > 1:
+                    errors.append(f"Multiple values for header: {header}")
+
+        except Exception as e:
+            errors.append(f"Request validation error: {str(e)}")
+
+        return {
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "sanitized_data": sanitized_data
+        }
+
+    def _validate_security_headers(self, request: Request) -> Dict:
+        """Validate security-related headers."""
+        violations = []
+        should_block = False
+
+        # Check Content-Type for API requests
+        if request.method in ['POST', 'PUT', 'PATCH']:
+            content_type = request.headers.get('content-type', '')
+            if not content_type.startswith('application/json'):
+                violations.append("Invalid Content-Type for API request")
+
+        # Check for suspicious Origin/Referer combinations
+        origin = request.headers.get('origin', '')
+        referer = request.headers.get('referer', '')
+
+        if origin and referer:
+            try:
+                from urllib.parse import urlparse
+                origin_domain = urlparse(origin).netloc
+                referer_domain = urlparse(referer).netloc
+
+                # Allow localhost combinations
+                if not (origin_domain in ['localhost', '127.0.0.1'] or
+                       referer_domain in ['localhost', '127.0.0.1']):
+                    # Check for domain mismatch that might indicate header injection
+                    if origin_domain != referer_domain:
+                        violations.append("Origin/Referer domain mismatch")
+                        should_block = True
+            except Exception:
+                violations.append("Invalid Origin/Referer format")
+
+        # Check User-Agent for suspicious patterns
+        user_agent = request.headers.get('user-agent', '')
+        suspicious_patterns = [
+            r'curl/',  # CLI tools (might be legitimate)
+            r'python-requests/',  # Automated tools
+            r'sqlmap',  # SQL injection tools
+            r'nmap',  # Port scanning
+        ]
+
+        for pattern in suspicious_patterns:
+            if re.search(pattern, user_agent, re.IGNORECASE):
+                violations.append(f"Suspicious User-Agent pattern: {pattern}")
+                should_block = True
+
+        return {
+            "valid": len(violations) == 0,
+            "violations": violations,
+            "block": should_block
+        }
+
+    def _generate_request_fingerprint(self, request: Request) -> str:
+        """Generate a fingerprint for anomaly detection."""
+        import hashlib
+
+        fingerprint_data = [
+            request.method,
+            request.url.path,
+            request.headers.get('user-agent', ''),
+            request.headers.get('accept', ''),
+            str(len(request.headers.get('content-length', '0'))),
+        ]
+
+        # Add query parameter names (not values for privacy)
+        query_names = sorted(request.query_params.keys())
+        fingerprint_data.extend(query_names)
+
+        fingerprint_str = '|'.join(fingerprint_data)
+        return hashlib.md5(fingerprint_str.encode()).hexdigest()
+
+    def _calculate_anomaly_score(self, fingerprint: str, client_ip: str) -> float:
+        """Calculate anomaly score based on request patterns."""
+        # Track fingerprint frequency
+        current_time = time.time()
+        if fingerprint not in self.request_fingerprints:
+            self.request_fingerprints[fingerprint] = []
+
+        # Clean old fingerprints (keep last hour)
+        self.request_fingerprints[fingerprint] = [
+            ts for ts in self.request_fingerprints[fingerprint]
+            if current_time - ts < 3600
+        ]
+
+        self.request_fingerprints[fingerprint].append(current_time)
+
+        # Calculate anomaly score based on frequency
+        recent_count = len(self.request_fingerprints[fingerprint])
+        if recent_count == 1:
+            return 0.0  # First time seeing this fingerprint
+        elif recent_count > 10:
+            return 1.0  # Very frequent, potentially automated
+        else:
+            return min(0.5, recent_count / 20.0)  # Gradual increase
+
+    def _log_security_event(self, event_type: str, client_ip: str,
+                           correlation_id: str, details: Optional[Dict] = None):
+        """Log security events with PII redaction."""
+        # Redact sensitive information
+        safe_details = {}
+        if details:
+            for key, value in details.items():
+                if 'password' in key.lower() or 'token' in key.lower():
+                    safe_details[key] = '[REDACTED]'
+                else:
+                    safe_details[key] = value
+
+        logger.warning(f"SECURITY_EVENT [{correlation_id}]: {event_type} from {client_ip} - {safe_details}")
+
+    def _log_request_success(self, client_ip: str, correlation_id: str, fingerprint: str):
+        """Log successful requests for monitoring."""
+        logger.info(f"REQUEST_SUCCESS [{correlation_id}]: {client_ip} fingerprint={fingerprint[:8]}...")
+
+    def _create_security_response(self, status_code: int, message: str):
+        """Create a proper security response without mock objects."""
+        from starlette.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "error": message,
+                "timestamp": datetime.now().isoformat(),
+                "type": "security_violation"
+            },
+            headers={
+                "X-Content-Type-Options": "nosniff",
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "1; mode=block",
+            }
+        )
 
     async def dispatch(self, request: Request, call_next):
         """Process request through security checks."""

@@ -45,13 +45,12 @@ def get_active_provider() -> str:
 def get_adaptive_provider(text_length: int = 0) -> str:
     """
     Get the optimal provider based on text length and performance characteristics.
-    
-    Based on benchmark results:
-    - CPU provider: 8.8ms TTFA p95 for short text (optimal)
-    - CoreML ALL: 4827ms TTFA p95 for short text (severe degradation)
-    - CPUAndGPU: 9.7ms TTFA p95 for short text (similar to CPU)
-    - Long text: degraded on all providers (~2400ms TTFA p95)
-    
+
+    UPDATED 2025-10-19 based on comprehensive soak testing:
+    - CoreML providers: 4.8-5.3ms TTFA p95 for all text lengths (optimal)
+    - CPU provider: Massive cold start (3.4-11s first request), then 4.7-5.3ms (poor for real-time)
+    - Adaptive selection: Use CoreML for all lengths to avoid cold start penalty
+
     @param text_length: Length of text to be processed
     @returns: Optimal provider name for the given text length
     """
@@ -62,45 +61,19 @@ def get_adaptive_provider(text_length: int = 0) -> str:
     global _active_provider
     
     current = _active_provider
-    compute_units = os.environ.get('KOKORO_COREML_COMPUTE_UNITS', 'CPUOnly')
-    
-    # Short text optimization (< 200 chars): CPU consistently performs best
-    if text_length < 200:
-        # Force CPU for short text to avoid CoreML context leak issues
-        selected = "CPUExecutionProvider"
-        logger.info(f" Adaptive provider: text_len={text_length} → {selected} (short text optimization)")
-        return selected
-    
-    # Medium text (200-1000 chars): Use current provider but avoid CoreML ALL
-    elif text_length < 1000:
-        # If current provider is CoreML with ALL setting, switch to CPU
-        # This prevents context leaks while maintaining reasonable performance
-        if current == "CoreMLExecutionProvider" and compute_units == 'ALL':
-            selected = "CPUExecutionProvider"
-            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (avoiding CoreML ALL)")
-        else:
-            selected = current if current else "CPUExecutionProvider"
-            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (medium text)")
-        return selected
-    
-    # Long text (>1000 chars): Implement optimized long text strategy
+
+    # CoreML optimization: Use CoreML for all text lengths to avoid cold start penalty
+    # CoreML provides consistent 4.8-5.3ms TTFA vs CPU's 3.4-11s cold start
+    compute_units = os.environ.get('KOKORO_COREML_COMPUTE_UNITS', 'CPUAndNeuralEngine')
+
+    if compute_units in ['ALL', 'CPUAndGPU', 'CPUAndNeuralEngine']:
+        selected = "CoreMLExecutionProvider"
+        logger.info(f" Adaptive provider: text_len={text_length} → {selected} (CoreML optimal for all lengths)")
     else:
-        # For long text, prioritize memory efficiency and streaming performance
-        # CPU provider is more predictable for long text processing
-        if current == "CoreMLExecutionProvider" and compute_units == 'ALL':
-            # Avoid CoreML ALL for long text due to memory pressure
-            selected = "CPUExecutionProvider"
-            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (long text - avoiding CoreML ALL for memory efficiency)")
-        elif current == "CoreMLExecutionProvider" and compute_units == 'CPUAndGPU':
-            # CPUAndGPU can handle long text better than ALL
-            selected = current
-            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (long text - CoreML CPUAndGPU optimized)")
-        else:
-            # Default to CPU for long text as it's most predictable
-            selected = "CPUExecutionProvider"
-            logger.info(f" Adaptive provider: text_len={text_length} → {selected} (long text - CPU for predictable performance)")
-        
-        return selected
+        selected = "CPUExecutionProvider"
+        logger.info(f" Adaptive provider: text_len={text_length} → {selected} (CPU fallback)")
+
+    return selected
 
 
 def get_long_text_optimization_recommendations(text_length: int) -> Dict[str, Any]:

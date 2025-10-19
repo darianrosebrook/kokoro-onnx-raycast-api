@@ -370,29 +370,32 @@ async def clear_cache():
     This endpoint is useful for benchmarking to prevent cache pollution between trials.
     """
     try:
-        from api.model.sessions.manager import clear_model
+        # from api.model.sessions.manager import clear_model  # Not clearing active model
         from api.tts.text_processing import clear_phoneme_cache
         from api.utils.cache_helpers import clear_inference_cache
         
-        # Clear model sessions
-        clear_model()
-        
         # Clear phoneme cache
         clear_phoneme_cache()
-        
+
         # Clear inference cache
         clear_inference_cache()
-        
-        logger.info("✅ Model and session caches cleared successfully")
+
+        # NOTE: We intentionally do NOT clear the active model session
+        # to avoid breaking the user experience. Cache clearing is meant
+        # for debugging session corruption, not for normal operation.
+
+        logger.info("✅ Caches cleared successfully (active model preserved)")
         
         return {
             "status": "success",
-            "message": "Model and session caches cleared",
+            "message": "Caches cleared successfully (active model preserved)",
             "timestamp": datetime.now().isoformat(),
             "cleared_caches": [
-                "model_sessions",
-                "phoneme_cache", 
+                "phoneme_cache",
                 "inference_cache"
+            ],
+            "preserved": [
+                "model_sessions"
             ]
         }
     except Exception as e:

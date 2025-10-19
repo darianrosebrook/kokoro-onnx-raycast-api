@@ -612,10 +612,20 @@ export class TTSSpeechProcessor {
             // afplay has terminated but we're still receiving chunks - skip them
             return;
           } else if (this.useStreaming && !streamingStarted) {
-            // Streaming mode but streaming hasn't started yet - this can happen if afplay terminated before first chunk
+            // TODO: Improve streaming state management and race condition handling
+            // - [ ] Add proper state machine for streaming lifecycle (INIT -> STARTING -> STREAMING -> COMPLETE/FAILED)
+            // - [ ] Implement timeout handling for afplay startup delays
+            // - [ ] Add retry logic for transient afplay startup failures
+            // - [ ] Implement proper cleanup for orphaned streaming processes
+            // - [ ] Add metrics for streaming startup success/failure rates
             return;
           } else if (this.useStreaming && !streamingPlayback) {
-            // Streaming mode but no streaming playback available - this can happen if afplay terminated
+            // TODO: Enhance streaming playback robustness
+            // - [ ] Add heartbeat monitoring for afplay process health
+            // - [ ] Implement automatic restart for crashed afplay processes
+            // - [ ] Add fallback to buffered playback when streaming fails
+            // - [ ] Implement streaming quality metrics and degradation detection
+            // - [ ] Add user notification for streaming failures with recovery options
             return;
           }
         });

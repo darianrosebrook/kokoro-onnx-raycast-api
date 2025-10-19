@@ -1,0 +1,17 @@
+{
+  "_comment": "Model checksum store for security verification",
+  "_format": "Maps 'modelId@version' to hash objects",
+  "_note": "Checksums should be calculated using: openssl sha256 <file> or shasum -a 256 <file>",
+  "kokoro-v1.0@v1.0": {
+    "sha256": "6e742170d309016e5891a994e1ce1559c702a2ccd0075e67ef7157974f6406cb",
+    "sha512": "356ce6c9dd226388922329efe27c3cde1902eda9b8a1c73ada1ea206c1fcc477ad0d05a12faf6ebdb6898dd0b0a3962907f2e7fe89dda4b5991138b1fcab753c",
+    "registered_at": "2025-10-19T15:30:00Z",
+    "registered_by": "caws-agent"
+  },
+  "voices-v1.0@v1.0": {
+    "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+    "sha512": "eb8bcd73f516847eac24e82955b1432c09f83a345681486977a6f47d07efe10d0a9ea28910757219058841d7500c4be0ea6de76431224d9d6ecfb5d0f897cad5",
+    "registered_at": "2025-10-19T15:30:00Z",
+    "registered_by": "caws-agent"
+  }
+}

@@ -163,7 +163,17 @@ class PerformanceMonitor:
             logger.error(f"Failed to collect API metrics: {e}")
             error_rate = 1.0
         
-        # Get connection count (simplified)
+        # TODO: Implement proper connection tracking
+        # - [ ] Add connection pool monitoring for database connections
+        # - [ ] Implement active HTTP connection counting via server metrics
+        # - [ ] Add WebSocket connection tracking for real-time features
+        # - [ ] Implement connection lifecycle monitoring (established, active, idle, closed)
+        # - [ ] Add connection timeout and cleanup detection
+        # TODO: Implement connection tracking system
+        # - [ ] Add server metrics endpoint for active connection counting
+        # - [ ] Implement WebSocket connection lifecycle monitoring
+        # - [ ] Track connection states (established, active, idle, closed)
+        # - [ ] Add connection timeout detection and cleanup
         active_connections = 1  # Placeholder - would need more sophisticated tracking
         
         return PerformanceMetrics(

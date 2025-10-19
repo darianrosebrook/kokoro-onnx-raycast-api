@@ -1,6 +1,8 @@
 {
   "cache_type": "model_cache",
-  "timestamp": 1760753624.490596,
+  "timestamp": 1760912395.785385,
   "entries_count": 0,
-  "data": {}
+  "version": "1.0",
+  "data": {},
+  "checksum": "51c820af61d716858bc95efb089dbef3dd3824ebcb5d716873c4f350f52dab8d"
 }

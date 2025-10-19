@@ -355,7 +355,11 @@ export class AdaptiveAudioDaemon extends EventEmitter {
     const chunkStartTime = performance.now();
     this.currentBufferSize -= chunk.length;
 
-    // Simulate chunk playback (in real implementation, this would send to audio system)
+    // TODO: Implement actual audio system integration
+    // - [ ] Send audio chunks to system audio output
+    // - [ ] Implement audio device selection and configuration
+    // - [ ] Handle audio format conversion for system compatibility
+    // - [ ] Add audio synchronization and timing control
     this.emit("audioChunk", chunk);
 
     const playbackTime = performance.now() - chunkStartTime;

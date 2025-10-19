@@ -206,7 +206,13 @@ const NetworkConditionsDisplay: React.FC<NetworkConditionsDisplayProps> = ({ con
 };
 
 /**
- * Performance chart component (simplified for Raycast)
+ * TODO: Enhance performance monitoring UI components
+ * - [ ] Implement interactive charts with zoom, pan, and filtering
+ * - [ ] Add real-time data streaming and updates
+ * - [ ] Implement multiple chart types (line, bar, scatter, histogram)
+ * - [ ] Add data export functionality (CSV, JSON, PNG)
+ * - [ ] Implement alert visualization and threshold indicators
+ * - [ ] Add comparative analysis between different time periods
  */
 interface PerformanceChartProps {
   data: Array<{ timestamp: number; value: number; label: string }>;

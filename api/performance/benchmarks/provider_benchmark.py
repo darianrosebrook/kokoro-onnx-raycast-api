@@ -35,7 +35,12 @@ class ProviderBenchmark:
         """
         Compare CoreML vs CPU provider performance.
         """
-        # For now, return mock data since we need to implement provider switching
+        # TODO: Implement real provider performance comparison
+        # - [ ] Add API endpoints for provider switching/configuration
+        # - [ ] Implement actual benchmark runs against different providers
+        # - [ ] Measure real TTFA and RTF metrics for comparison
+        # - [ ] Calculate success rates from actual test results
+        # - [ ] Implement provider recommendation algorithm
         return ProviderComparison(
             coreml_avg_time_ms=800.0,
             cpu_avg_time_ms=1200.0,

@@ -6,8 +6,8 @@
  * @author @darianrosebrook
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 /**
  * Test quality scoring criteria
@@ -15,32 +15,32 @@ const path = require('path');
 const QUALITY_CRITERIA = {
   ASSERTION_DENSITY: {
     weight: 0.25,
-    description: 'Ratio of assertions to test functions',
+    description: "Ratio of assertions to test functions",
     thresholds: { excellent: 0.8, good: 0.6, poor: 0.3 },
   },
   EDGE_CASE_COVERAGE: {
     weight: 0.2,
-    description: 'Coverage of edge cases and error conditions',
+    description: "Coverage of edge cases and error conditions",
     thresholds: { excellent: 0.7, good: 0.5, poor: 0.2 },
   },
   DESCRIPTIVE_NAMING: {
     weight: 0.15,
-    description: 'Quality of test names and descriptions',
+    description: "Quality of test names and descriptions",
     thresholds: { excellent: 0.8, good: 0.6, poor: 0.3 },
   },
   SETUP_TEARDOWN: {
     weight: 0.1,
-    description: 'Proper test setup and teardown',
+    description: "Proper test setup and teardown",
     thresholds: { excellent: 0.9, good: 0.7, poor: 0.4 },
   },
   MOCKING_QUALITY: {
     weight: 0.15,
-    description: 'Appropriate use of mocks and test doubles',
+    description: "Appropriate use of mocks and test doubles",
     thresholds: { excellent: 0.8, good: 0.6, poor: 0.3 },
   },
   SPEC_COVERAGE: {
     weight: 0.15,
-    description: 'Alignment with acceptance criteria from working spec',
+    description: "Alignment with acceptance criteria from working spec",
     thresholds: { excellent: 0.9, good: 0.7, poor: 0.4 },
   },
 };
@@ -52,27 +52,27 @@ const QUALITY_CRITERIA = {
  * @returns {Object} Quality analysis results
  */
 function analyzeTestFile(filePath, _spec = null) {
-  let content = '';
-  let language = 'javascript';
+  let content = "";
+  let language = "javascript";
 
   // Determine language from file extension
   const ext = path.extname(filePath);
-  if (ext === '.py') {
-    language = 'python';
-  } else if (ext === '.java') {
-    language = 'java';
-  } else if (ext === '.js' || ext === '.ts') {
-    language = 'javascript';
+  if (ext === ".py") {
+    language = "python";
+  } else if (ext === ".java") {
+    language = "java";
+  } else if (ext === ".js" || ext === ".ts") {
+    language = "javascript";
   }
 
   try {
-    content = fs.readFileSync(filePath, 'utf8');
+    content = fs.readFileSync(filePath, "utf8");
   } catch (error) {
     console.warn(`⚠️  Could not read test file: ${filePath}`);
     return null;
   }
 
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   const analysis = {
     file: path.basename(filePath),
     language,
@@ -90,13 +90,13 @@ function analyzeTestFile(filePath, _spec = null) {
 
   // Language-specific analysis
   switch (language) {
-    case 'javascript':
+    case "javascript":
       analyzeJavaScriptTest(content, lines, analysis, _spec);
       break;
-    case 'python':
+    case "python":
       analyzePythonTest(content, lines, analysis, _spec);
       break;
-    case 'java':
+    case "java":
       analyzeJavaTest(content, lines, analysis, _spec);
       break;
   }
@@ -109,7 +109,10 @@ function analyzeTestFile(filePath, _spec = null) {
  */
 function analyzeJavaScriptTest(content, lines, analysis, _spec) {
   // Count test functions (describe/it/test blocks in Jest/Mocha)
-  const testPatterns = [/\b(describe|it|test)\s*\(/g, /\btest\s*\(\s*['"`][^'"`]*['"`]/g];
+  const testPatterns = [
+    /\b(describe|it|test)\s*\(/g,
+    /\btest\s*\(\s*['"`][^'"`]*['"`]/g,
+  ];
 
   testPatterns.forEach((pattern) => {
     const matches = content.match(pattern);
@@ -175,7 +178,7 @@ function analyzeJavaScriptTest(content, lines, analysis, _spec) {
   if (_spec && _spec.acceptance) {
     const specKeywords = _spec.acceptance
       .flatMap((ac) => [ac.given, ac.when, ac.then].filter(Boolean))
-      .join(' ')
+      .join(" ")
       .toLowerCase();
 
     const testContent = content.toLowerCase();
@@ -190,21 +193,30 @@ function analyzeJavaScriptTest(content, lines, analysis, _spec) {
   }
 
   // Identify issues
-  if (analysis.testFunctions > 0 && analysis.assertions / analysis.testFunctions < 0.5) {
-    analysis.issues.push('Low assertion density - tests may not be properly validating behavior');
+  if (
+    analysis.testFunctions > 0 &&
+    analysis.assertions / analysis.testFunctions < 0.5
+  ) {
+    analysis.issues.push(
+      "Low assertion density - tests may not be properly validating behavior"
+    );
   }
 
   if (analysis.edgeCases === 0 && analysis.testFunctions > 3) {
-    analysis.issues.push('No edge case testing detected - consider adding error condition tests');
+    analysis.issues.push(
+      "No edge case testing detected - consider adding error condition tests"
+    );
   }
 
   if (!analysis.properSetup && analysis.testFunctions > 5) {
-    analysis.issues.push('Missing test setup - consider using beforeEach for common setup');
+    analysis.issues.push(
+      "Missing test setup - consider using beforeEach for common setup"
+    );
   }
 
   if (!analysis.mocksUsed && /\bimport.*from/.test(content)) {
     analysis.issues.push(
-      'External dependencies detected but no mocking - consider adding mocks for better isolation'
+      "External dependencies detected but no mocking - consider adding mocks for better isolation"
     );
   }
 }
@@ -330,7 +342,9 @@ function calculateQualityScore(analysis) {
 
   // Assertion density score
   const assertionDensity =
-    analysis.testFunctions > 0 ? analysis.assertions / analysis.testFunctions : 0;
+    analysis.testFunctions > 0
+      ? analysis.assertions / analysis.testFunctions
+      : 0;
   scores.assertionDensity = normalizeScore(
     assertionDensity,
     QUALITY_CRITERIA.ASSERTION_DENSITY.thresholds
@@ -338,13 +352,20 @@ function calculateQualityScore(analysis) {
 
   // Edge case coverage score
   const edgeCaseRatio =
-    analysis.testFunctions > 0 ? analysis.edgeCases / analysis.testFunctions : 0;
+    analysis.testFunctions > 0
+      ? analysis.edgeCases / analysis.testFunctions
+      : 0;
   scores.edgeCaseCoverage = normalizeScore(
     edgeCaseRatio,
     QUALITY_CRITERIA.EDGE_CASE_COVERAGE.thresholds
   );
 
-  // Descriptive naming score (simplified)
+  // TODO: Implement comprehensive test naming quality analysis
+  // - [ ] Implement natural language processing for test name analysis
+  // - [ ] Add pattern recognition for good/bad naming conventions
+  // - [ ] Calculate naming quality based on clarity, specificity, and descriptiveness
+  // - [ ] Add machine learning model for automated naming quality scoring
+  // - [ ] Implement test naming guidelines enforcement and suggestions
   const namingScore = analysis.descriptiveNames > 0 ? 1 : 0.5;
   scores.descriptiveNaming = normalizeScore(
     namingScore,
@@ -352,8 +373,12 @@ function calculateQualityScore(analysis) {
   );
 
   // Setup/teardown score
-  const setupScore = (analysis.properSetup ? 0.5 : 0) + (analysis.properTeardown ? 0.5 : 0);
-  scores.setupTeardown = normalizeScore(setupScore, QUALITY_CRITERIA.SETUP_TEARDOWN.thresholds);
+  const setupScore =
+    (analysis.properSetup ? 0.5 : 0) + (analysis.properTeardown ? 0.5 : 0);
+  scores.setupTeardown = normalizeScore(
+    setupScore,
+    QUALITY_CRITERIA.SETUP_TEARDOWN.thresholds
+  );
 
   // Mocking quality score
   scores.mockingQuality = analysis.mocksUsed
@@ -369,7 +394,8 @@ function calculateQualityScore(analysis) {
   // Calculate weighted score
   let totalScore = 0;
   Object.keys(QUALITY_CRITERIA).forEach((criterion) => {
-    totalScore += scores[criterion.toLowerCase()] * QUALITY_CRITERIA[criterion].weight;
+    totalScore +=
+      scores[criterion.toLowerCase()] * QUALITY_CRITERIA[criterion].weight;
   });
 
   return Math.round(totalScore * 100);
@@ -422,7 +448,9 @@ function analyzeTestDirectory(testDir, _spec = null) {
           results.summary.totalAssertions += analysis.assertions;
 
           if (analysis.issues.length > 0) {
-            results.summary.issues.push(...analysis.issues.map((issue) => `${file}: ${issue}`));
+            results.summary.issues.push(
+              ...analysis.issues.map((issue) => `${file}: ${issue}`)
+            );
           }
         }
       }
@@ -430,8 +458,13 @@ function analyzeTestDirectory(testDir, _spec = null) {
 
     // Calculate average quality score
     if (results.files.length > 0) {
-      const totalScore = results.files.reduce((sum, file) => sum + file.qualityScore, 0);
-      results.summary.averageQualityScore = Math.round(totalScore / results.files.length);
+      const totalScore = results.files.reduce(
+        (sum, file) => sum + file.qualityScore,
+        0
+      );
+      results.summary.averageQualityScore = Math.round(
+        totalScore / results.files.length
+      );
     }
   } catch (error) {
     console.error(`❌ Error analyzing test directory: ${error.message}`);
@@ -450,26 +483,29 @@ function generateRecommendations(results) {
 
   if (results.summary.averageQualityScore < 70) {
     recommendations.push({
-      type: 'critical',
+      type: "critical",
       message:
-        'Overall test quality is below acceptable threshold. Consider improving test meaningfulness.',
+        "Overall test quality is below acceptable threshold. Consider improving test meaningfulness.",
       suggestions: [
-        'Add more assertions per test function',
-        'Include edge case and error condition testing',
-        'Improve test naming for better clarity',
-        'Ensure proper setup/teardown procedures',
+        "Add more assertions per test function",
+        "Include edge case and error condition testing",
+        "Improve test naming for better clarity",
+        "Ensure proper setup/teardown procedures",
       ],
     });
   }
 
-  if (results.summary.totalAssertions / Math.max(results.summary.totalTests, 1) < 0.5) {
+  if (
+    results.summary.totalAssertions / Math.max(results.summary.totalTests, 1) <
+    0.5
+  ) {
     recommendations.push({
-      type: 'warning',
-      message: 'Low assertion density detected across tests.',
+      type: "warning",
+      message: "Low assertion density detected across tests.",
       suggestions: [
-        'Each test should validate expected behavior with assertions',
-        'Avoid tests that only check if code runs without errors',
-        'Add assertions for return values, side effects, and state changes',
+        "Each test should validate expected behavior with assertions",
+        "Avoid tests that only check if code runs without errors",
+        "Add assertions for return values, side effects, and state changes",
       ],
     });
   }
@@ -479,12 +515,12 @@ function generateRecommendations(results) {
   );
   if (filesWithoutEdgeCases.length > 0) {
     recommendations.push({
-      type: 'info',
+      type: "info",
       message: `${filesWithoutEdgeCases.length} test file(s) lack edge case coverage.`,
       suggestions: [
-        'Add tests for null/undefined inputs',
-        'Test boundary conditions and error scenarios',
-        'Include tests for invalid or malformed data',
+        "Add tests for null/undefined inputs",
+        "Test boundary conditions and error scenarios",
+        "Include tests for invalid or malformed data",
       ],
     });
   }
@@ -495,35 +531,39 @@ function generateRecommendations(results) {
 // CLI interface
 if (require.main === module) {
   const command = process.argv[2];
-  const testDir = process.argv[3] || 'tests';
+  const testDir = process.argv[3] || "tests";
 
   switch (command) {
-    case 'analyze':
+    case "analyze":
       console.log(`🔍 Analyzing test quality in: ${testDir}`);
 
       // Try to load working spec for spec alignment check
       let spec = null;
-      const specPath = '.caws/working-spec.yaml';
+      const specPath = ".caws/working-spec.yaml";
       if (fs.existsSync(specPath)) {
         try {
-          const yaml = require('js-yaml');
-          spec = yaml.load(fs.readFileSync(specPath, 'utf8'));
-          console.log('✅ Loaded working spec for alignment analysis');
+          const yaml = require("js-yaml");
+          spec = yaml.load(fs.readFileSync(specPath, "utf8"));
+          console.log("✅ Loaded working spec for alignment analysis");
         } catch (error) {
-          console.warn('⚠️  Could not load working spec for alignment analysis');
+          console.warn(
+            "⚠️  Could not load working spec for alignment analysis"
+          );
         }
       }
 
       const results = analyzeTestDirectory(testDir, spec);
 
-      console.log('\n📊 Test Quality Analysis Results:');
+      console.log("\n📊 Test Quality Analysis Results:");
       console.log(`   Files analyzed: ${results.summary.totalFiles}`);
       console.log(`   Test functions: ${results.summary.totalTests}`);
       console.log(`   Total assertions: ${results.summary.totalAssertions}`);
-      console.log(`   Average quality score: ${results.summary.averageQualityScore}/100`);
+      console.log(
+        `   Average quality score: ${results.summary.averageQualityScore}/100`
+      );
 
       if (results.files.length > 0) {
-        console.log('\n📋 File-by-file breakdown:');
+        console.log("\n📋 File-by-file breakdown:");
         results.files.forEach((file) => {
           console.log(
             `   ${file.file}: ${file.qualityScore}/100 (${file.testFunctions} tests, ${file.assertions} assertions)`
@@ -532,7 +572,7 @@ if (require.main === module) {
       }
 
       if (results.summary.issues.length > 0) {
-        console.log('\n⚠️  Issues found:');
+        console.log("\n⚠️  Issues found:");
         results.summary.issues.forEach((issue) => {
           console.log(`   - ${issue}`);
         });
@@ -540,7 +580,7 @@ if (require.main === module) {
 
       const recommendations = generateRecommendations(results);
       if (recommendations.length > 0) {
-        console.log('\n💡 Recommendations:');
+        console.log("\n💡 Recommendations:");
         recommendations.forEach((rec) => {
           console.log(`   [${rec.type.toUpperCase()}] ${rec.message}`);
           rec.suggestions.forEach((suggestion) => {
@@ -551,20 +591,20 @@ if (require.main === module) {
 
       // Exit with error code if quality is poor
       if (results.summary.averageQualityScore < 70) {
-        console.error('\n❌ Test quality below acceptable threshold');
+        console.error("\n❌ Test quality below acceptable threshold");
         process.exit(1);
       }
 
       break;
 
     default:
-      console.log('CAWS Test Quality Analyzer');
-      console.log('Usage:');
-      console.log('  node test-quality.js analyze [test-directory]');
-      console.log('');
-      console.log('Examples:');
-      console.log('  node test-quality.js analyze tests/unit');
-      console.log('  node test-quality.js analyze tests/');
+      console.log("CAWS Test Quality Analyzer");
+      console.log("Usage:");
+      console.log("  node test-quality.js analyze [test-directory]");
+      console.log("");
+      console.log("Examples:");
+      console.log("  node test-quality.js analyze tests/unit");
+      console.log("  node test-quality.js analyze tests/");
       process.exit(1);
   }
 }

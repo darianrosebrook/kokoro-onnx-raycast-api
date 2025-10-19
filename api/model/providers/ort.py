@@ -182,8 +182,11 @@ def get_or_create_ort_model() -> str:
     """
     from api.config import TTSConfig
     
-    # For now, return the original model path
-    # In a full implementation, this would handle model optimization
+    # TODO: Implement ONNX model optimization pipeline
+    # - [ ] Add ONNX optimization passes for inference speed
+    # - [ ] Implement quantized model generation and loading
+    # - [ ] Add optimization level selection based on hardware
+    # - [ ] Cache optimized models to avoid repeated optimization
     return TTSConfig.MODEL_PATH
 
 

@@ -125,7 +125,21 @@ def get_primer_microcache_stats() -> Dict[str, Any]:
 
 
 def _get_cached_model(provider: str) -> Kokoro:
-    """Thread-safe retrieval/creation of a Kokoro model bound to a provider."""
+    """Thread-safe retrieval of the properly initialized Kokoro model."""
+    # First, try to use the model that was properly initialized at startup
+    try:
+        from api.model.sessions import get_model
+        startup_model = get_model()
+        if startup_model is not None:
+            logger.info(f"✅ TTFA OPTIMIZATION: Using startup-initialized model for provider: {provider}")
+            return startup_model
+    except Exception as e:
+        logger.warning(f"Could not get startup model: {e}")
+    
+    # Fallback: use the legacy cache system (but this should rarely happen)
+    logger.error(f"🚫 TTFA ISSUE: FALLBACK to legacy model cache for provider: {provider}")
+    logger.error(f" This indicates startup model initialization failed or model was not properly set!")
+    
     # Trigger background refresh if TTL expired (non-blocking and no cold start)
     try:
         ttl_seconds = int(TTSConfig.get_benchmark_cache_duration())
@@ -138,8 +152,9 @@ def _get_cached_model(provider: str) -> Kokoro:
 
     with _model_cache_lock:
         if provider not in _model_cache:
-            logger.warning(f" PERFORMANCE ISSUE: Creating new Kokoro model for provider: {provider} (cache miss)")
-            logger.warning(f" Current cache contents: {list(_model_cache.keys())}")
+            logger.error(f"🚫 CRITICAL: Creating new Kokoro model for provider: {provider} (cache miss)")
+            logger.error(f" This indicates startup model initialization failed!")
+            logger.error(f" Current cache contents: {list(_model_cache.keys())}")
             _model_cache[provider] = Kokoro(
                 model_path=TTSConfig.MODEL_PATH,
                 voices_path=TTSConfig.VOICES_PATH,
@@ -543,6 +558,7 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
                                  request_id: str, no_cache: bool = False) -> Tuple[int, Optional[np.ndarray], str, str]:
     """
     Latency-optimized path for primer segments with corruption detection.
+    Uses adaptive provider selection (CoreML for most cases) for optimal performance.
     """
     if not text or len(text.strip()) < 3:
         return idx, None, "Text too short", "none"
@@ -559,8 +575,9 @@ def _fast_generate_audio_segment(idx: int, text: str, voice: str, speed: float, 
                 logger.debug(f"[{idx}] Fast path cache hit")
                 return idx, samples, f"{provider} (fast-cached)", "fast-cached"
 
-        # Primer-fast path: force CPU provider to minimize TTFA and avoid CoreML startup overhead
-        provider = "CPUExecutionProvider"
+        # Primer-fast path: use adaptive provider for optimal performance (CoreML for most cases)
+        from api.model.sessions.manager import get_adaptive_provider
+        provider = get_adaptive_provider(len(processed_text))
         model = _get_cached_model(provider)
         
         start = time.perf_counter()
@@ -629,6 +646,16 @@ async def stream_tts_audio(
     start_time = time.perf_counter()
     stream_success = True
     error_details = None
+    
+    # Add detailed timing diagnostics for streaming performance analysis
+    timing_checkpoints = {
+        "start": start_time,
+        "text_processing_start": None,
+        "text_processing_end": None,
+        "first_segment_start": None,
+        "first_segment_end": None,
+        "first_chunk_yield": None,
+    }
 
     # Get variation handler for CoreML precision tracking
     variation_handler = get_variation_handler()
@@ -637,12 +664,28 @@ async def stream_tts_audio(
     if not get_model_status():
         logger.error(f"[{request_id}] Model not ready")
         raise HTTPException(status_code=503, detail="TTS model not ready.")
+    
+    # Log model status for debugging
+    try:
+        from api.model.sessions import get_model, get_active_provider
+        startup_model = get_model()
+        active_provider = get_active_provider()
+        logger.info(f"[{request_id}] ✅ TTFA CHECK: Model status: loaded={startup_model is not None}, provider={active_provider}")
+        if startup_model is None:
+            logger.error(f"[{request_id}] 🚫 TTFA ISSUE: Startup model is None - this will cause 10+ second delays!")
+    except Exception as e:
+        logger.error(f"[{request_id}] 🚫 TTFA ISSUE: Could not check model status: {e}")
 
     # Segment the text (use aliased import to avoid shadowing)
+    timing_checkpoints["text_processing_start"] = time.perf_counter()
     segments = split_segments(text, TTSConfig.MAX_SEGMENT_LENGTH)
+    timing_checkpoints["text_processing_end"] = time.perf_counter()
+    
     if not segments:
         raise HTTPException(status_code=400, detail="No valid text segments found")
 
+    text_processing_time = (timing_checkpoints["text_processing_end"] - timing_checkpoints["text_processing_start"]) * 1000
+    logger.info(f"[{request_id}] 📊 STREAMING DIAGNOSTICS: Text processing took {text_processing_time:.1f}ms")
     logger.info(f"[{request_id}] Text segmented into {len(segments)} parts")
     
     # Log text processing completion
@@ -758,7 +801,10 @@ async def stream_tts_audio(
                     TTSConfig.BYTES_PER_SAMPLE * 8,
                 )
 
-                # data chunk with placeholder size
+                # TODO: Implement proper WAV header size calculation
+                # - [ ] Calculate actual data chunk size after all audio is generated
+                # - [ ] Update WAV header with correct size after streaming completion
+                # - [ ] Handle streaming termination and header correction
                 struct.pack_into("<4sI", wav_header, 36, b"data", 0xFFFFFFFF - header_size)
                 yield bytes(wav_header)
 
@@ -800,7 +846,16 @@ async def stream_tts_audio(
 
         while current_index < n:
             try:
+                if current_index == 0:
+                    timing_checkpoints["first_segment_start"] = time.perf_counter()
+                
                 (idx, audio_np, provider, method), gen_time, use_fast = await current_future
+                
+                if current_index == 0:
+                    timing_checkpoints["first_segment_end"] = time.perf_counter()
+                    first_segment_time = (timing_checkpoints["first_segment_end"] - timing_checkpoints["first_segment_start"]) * 1000
+                    logger.info(f"[{request_id}] 📊 STREAMING DIAGNOSTICS: First segment generation took {first_segment_time:.1f}ms")
+                
                 logger.debug(f"[{request_id}] Segment {current_index} generated in {gen_time:.3f}s via {provider}")
 
                 if audio_np is None:
@@ -843,7 +898,9 @@ async def stream_tts_audio(
 
                     if chunk_state["first_chunk_time"] is None:
                         chunk_state["first_chunk_time"] = current_time
+                        timing_checkpoints["first_chunk_yield"] = current_time
                         ttfa_ms = (current_time - chunk_state["stream_start_time"]) * 1000.0
+                        logger.info(f"[{request_id}] 📊 STREAMING DIAGNOSTICS: First chunk yielded in {ttfa_ms:.2f}ms")
                         logger.info(f"[{request_id}] First chunk in {ttfa_ms:.2f} ms")
                         server_tracker.log_event(request_id, "FIRST_CHUNK_GENERATED", {"ttfa_ms": ttfa_ms, "chunk_size": len(chunk)})
 
@@ -989,6 +1046,20 @@ async def stream_tts_audio(
         logger.info(f"[{request_id}] Performance: segments={processed_count}/{len(segments_to_process)}, "
                    f"chunks={chunk_state['chunk_count']}, TTFA={ttfa_str}ms, RTF={rtf_str}, "
                    f"efficiency={efficiency_str}%, max_gap={max_gap_str}ms, compliant={compliant}")
+        
+        # Log detailed streaming diagnostics
+        if timing_checkpoints["first_chunk_yield"]:
+            total_to_first_chunk = (timing_checkpoints["first_chunk_yield"] - timing_checkpoints["start"]) * 1000
+            logger.info(f"[{request_id}] 📊 STREAMING DIAGNOSTICS SUMMARY:")
+            logger.info(f"[{request_id}]   • Total time to first chunk: {total_to_first_chunk:.1f}ms")
+            if timing_checkpoints["text_processing_end"]:
+                text_time = (timing_checkpoints["text_processing_end"] - timing_checkpoints["text_processing_start"]) * 1000
+                logger.info(f"[{request_id}]   • Text processing: {text_time:.1f}ms")
+            if timing_checkpoints["first_segment_end"]:
+                segment_time = (timing_checkpoints["first_segment_end"] - timing_checkpoints["first_segment_start"]) * 1000
+                logger.info(f"[{request_id}]   • First segment generation: {segment_time:.1f}ms")
+                chunk_yield_time = (timing_checkpoints["first_chunk_yield"] - timing_checkpoints["first_segment_end"]) * 1000
+                logger.info(f"[{request_id}]   • Chunk processing & yield: {chunk_yield_time:.1f}ms")
 
         if processed_count == 0:
             logger.error(f"[{request_id}] No segments processed successfully")

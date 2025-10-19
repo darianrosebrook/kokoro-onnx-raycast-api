@@ -1389,9 +1389,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
       return;
     }
 
+    // TODO: Implement real-time audio decoding and playback
+    // - [ ] Decode incoming audio chunks to PCM format
+    // - [ ] Implement audio buffer management and queuing
+    // - [ ] Add audio device output and synchronization
+    // - [ ] Handle audio format conversion and resampling
     // Append the chunk to the audio buffer
-    // In a real application, you would decode and play the audio
-    // For now, we just update stats and emit an event
     this.stats.chunksReceived++;
     this.stats.bytesReceived += chunkData.length;
     this.stats.averageChunkSize = this.stats.bytesReceived / this.stats.chunksReceived;
@@ -1408,7 +1411,11 @@ export class AudioPlaybackDaemon extends EventEmitter {
     //   method: "handleStatusUpdate",
     //   status: message.data,
     // });
-    // For now, we'll just log the status
+    // TODO: Implement proper status update handling
+    // - [ ] Parse and validate daemon status messages
+    // - [ ] Update internal state based on status changes
+    // - [ ] Emit appropriate events for status transitions
+    // - [ ] Handle error states and recovery procedures
     // console.log("Received status update from daemon", {
     //   component: this.name,
     //   method: "handleStatusUpdate",
@@ -1606,7 +1613,11 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Get buffer utilization (delegated to daemon)
    */
   getBufferUtilization(): number {
-    // This would be retrieved from daemon status
+    // TODO: Implement buffer utilization monitoring
+    // - [ ] Query daemon for current buffer levels
+    // - [ ] Calculate utilization percentage from buffer stats
+    // - [ ] Handle buffer overflow/underflow conditions
+    // - [ ] Provide real-time buffer health metrics
     return 0.5; // Placeholder
   }
 

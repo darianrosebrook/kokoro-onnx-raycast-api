@@ -146,7 +146,12 @@ class PerformanceDashboard:
             logger.error(f"Failed to collect API metrics: {e}")
             error_rate = 1.0
         
-        # Calculate requests per minute (simplified)
+        # TODO: Implement proper requests per minute calculation
+        # - [ ] Track actual request counts over time windows (1min, 5min, 15min)
+        # - [ ] Implement sliding window calculation for accurate throughput metrics
+        # - [ ] Add percentile calculations for request rate distribution
+        # - [ ] Implement burst detection and rate limiting monitoring
+        # - [ ] Add historical trending for request rate patterns
         requests_per_minute = 0.0
         if len(self.metrics_history) > 1:
             time_diff = timestamp - self.metrics_history[-1].timestamp

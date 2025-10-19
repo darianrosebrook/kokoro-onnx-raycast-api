@@ -64,7 +64,12 @@ describe("TTSLogger", () => {
     const _logger = new TTSLogger({ developmentMode: false, level: LogLevel.INFO });
     console.warn("This should not be logged");
     // How to check this? We need access to the mock.
-    // Let's defer this kind of check for now.
+    // TODO: Implement proper logger testing
+    // - [ ] Add mock console interception to verify log filtering
+    // - [ ] Test all log levels (DEBUG, INFO, WARN, ERROR) with development mode
+    // - [ ] Add tests for log message formatting and metadata inclusion
+    // - [ ] Implement log output redirection for test isolation
+    // - [ ] Add performance tests for logging overhead
     expect(true).toBe(true);
   });
 

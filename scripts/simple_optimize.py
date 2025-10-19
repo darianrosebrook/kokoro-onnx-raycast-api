@@ -62,8 +62,11 @@ def optimize_model(input_path: str, output_path: str, optimization_level: str = 
             providers=['CPUExecutionProvider']  # Use CPU for optimization
         )
         
-        # For now, just copy the input model since ONNX Runtime optimization
-        # is applied at runtime, not by creating a new model file
+        # TODO: Implement comprehensive ONNX model optimization
+        # - [ ] Apply ONNX graph optimizations and constant folding
+        # - [ ] Implement quantization for reduced model size
+        # - [ ] Add operator fusion and dead code elimination
+        # - [ ] Generate optimized model artifacts for deployment
         logger.info("ONNX Runtime optimization is applied at runtime")
         logger.info("Copying input model as optimized version")
         

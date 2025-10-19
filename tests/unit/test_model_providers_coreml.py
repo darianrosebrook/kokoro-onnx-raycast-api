@@ -241,7 +241,11 @@ class TestProviderOptionsCreation:
         key2 = coreml._get_capability_cache_key(caps2)
 
         # Assert - keys should differ for significantly different capabilities
-        # (Cache key might be simplified, so we check if they're strings at minimum)
+        # TODO: Improve cache key generation and test coverage
+        # - [ ] Implement proper cache key generation with all capability factors
+        # - [ ] Add test to verify cache keys differ for all capability combinations
+        # - [ ] Add cache key collision detection and validation
+        # - [ ] Implement cache key versioning for compatibility
         assert isinstance(key1, str)
         assert isinstance(key2, str)
 

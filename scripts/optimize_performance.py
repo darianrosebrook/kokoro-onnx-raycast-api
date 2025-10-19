@@ -105,10 +105,13 @@ class PerformanceOptimizer:
         """Register startup tasks for optimization."""
         
         # Dependencies validation (critical, fast)
+        # Import and use the existing dependency validation function
+        from api.main import validate_dependencies
+
         optimizer.register_task(StartupTask(
             name="validate_dependencies",
             phase=StartupPhase.DEPENDENCIES,
-            function=lambda: None,  # Placeholder
+            function=validate_dependencies,
             critical=True,
             estimated_duration_ms=100
         ))
@@ -122,39 +125,112 @@ class PerformanceOptimizer:
             estimated_duration_ms=200
         ))
         
-        # Model loading (critical, slow)
+        # Model loading (critical, slow) - use existing async initialization
+        def load_model_sync():
+            """Synchronous wrapper for async model loading"""
+            try:
+                # Import here to avoid circular imports
+                from api.main import initialize_model
+                import asyncio
+
+                # Run async initialization in new event loop
+                asyncio.run(initialize_model())
+                logger.info("✅ Model loading completed successfully")
+            except Exception as e:
+                logger.error(f"❌ Model loading failed: {e}")
+                raise
+
         optimizer.register_task(StartupTask(
             name="load_model",
             phase=StartupPhase.MODEL_LOADING,
-            function=lambda: None,  # Placeholder
+            function=load_model_sync,
             critical=True,
             estimated_duration_ms=15000
         ))
         
-        # Session warming (critical, slow)
+        # Session warming (critical, slow) - use existing cold-start warmup
+        def warm_sessions_sync():
+            """Synchronous wrapper for async session warming"""
+            try:
+                # Import here to avoid circular imports
+                from api.main import perform_cold_start_warmup
+                import asyncio
+
+                # Run async session warming
+                asyncio.run(perform_cold_start_warmup())
+                logger.info("✅ Session warming completed successfully")
+            except Exception as e:
+                logger.error(f"❌ Session warming failed: {e}")
+                raise
+
         optimizer.register_task(StartupTask(
             name="warm_sessions",
             phase=StartupPhase.SESSION_WARMING,
-            function=lambda: None,  # Placeholder
+            function=warm_sessions_sync,
             critical=True,
             estimated_duration_ms=20000
         ))
         
         # Cache initialization (non-critical, can be lazy)
+        def init_cache_sync():
+            """Initialize and optimize cache systems"""
+            try:
+                # Import here to avoid circular imports
+                from api.model.optimization.cache_optimizer import CacheOptimizer
+                from api.config import TTSConfig
+
+                logger.info("🔄 Initializing cache optimization system...")
+
+                # Initialize cache optimizer
+                cache_optimizer = CacheOptimizer()
+
+                # Pre-warm phoneme cache
+                cache_optimizer.optimize_phoneme_cache()
+
+                # Pre-warm inference cache
+                cache_optimizer.optimize_inference_cache()
+
+                # Pre-warm primer microcache
+                cache_optimizer.optimize_primer_cache()
+
+                logger.info("✅ Cache initialization completed successfully")
+            except Exception as e:
+                logger.error(f"❌ Cache initialization failed: {e}")
+                # Don't raise - cache init is non-critical
+                logger.warning("⚠️ Continuing without cache optimization")
+
         optimizer.register_task(StartupTask(
             name="init_cache",
             phase=StartupPhase.CACHE_INITIALIZATION,
-            function=lambda: None,  # Placeholder
+            function=init_cache_sync,
             critical=False,
             parallelizable=True,
             estimated_duration_ms=2000
         ))
         
         # Background services (non-critical, can be lazy)
+        def start_background_services_sync():
+            """Start background maintenance and monitoring services"""
+            try:
+                # Import here to avoid circular imports
+                from api.model.optimization.startup_optimizer import get_startup_optimizer
+
+                logger.info("🔄 Starting background maintenance services...")
+
+                # Get the startup optimizer and start background initialization
+                startup_optimizer = get_startup_optimizer()
+                startup_optimizer._start_background_initialization()
+
+                logger.info("✅ Background services started successfully")
+            except Exception as e:
+                logger.error(f"❌ Background services startup failed: {e}")
+                # Don't raise - background services are non-critical
+                logger.warning("⚠️ Continuing without background services")
+
         optimizer.register_task(StartupTask(
             name="start_background_services",
             phase=StartupPhase.BACKGROUND_SERVICES,
-            function=lambda: None,  # Placeholder
+            function=start_background_services_sync,
             critical=False,
             parallelizable=True,
             estimated_duration_ms=1000

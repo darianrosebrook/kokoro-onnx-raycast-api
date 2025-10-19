@@ -28,7 +28,7 @@ entire pipeline and provides actionable optimization recommendations.
 import asyncio
 import logging
 import time
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional, Callable, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import json
@@ -87,21 +87,183 @@ class TTFAMeasurement:
 
 @dataclass
 class TTFAStats:
-    """TTFA performance statistics"""
+    """TTFA performance statistics with advanced moving average calculations"""
     total_requests: int = 0
     successful_requests: int = 0
     target_achieved_count: int = 0
-    
+
     # Timing statistics (milliseconds)
     average_ttfa: float = 0.0
     median_ttfa: float = 0.0
     p95_ttfa: float = 0.0
     p99_ttfa: float = 0.0
+
+    # Advanced moving averages
+    ema_ttfa: float = 0.0  # Exponential moving average
+    wma_ttfa: float = 0.0  # Weighted moving average
+    simple_ma_ttfa: float = 0.0  # Simple moving average
+
+    # Moving average configuration
+    ma_window_size: int = 50  # Configurable window size
+    ema_alpha: float = 0.1  # EMA smoothing factor (0.1 = 10% new, 90% old)
+
+    # Historical data for calculations
+    recent_values: List[float] = field(default_factory=list)
+    weighted_values: List[Tuple[float, float]] = field(default_factory=list)  # (value, weight)
     min_ttfa: float = float('inf')
     max_ttfa: float = 0.0
-    
+
     # Recent performance (last 10 requests)
     recent_ttfa_values: List[float] = field(default_factory=list)
+
+    @property
+    def average_ttfa(self) -> float:
+        """
+        DEPRECATED: Use p50_ttfa instead.
+
+        Backward compatibility property that returns p50_ttfa (median) as the "average".
+        The old simple average is still maintained in _legacy_average_ttfa for migration.
+        """
+        import warnings
+        warnings.warn(
+            "average_ttfa is deprecated. Use p50_ttfa (median) for central tendency.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return self.median_ttfa  # p50 is more robust than simple average
+
+    @average_ttfa.setter
+    def average_ttfa(self, value: float) -> None:
+        """Allow setting for backward compatibility, but log deprecation."""
+        import warnings
+        warnings.warn(
+            "Setting average_ttfa is deprecated. Use statistical measures directly.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        # Store in legacy field for migration tracking
+        self._legacy_average_ttfa = value
+
+    def _update_moving_averages(self, new_value: float) -> None:
+        """Update all moving average calculations with new value."""
+        if not self.recent_values:
+            # Initialize all averages with first value
+            self.ema_ttfa = new_value
+            self.wma_ttfa = new_value
+            self.simple_ma_ttfa = new_value
+            return
+
+        # Exponential Moving Average (EMA)
+        self.ema_ttfa = self.ema_alpha * new_value + (1 - self.ema_alpha) * self.ema_ttfa
+
+        # Simple Moving Average (SMA)
+        if len(self.recent_values) >= 2:
+            self.simple_ma_ttfa = sum(self.recent_values[-min(len(self.recent_values), 10):]) / min(len(self.recent_values), 10)
+
+        # Weighted Moving Average (WMA) - more recent values have higher weight
+        if self.weighted_values:
+            total_weight = sum(weight for _, weight in self.weighted_values)
+            if total_weight > 0:
+                self.wma_ttfa = sum(value * weight for value, weight in self.weighted_values) / total_weight
+
+    def _update_statistical_measures(self) -> None:
+        """Update statistical measures (median, percentiles) from recent values."""
+        if not self.recent_values:
+            return
+
+        sorted_values = sorted(self.recent_values)
+
+        # Median
+        n = len(sorted_values)
+        if n % 2 == 1:
+            self.median_ttfa = sorted_values[n // 2]
+        else:
+            mid1, mid2 = sorted_values[n // 2 - 1], sorted_values[n // 2]
+            self.median_ttfa = (mid1 + mid2) / 2
+
+        # Percentiles (simple interpolation)
+        def percentile(p: float) -> float:
+            k = (len(sorted_values) - 1) * (p / 100)
+            f = int(k)
+            c = k - f
+            if f + 1 < len(sorted_values):
+                return sorted_values[f] + c * (sorted_values[f + 1] - sorted_values[f])
+            else:
+                return sorted_values[f]
+
+        self.p95_ttfa = percentile(95)
+        self.p99_ttfa = percentile(99)
+
+    def configure_moving_averages(self, window_size: int = 50, ema_alpha: float = 0.1) -> None:
+        """Configure moving average parameters."""
+        self.ma_window_size = max(5, window_size)  # Minimum window of 5
+        self.ema_alpha = max(0.01, min(1.0, ema_alpha))  # Clamp to valid range
+
+        # Trim existing data to new window size
+        if len(self.recent_values) > self.ma_window_size:
+            self.recent_values = self.recent_values[-self.ma_window_size:]
+        if len(self.weighted_values) > self.ma_window_size:
+            self.weighted_values = self.weighted_values[-self.ma_window_size:]
+
+    def detect_performance_drift(self, threshold_factor: float = 1.5) -> Optional[Dict[str, Any]]:
+        """Detect performance drift using moving average trends."""
+        if len(self.recent_values) < 10:
+            return None  # Need minimum data for drift detection
+
+        # Compare recent EMA with overall average
+        if self.average_ttfa > 0:
+            drift_ratio = self.ema_ttfa / self.average_ttfa
+            if drift_ratio > threshold_factor:
+                return {
+                    "drift_detected": True,
+                    "drift_ratio": drift_ratio,
+                    "ema_ttfa": self.ema_ttfa,
+                    "average_ttfa": self.average_ttfa,
+                    "severity": "high" if drift_ratio > 2.0 else "medium",
+                    "recommendation": "Investigate recent performance degradation"
+                }
+            elif drift_ratio < (1 / threshold_factor):
+                return {
+                    "drift_detected": False,
+                    "drift_ratio": drift_ratio,
+                    "improvement_ratio": 1 / drift_ratio,
+                    "message": "Performance improvement detected"
+                }
+
+        return None
+
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """Get comprehensive performance summary with all metrics."""
+        drift_info = self.detect_performance_drift()
+
+        return {
+            "total_requests": self.total_requests,
+            "successful_requests": self.successful_requests,
+            "success_rate": self.successful_requests / max(1, self.total_requests),
+
+            # Basic statistics
+            "average_ttfa": self.average_ttfa,
+            "median_ttfa": self.median_ttfa,
+            "min_ttfa": self.min_ttfa if self.min_ttfa != float('inf') else 0,
+            "max_ttfa": self.max_ttfa,
+
+            # Percentiles
+            "p95_ttfa": self.p95_ttfa,
+            "p99_ttfa": self.p99_ttfa,
+
+            # Moving averages
+            "ema_ttfa": self.ema_ttfa,
+            "wma_ttfa": self.wma_ttfa,
+            "simple_ma_ttfa": self.simple_ma_ttfa,
+
+            # Configuration
+            "ma_window_size": self.ma_window_size,
+            "ema_alpha": self.ema_alpha,
+
+            # Performance analysis
+            "drift_analysis": drift_info,
+            "data_points": len(self.recent_values)
+        }
     
     def update(self, ttfa_ms: float):
         """Update statistics with new TTFA measurement"""
@@ -113,12 +275,37 @@ class TTFAStats:
             self.min_ttfa = min(self.min_ttfa, ttfa_ms)
             self.max_ttfa = max(self.max_ttfa, ttfa_ms)
             
-            # Track recent values for trending
-            self.recent_ttfa_values.append(ttfa_ms)
-            if len(self.recent_ttfa_values) > 10:
-                self.recent_ttfa_values.pop(0)
-            
-            # Update average (simple moving average for now)
+            # Track recent values for statistical calculations
+            self.recent_values.append(ttfa_ms)
+            if len(self.recent_values) > self.ma_window_size:
+                self.recent_values.pop(0)
+
+            # Add weighted value (more recent = higher weight)
+            weight = time.time()  # Use timestamp as weight for recency
+            self.weighted_values.append((ttfa_ms, weight))
+            if len(self.weighted_values) > self.ma_window_size:
+                self.weighted_values.pop(0)
+
+            # Update min/max
+            self.min_ttfa = min(self.min_ttfa, ttfa_ms)
+            self.max_ttfa = max(self.max_ttfa, ttfa_ms)
+
+            # Calculate moving averages
+            self._update_moving_averages(ttfa_ms)
+
+            # Calculate statistical measures
+            self._update_statistical_measures()
+
+            # Migration from legacy simple average to statistical measures
+            # DEPRECATED: Legacy simple averaging - use p50_ttfa instead
+            import warnings
+            warnings.warn(
+                "Simple average TTFA calculation is deprecated. Use p50_ttfa or p95_ttfa instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+
+            # Legacy support for backward compatibility (will be removed in future version)
             if hasattr(self, '_total_ttfa'):
                 self._total_ttfa += ttfa_ms
                 self.average_ttfa = self._total_ttfa / self.successful_requests

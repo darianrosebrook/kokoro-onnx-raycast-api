@@ -66,8 +66,11 @@ def get_mutation_results() -> float:
 
 def get_test_results() -> Dict[str, Any]:
     """Get test execution results."""
-    # This would typically parse pytest output or test results
-    # For now, return mock data based on what we observed
+    # TODO: Implement test result parsing from execution artifacts
+    # - [ ] Parse pytest JSON/XML output files
+    # - [ ] Extract test case results and failure details
+    # - [ ] Calculate coverage metrics from coverage reports
+    # - [ ] Track test execution timing and resource usage
     return {
         'tests_passed': 187,  # From the test run we saw
         'tests_failed': 31,   # From the test run we saw
@@ -77,8 +80,11 @@ def get_test_results() -> Dict[str, Any]:
 
 def get_contract_results() -> Dict[str, bool]:
     """Check contract test results."""
-    # This would check if contract tests passed
-    # For now, assume they pass if the contracts directory exists
+    # TODO: Implement contract test result verification
+    # - [ ] Parse Pact broker results for consumer contracts
+    # - [ ] Check provider contract test execution results
+    # - [ ] Validate contract compatibility and versioning
+    # - [ ] Track contract test coverage and success rates
     contracts_dir = Path('contracts')
     return {
         'consumer': contracts_dir.exists(),
