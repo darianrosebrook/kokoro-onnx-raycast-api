@@ -39,17 +39,59 @@ _cached_provider_strategy = None
 
 
 def read_cached_provider_strategy() -> Optional[Dict[str, Any]]:
-    """Read cached provider strategy from disk."""
+    """Read cached provider strategy from disk using existing cache utilities."""
     global _cached_provider_strategy
     if _cached_provider_strategy is not None:
         return _cached_provider_strategy
-    
-    # TODO: Implement persistent cache for provider strategies
-    # - [ ] Create cache file format for provider performance data
-    # - [ ] Implement cache file reading with validation
-    # - [ ] Add cache invalidation logic for model updates
-    # - [ ] Handle cache corruption gracefully with fallback
-    return None
+
+    # Use existing cache utilities for provider strategy persistence
+    try:
+        from api.model.utils.cache_utils import read_cached_provider_strategy as read_cache
+        _cached_provider_strategy = read_cache()
+        if _cached_provider_strategy:
+            logger.info("✅ Loaded cached provider strategy from disk")
+        return _cached_provider_strategy
+    except Exception as e:
+        logger.warning(f"Failed to read cached provider strategy: {e}")
+        return None
+
+
+def save_cached_provider_strategy(strategy: Dict[str, Any]) -> bool:
+    """Save provider strategy to persistent cache."""
+    global _cached_provider_strategy
+
+    try:
+        from api.model.utils.cache_utils import save_cached_provider_strategy as save_cache
+        success = save_cache(strategy)
+        if success:
+            _cached_provider_strategy = strategy
+            logger.info("✅ Saved provider strategy to persistent cache")
+        return success
+    except Exception as e:
+        logger.error(f"Failed to save provider strategy to cache: {e}")
+        return False
+
+
+def invalidate_provider_cache() -> bool:
+    """Invalidate cached provider strategy due to model or system changes."""
+    global _cached_provider_strategy
+
+    try:
+        from api.model.utils.cache_utils import clear_cache_file, get_cache_file_path
+        from api.utils.cache_helpers import compute_system_fingerprint
+        from api.config import TTSConfig
+
+        # Clear the in-memory cache
+        _cached_provider_strategy = None
+
+        # Clear the disk cache
+        fp = compute_system_fingerprint(TTSConfig.MODEL_PATH, TTSConfig.VOICES_PATH)
+        cache_name = f"provider_strategy_{fp}.json"
+        cache_file = get_cache_file_path(cache_name)
+        return clear_cache_file(cache_file)
+    except Exception as e:
+        logger.error(f"Failed to invalidate provider cache: {e}")
+        return False
 
 
 def _initialize_session_for_provider(provider_name: str, capabilities: Dict[str, Any]) -> Kokoro:

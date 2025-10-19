@@ -180,14 +180,210 @@ def get_or_create_ort_model() -> str:
     
     @returns str: Path to the optimized ONNX model
     """
-    from api.config import TTSConfig
-    
-    # TODO: Implement ONNX model optimization pipeline
-    # - [ ] Add ONNX optimization passes for inference speed
-    # - [ ] Implement quantized model generation and loading
-    # - [ ] Add optimization level selection based on hardware
-    # - [ ] Cache optimized models to avoid repeated optimization
-    return TTSConfig.MODEL_PATH
+    try:
+        import onnxruntime as ort
+        import onnx
+        from onnx import optimizer
+        import os
+        from pathlib import Path
+        import hashlib
+
+        # Create optimized models directory
+        optimized_dir = Path("optimized_models")
+        optimized_dir.mkdir(exist_ok=True)
+
+        # Generate cache key based on model file and optimization settings
+        model_path = Path(TTSConfig.MODEL_PATH)
+        if not model_path.exists():
+            logger.warning(f"Model file not found: {model_path}")
+            return TTSConfig.MODEL_PATH
+
+        cache_key = generate_model_cache_key(model_path, capabilities or {})
+        optimized_path = optimized_dir / f"optimized_{cache_key}.onnx"
+
+        # Check if optimized model already exists
+        if optimized_path.exists():
+            logger.info(f"Using cached optimized model: {optimized_path}")
+            return str(optimized_path)
+
+        # Load original model
+        logger.info(f"Optimizing ONNX model: {model_path}")
+        original_model = onnx.load(str(model_path))
+
+        # Apply optimization pipeline
+        optimized_model = apply_onnx_optimizations(original_model, capabilities or {})
+
+        # Save optimized model
+        onnx.save(optimized_model, str(optimized_path))
+        logger.info(f"Optimized model saved to: {optimized_path}")
+
+        return str(optimized_path)
+
+    except ImportError as e:
+        logger.warning(f"ONNX optimization not available: {e}")
+        return TTSConfig.MODEL_PATH
+    except Exception as e:
+        logger.error(f"Failed to optimize ONNX model: {e}")
+        return TTSConfig.MODEL_PATH
+
+
+def generate_model_cache_key(model_path: Path, capabilities: Dict[str, Any]) -> str:
+    """
+    Generate a cache key for the optimized model based on model file and capabilities.
+
+    @param model_path: Path to the original model file
+    @param capabilities: Hardware capabilities and optimization settings
+    @returns str: Cache key for the optimized model
+    """
+    # Include model file hash
+    model_hash = hashlib.md5()
+    with open(model_path, 'rb') as f:
+        # Read first 1MB for hash (performance optimization)
+        chunk = f.read(1024 * 1024)
+        model_hash.update(chunk)
+
+    # Include relevant capabilities in cache key
+    cache_components = [
+        model_hash.hexdigest(),
+        str(capabilities.get('cpu_cores', 'unknown')),
+        str(capabilities.get('memory_gb', 'unknown')),
+        str(capabilities.get('has_cuda', False)),
+        str(capabilities.get('has_tensorrt', False)),
+        str(capabilities.get('optimization_level', 'basic')),
+        str(capabilities.get('quantization_enabled', False)),
+    ]
+
+    full_cache_key = '_'.join(cache_components)
+    return hashlib.md5(full_cache_key.encode()).hexdigest()[:16]
+
+
+def apply_onnx_optimizations(model: onnx.ModelProto, capabilities: Dict[str, Any]) -> onnx.ModelProto:
+    """
+    Apply comprehensive ONNX optimizations to the model.
+
+    @param model: Original ONNX model
+    @param capabilities: Hardware capabilities for optimization selection
+    @returns onnx.ModelProto: Optimized ONNX model
+    """
+    try:
+        import onnxruntime as ort
+        from onnx import optimizer
+        import onnxoptimizer
+
+        logger.info("Applying ONNX optimizations...")
+
+        # Start with basic optimizations
+        optimized_model = model
+
+        # Apply onnx-optimizer passes
+        try:
+            passes = onnxoptimizer.get_fuse_and_elimination_passes()
+            optimized_model = onnxoptimizer.optimize(optimized_model, passes)
+            logger.debug(f"Applied {len(passes)} optimization passes")
+        except Exception as e:
+            logger.debug(f"onnx-optimizer passes failed: {e}")
+
+        # Apply additional optimization based on capabilities
+        optimization_level = capabilities.get('optimization_level', 'basic')
+
+        if optimization_level == 'aggressive':
+            # Apply more aggressive optimizations for better performance
+            try:
+                # Use ONNX optimizer with extended passes
+                optimized_model = optimizer.optimize(
+                    optimized_model,
+                    ['eliminate_deadend', 'eliminate_nop_monotone_argmax', 'fuse_consecutive_squeezes',
+                     'fuse_consecutive_transposes', 'fuse_matmul_add_bias_into_gemm']
+                )
+                logger.debug("Applied aggressive optimization passes")
+            except Exception as e:
+                logger.debug(f"Extended optimization passes failed: {e}")
+
+        # Apply quantization if enabled and supported
+        if capabilities.get('quantization_enabled', False):
+            try:
+                optimized_model = apply_quantization(optimized_model, capabilities)
+                logger.info("Applied quantization optimization")
+            except Exception as e:
+                logger.warning(f"Quantization failed: {e}")
+
+        # Validate the optimized model
+        try:
+            onnx.checker.check_model(optimized_model)
+            logger.debug("Optimized model validation passed")
+        except Exception as e:
+            logger.error(f"Optimized model validation failed: {e}")
+            # Return original model if optimization broke it
+            return model
+
+        # Log optimization results
+        original_size = len(onnx.save_to_string(model))
+        optimized_size = len(onnx.save_to_string(optimized_model))
+        compression_ratio = optimized_size / original_size if original_size > 0 else 1.0
+
+        logger.info(f"ONNX optimization complete: {compression_ratio:.2%} of original size")
+
+        return optimized_model
+
+    except ImportError as e:
+        logger.warning(f"ONNX optimization libraries not available: {e}")
+        return model
+    except Exception as e:
+        logger.error(f"ONNX optimization failed: {e}")
+        return model
+
+
+def apply_quantization(model: onnx.ModelProto, capabilities: Dict[str, Any]) -> onnx.ModelProto:
+    """
+    Apply quantization to the ONNX model for reduced precision inference.
+
+    @param model: ONNX model to quantize
+    @param capabilities: Hardware capabilities
+    @returns onnx.ModelProto: Quantized model
+    """
+    try:
+        from onnxruntime.quantization import quantize_dynamic, QuantType
+
+        # Create temporary files for quantization
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(suffix='.onnx', delete=False) as input_file:
+            onnx.save(model, input_file.name)
+            input_path = input_file.name
+
+        with tempfile.NamedTemporaryFile(suffix='.onnx', delete=False) as output_file:
+            output_path = output_file.name
+
+        try:
+            # Apply dynamic quantization
+            quantize_dynamic(
+                model_input=input_path,
+                model_output=output_path,
+                weight_type=QuantType.QInt8,  # Use 8-bit quantization
+                optimize_model=True
+            )
+
+            # Load and return quantized model
+            quantized_model = onnx.load(output_path)
+            logger.info("Dynamic quantization applied successfully")
+
+            return quantized_model
+
+        finally:
+            # Clean up temporary files
+            try:
+                os.unlink(input_path)
+                os.unlink(output_path)
+            except:
+                pass
+
+    except ImportError as e:
+        logger.warning(f"ONNX quantization not available: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"Quantization failed: {e}")
+        raise e
 
 
 def configure_ort_providers(capabilities: Optional[Dict[str, Any]] = None) -> List[str]:

@@ -33,6 +33,15 @@ import fnmatch
 from pathlib import Path
 from typing import Dict, List, Any
 
+# Global tracking for temporary mutation files
+_temp_mutation_files: Set[str] = set()
+
+# Global lock for concurrent mutation testing safety
+import fcntl
+import threading
+_mutation_lock = threading.Lock()
+_mutation_lock_file = None
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -62,39 +71,196 @@ def run_tests(test_path: str = "tests/unit") -> bool:
         return True
 
 def create_mutation(file_path: str, line_num: int, original: str, mutated: str) -> str:
-    """Create a mutated version of a file."""
+    """Create a mutated version of a file with cleanup tracking."""
     with open(file_path, 'r') as f:
         lines = f.readlines()
-    
+
     if line_num < 1 or line_num > len(lines):
         return None
-    
+
     # Create mutation
     mutated_lines = lines.copy()
     mutated_lines[line_num - 1] = lines[line_num - 1].replace(original, mutated)
-    
+
     # Write to temporary file
     temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
     temp_file.writelines(mutated_lines)
     temp_file.close()
-    
+
+    # Track temporary file for cleanup
+    _temp_mutation_files.add(temp_file.name)
+
     return temp_file.name
 
 def test_mutation(original_file: str, mutated_file: str) -> bool:
-    """Test if a mutation is caught by tests."""
-    # Copy mutated file to original location
-    shutil.copy2(mutated_file, original_file)
-    
-    # Run tests
-    success = run_tests()
-    
-    # TODO: Implement proper file restoration after mutation testing
-    # - [ ] Add git stash/pop for clean file restoration
-    # - [ ] Implement backup/restore mechanism for original files
-    # - [ ] Handle concurrent mutation testing sessions safely
-    # - [ ] Add cleanup for temporary mutation files
-    
-    return not success  # Mutation is good if tests fail
+    """Test if a mutation is caught by tests with proper file restoration."""
+    import subprocess
+    import os
+
+    original_backup = None
+    git_stashed = False
+
+    try:
+        # Method 1: Try git stash for clean restoration
+        try:
+            # Check if we're in a git repository and file is tracked
+            result = subprocess.run(['git', 'ls-files', '--error-unmatch', original_file],
+                                  capture_output=True, text=True, cwd=os.path.dirname(original_file) or '.')
+
+            if result.returncode == 0:  # File is tracked by git
+                # Stash current changes
+                stash_result = subprocess.run(['git', 'stash', 'push', '-m', 'mutation-testing-backup'],
+                                            capture_output=True, text=True, cwd=os.path.dirname(original_file) or '.')
+                if stash_result.returncode == 0:
+                    git_stashed = True
+                    logger.debug(f"Git stashed changes for {original_file}")
+                else:
+                    logger.warning(f"Failed to git stash {original_file}: {stash_result.stderr}")
+            else:
+                logger.debug(f"File {original_file} not tracked by git, using backup method")
+        except Exception as e:
+            logger.debug(f"Git stash check failed for {original_file}: {e}")
+
+        # Method 2: Create backup if git stash didn't work
+        if not git_stashed:
+            original_backup = original_file + '.mutation_backup'
+            try:
+                shutil.copy2(original_file, original_backup)
+                logger.debug(f"Created backup: {original_backup}")
+            except Exception as e:
+                logger.error(f"Failed to create backup for {original_file}: {e}")
+                return False  # Can't proceed without backup
+
+        # Apply mutation
+        try:
+            shutil.copy2(mutated_file, original_file)
+            logger.debug(f"Applied mutation to {original_file}")
+        except Exception as e:
+            logger.error(f"Failed to apply mutation to {original_file}: {e}")
+            return False
+
+        # Run tests
+        success = run_tests()
+        result = not success  # Mutation is good if tests fail
+
+        logger.debug(f"Mutation test result: {'caught' if not success else 'not caught'}")
+        return result
+
+    finally:
+        # Restore original file
+        try:
+            if git_stashed:
+                # Restore using git stash pop
+                pop_result = subprocess.run(['git', 'stash', 'pop'],
+                                          capture_output=True, text=True,
+                                          cwd=os.path.dirname(original_file) or '.')
+                if pop_result.returncode == 0:
+                    logger.debug(f"Restored {original_file} using git stash pop")
+                else:
+                    logger.error(f"Failed to git stash pop for {original_file}: {pop_result.stderr}")
+                    # Fallback to backup method
+                    if original_backup and os.path.exists(original_backup):
+                        shutil.copy2(original_backup, original_file)
+                        logger.warning(f"Fell back to backup restoration for {original_file}")
+
+            elif original_backup and os.path.exists(original_backup):
+                # Restore using backup file
+                shutil.copy2(original_backup, original_file)
+                os.remove(original_backup)  # Clean up backup
+                logger.debug(f"Restored {original_file} from backup")
+
+        except Exception as e:
+            logger.error(f"Failed to restore original file {original_file}: {e}")
+            logger.error("Manual intervention may be required to restore the file")
+
+        finally:
+            # Clean up temporary mutation file
+            if mutated_file and os.path.exists(mutated_file):
+                try:
+                    os.remove(mutated_file)
+                    _temp_mutation_files.discard(mutated_file)
+                    logger.debug(f"Cleaned up mutation file: {mutated_file}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up mutation file {mutated_file}: {e}")
+
+    return False  # Default to mutation not caught if restoration failed
+
+
+def acquire_mutation_lock() -> bool:
+    """Acquire exclusive lock for mutation testing to prevent concurrent sessions."""
+    global _mutation_lock_file
+
+    try:
+        lock_file_path = os.path.join(project_root, '.mutation-testing.lock')
+
+        # Create lock file if it doesn't exist
+        _mutation_lock_file = open(lock_file_path, 'w')
+        _mutation_lock_file.write(str(os.getpid()))
+
+        # Try to acquire exclusive lock (non-blocking)
+        fcntl.flock(_mutation_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        logger.info("🔒 Acquired mutation testing lock")
+        return True
+    except (OSError, IOError) as e:
+        if _mutation_lock_file:
+            _mutation_lock_file.close()
+        logger.error(f"❌ Failed to acquire mutation testing lock: {e}")
+        logger.error("Another mutation testing session may be running")
+        return False
+
+
+def release_mutation_lock() -> None:
+    """Release the mutation testing lock."""
+    global _mutation_lock_file
+
+    try:
+        if _mutation_lock_file:
+            lock_file_path = _mutation_lock_file.name
+
+            # Release lock and close file
+            fcntl.flock(_mutation_lock_file.fileno(), fcntl.LOCK_UN)
+            _mutation_lock_file.close()
+            _mutation_lock_file = None
+
+            # Remove lock file
+            try:
+                os.remove(lock_file_path)
+            except OSError:
+                pass  # Lock file may have been removed by another process
+
+            logger.info("🔓 Released mutation testing lock")
+    except Exception as e:
+        logger.warning(f"Failed to release mutation testing lock: {e}")
+
+
+def cleanup_temp_files() -> None:
+    """Clean up temporary mutation files."""
+    global _temp_mutation_files
+
+    for temp_file in _temp_mutation_files.copy():
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+                logger.debug(f"Cleaned up temporary file: {temp_file}")
+            _temp_mutation_files.discard(temp_file)
+        except Exception as e:
+            logger.warning(f"Failed to clean up {temp_file}: {e}")
+
+    # Also clean up any leftover backup files
+    try:
+        for root, dirs, files in os.walk('.'):
+            for file in files:
+                if file.endswith('.mutation_backup'):
+                    backup_path = os.path.join(root, file)
+                    try:
+                        os.remove(backup_path)
+                        logger.debug(f"Cleaned up backup file: {backup_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up backup {backup_path}: {e}")
+    except Exception as e:
+        logger.debug(f"Backup cleanup scan failed: {e}")
+
 
 def run_comprehensive_mutation_test() -> Dict[str, Any]:
     """Run comprehensive mutation testing with multiple operators and parallel execution.
@@ -1111,66 +1277,86 @@ def main():
     """Main mutation testing function with comprehensive analysis."""
     print("🧬 Running comprehensive mutation testing...")
 
-    # First, ensure tests pass
-    print("Running baseline tests...")
-    if not run_tests():
-        print("❌ Baseline tests failed, cannot run mutation testing")
+    # Acquire exclusive lock to prevent concurrent mutation testing
+    if not acquire_mutation_lock():
+        print("❌ Could not acquire mutation testing lock - another session may be running")
         sys.exit(1)
 
-    print("✅ Baseline tests passed, proceeding with mutation testing...")
+    try:
+        # First, ensure tests pass
+        print("Running baseline tests...")
+        if not run_tests():
+            print("❌ Baseline tests failed, cannot run mutation testing")
+            return
 
-    # Run comprehensive mutation tests
-    results = run_comprehensive_mutation_test()
+        print("✅ Baseline tests passed, proceeding with mutation testing...")
 
-    # Report results
-    score_percentage = results['mutation_score'] * 100
-    print("\n📊 Comprehensive Mutation Testing Results:")
-    print(f"  Total mutations: {results['total_mutations']}")
-    print(f"  Killed mutations: {results['killed_mutations']}")
-    print(f"  Survived mutations: {results['survived_mutations']}")
-    print(f"  Equivalent mutations: {results['equivalent_mutations']}")
-    print(f"  Timeouts: {results['timeout_mutations']}")
-    print(f"  Errors: {results['error_mutations']}")
-    print(f"  Mutation score: {results['mutation_score']:.1%}")
-    print(f"  Execution time: {results['execution_time_seconds']:.1f}s")
-    # Analyze trend information
-    trend_info = results.get('trend_analysis', {})
-    if trend_info.get('historical_runs', 0) >= 3:
-        trend_direction = trend_info.get('score_trend', {}).get('direction', 'unknown')
-        if trend_direction == 'improving':
-            print(f"📈 Mutation score trending upward ({trend_info.get('score_trend', {}).get('slope', 0):.4f} per run)")
-        elif trend_direction == 'declining':
-            print(f"📉 Mutation score trending downward - investigate test coverage")
+        # Run comprehensive mutation tests
+        results = run_comprehensive_mutation_test()
+
+        # Report results
+        score_percentage = results['mutation_score'] * 100
+        print("\n📊 Comprehensive Mutation Testing Results:")
+        print(f"  Total mutations: {results['total_mutations']}")
+        print(f"  Killed mutations: {results['killed_mutations']}")
+        print(f"  Survived mutations: {results['survived_mutations']}")
+        print(f"  Equivalent mutations: {results['equivalent_mutations']}")
+        print(f"  Timeouts: {results['timeout_mutations']}")
+        print(f"  Errors: {results['error_mutations']}")
+        print(f"  Mutation score: {results['mutation_score']:.1%}")
+        print(f"  Execution time: {results['execution_time_seconds']:.1f}s")
+
+        # Analyze trend information
+        trend_info = results.get('trend_analysis', {})
+        if trend_info.get('historical_runs', 0) >= 3:
+            trend_direction = trend_info.get('score_trend', {}).get('direction', 'unknown')
+            if trend_direction == 'improving':
+                print(f"📈 Mutation score trending upward ({trend_info.get('score_trend', {}).get('slope', 0):.4f} per run)")
+            elif trend_direction == 'declining':
+                print(f"📉 Mutation score trending downward - investigate test coverage")
+            else:
+                print(f"📊 Mutation score stable over {trend_info.get('historical_runs')} runs")
+
+            volatility = trend_info.get('score_volatility', 0)
+            if volatility > 0.1:
+                print(f"⚠️  High score volatility ({volatility:.3f}) - consider stabilizing test suite")
+
+        # Check against tier requirements (configurable)
+        min_score = config.get("baseline_required", {}).get("min_mutation_score", 0.7)
+        if results['mutation_score'] >= min_score:
+            print(f"✅ Mutation testing passed (≥{min_score*100:.0f}%)")
+
+            # Clean up temporary files
+            cleanup_temp_files()
+
+            # CI/CD integration: set success exit code
+            sys.exit(0)
         else:
-            print(f"📊 Mutation score stable over {trend_info.get('historical_runs')} runs")
+            print(f"❌ Mutation testing failed (<{min_score*100:.0f}%)")
+            print("💡 Recommendations:")
+            if results['survived_mutations'] > results['killed_mutations']:
+                print("   - Add more comprehensive test cases")
+                print("   - Review surviving mutations for missing test scenarios")
+            if results['timeout_mutations'] > 0:
+                print(f"   - {results['timeout_mutations']} mutations timed out - consider optimizing test execution")
+                print("   - Increase timeout or parallelize test runs")
+            if results['equivalent_mutations'] > 0:
+                print(f"   - {results['equivalent_mutations']} equivalent mutations detected - review test effectiveness")
+                print("   - Consider removing redundant test cases")
+            if results.get('trend_analysis', {}).get('improving') == False:
+                print("   - Mutation score is declining - investigate recent code changes")
 
-        volatility = trend_info.get('score_volatility', 0)
-        if volatility > 0.1:
-            print(f"⚠️  High score volatility ({volatility:.3f}) - consider stabilizing test suite")
+            # Clean up temporary files
+            cleanup_temp_files()
 
-    # Check against tier requirements (configurable)
-    min_score = config.get("baseline_required", {}).get("min_mutation_score", 0.7)
-    if results['mutation_score'] >= min_score:
-        print(f"✅ Mutation testing passed (≥{min_score*100:.0f}%)")
-        # CI/CD integration: set success exit code
-        sys.exit(0)
-    else:
-        print(f"❌ Mutation testing failed (<{min_score*100:.0f}%)")
-        print("💡 Recommendations:")
-        if results['survived_mutations'] > results['killed_mutations']:
-            print("   - Add more comprehensive test cases")
-            print("   - Review surviving mutations for missing test scenarios")
-        if results['timeout_mutations'] > 0:
-            print(f"   - {results['timeout_mutations']} mutations timed out - consider optimizing test execution")
-            print("   - Increase timeout or parallelize test runs")
-        if results['equivalent_mutations'] > 0:
-            print(f"   - {results['equivalent_mutations']} equivalent mutations detected - review test effectiveness")
-            print("   - Consider removing redundant test cases")
-        if results.get('trend_analysis', {}).get('improving') == False:
-            print("   - Mutation score is declining - investigate recent code changes")
+            # CI/CD integration: set failure exit code
+            sys.exit(1)
 
-        # CI/CD integration: set failure exit code
-        sys.exit(1)
+    finally:
+        # Always release the lock and clean up
+        release_mutation_lock()
+        cleanup_temp_files()
+
 
 if __name__ == "__main__":
     main()

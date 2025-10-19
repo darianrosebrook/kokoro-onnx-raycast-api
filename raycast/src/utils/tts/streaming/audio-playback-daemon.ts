@@ -171,6 +171,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
   private ws: InstanceType<typeof import("ws").default> | null = null; // WebSocket client connection
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
+  private restartAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private reconnectDelay: number = 1000;
 
@@ -1465,10 +1466,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
     });
 
     this.isConnected = false;
+    this.isPlaying = false;
+    this.isPaused = false;
     this.emit("error", error);
 
-    // Attempt reconnection
-    this.attemptReconnect();
+    // Attempt restart instead of just reconnection
+    this.attemptRestart();
   }
 
   /**
@@ -1494,9 +1497,24 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     this.emit("exit", { code, signal });
 
-    // Attempt reconnection if not a normal exit
-    if (code !== 0) {
-      this.attemptReconnect();
+    // Determine if this was a crash (non-zero exit code) or normal termination
+    const wasCrash = code !== 0 && code !== null;
+
+    if (wasCrash) {
+      console.warn("Daemon process crashed, attempting restart", {
+        component: this.name,
+        method: "handleDaemonExit",
+        exitCode: code,
+        signal,
+      });
+      this.attemptRestart();
+    } else {
+      console.log("Daemon process terminated normally", {
+        component: this.name,
+        method: "handleDaemonExit",
+        exitCode: code,
+        signal,
+      });
     }
   }
 
@@ -1544,6 +1562,71 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
       // Exponential backoff
       this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+    }
+  }
+
+  /**
+   * Attempt to restart the daemon process after a crash
+   */
+  private async attemptRestart(): Promise<void> {
+    if (this.restartAttempts >= this.maxReconnectAttempts) {
+      console.error("Max restart attempts reached", {
+        component: this.name,
+        method: "attemptRestart",
+        attempts: this.restartAttempts,
+        maxAttempts: this.maxReconnectAttempts,
+      });
+      this.emit("restartFailed", { attempts: this.restartAttempts });
+      return;
+    }
+
+    this.restartAttempts++;
+    console.log("Attempting daemon restart", {
+      component: this.name,
+      method: "attemptRestart",
+      attempt: this.restartAttempts,
+      maxAttempts: this.maxReconnectAttempts,
+    });
+
+    try {
+      // Clean up any existing process
+      await this.stopDaemon();
+
+      // Brief delay before restart
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Start fresh daemon process
+      await this.startDaemon();
+      await this.waitForConnection();
+      await this.configureAudio();
+
+      // Reset counters on success
+      this.restartAttempts = 0;
+      this.reconnectAttempts = 0;
+
+      console.log("Daemon restart successful", {
+        component: this.name,
+        method: "attemptRestart",
+      });
+
+      this.emit("restarted", { attempts: this.restartAttempts });
+    } catch (error) {
+      console.error("Daemon restart failed", {
+        component: this.name,
+        method: "attemptRestart",
+        attempt: this.restartAttempts,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      // Emit failure event for external monitoring
+      this.emit("restartFailed", {
+        attempts: this.restartAttempts,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      // Exponential backoff for restart attempts
+      const delay = Math.min(1000 * Math.pow(2, this.restartAttempts - 1), 10000);
+      setTimeout(() => this.attemptRestart(), delay);
     }
   }
 

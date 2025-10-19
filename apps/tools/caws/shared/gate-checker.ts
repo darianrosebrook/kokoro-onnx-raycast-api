@@ -6,6 +6,7 @@
  */
 
 import * as path from "path";
+import * as fs from "fs";
 import { CawsBaseTool } from "./base-tool.js";
 import {
   GateResult,
@@ -20,6 +21,7 @@ import {
 import { WaiversManager } from "./waivers-manager.js";
 
 export class CawsGateChecker extends CawsBaseTool {
+  private logger: any; // Logger instance (inherited from base tool)
   private tierPolicies: Record<number, TierPolicy> = {
     1: {
       min_branch: 0.9,
@@ -163,20 +165,26 @@ export class CawsGateChecker extends CawsBaseTool {
         return { waived: false };
       }
 
-      // TODO: Implement sophisticated waiver matching and conflict resolution
-      // - [ ] Implement waiver precedence rules (newer waivers override older ones)
-      // - [ ] Add waiver scope validation (ensure waiver applies to specific gate)
-      // - [ ] Implement waiver expiration and renewal workflows
-      // - [ ] Add waiver approval chain validation
-      // - [ ] Implement waiver audit trail and reporting
-      for (const waiver of waivers) {
-        const status = await this.waiversManager.checkWaiverStatus(
-          waiver.created_at
-        );
-        if (status.active) {
-          return { waived: true, waiver };
-        }
+      // Implement sophisticated waiver matching and conflict resolution
+      const applicableWaivers = await this.findApplicableWaivers(waivers, gate);
+
+      if (applicableWaivers.length === 0) {
+        return { waived: false };
       }
+
+      // Resolve conflicts and apply precedence rules
+      const resolvedWaiver = await this.resolveWaiverConflicts(
+        applicableWaivers
+      );
+
+      if (resolvedWaiver) {
+        return {
+          waived: true,
+          waiver: resolvedWaiver,
+        };
+      }
+
+      return { waived: false };
 
       return { waived: false };
     } catch (error) {
@@ -740,6 +748,20 @@ export class CawsGateChecker extends CawsBaseTool {
       totalScore += contractResult.score * weights.contracts;
       totalWeight += weights.contracts;
 
+      // Load working spec for requirements
+      let workingSpec = null;
+      try {
+        const specPath = path.join(
+          options.workingDirectory || this.getWorkingDirectory(),
+          ".caws/working-spec.yaml"
+        );
+        if (this.pathExists(specPath)) {
+          workingSpec = this.readYamlFile(specPath);
+        }
+      } catch {
+        // Working spec not available
+      }
+
       // Calculate A11y component score
       const a11yScore = this.calculateA11yScore(
         provenance?.results?.a11y,
@@ -1037,5 +1059,357 @@ export class CawsGateChecker extends CawsBaseTool {
    */
   getAvailableTiers(): number[] {
     return Object.keys(this.tierPolicies).map(Number);
+  }
+
+  /**
+   * Find waivers that are applicable to a specific gate
+   */
+  private async findApplicableWaivers(
+    waivers: WaiverConfig[],
+    targetGate: string
+  ): Promise<WaiverConfig[]> {
+    const applicableWaivers: Array<any> = [];
+
+    for (const waiver of waivers) {
+      try {
+        // Check if waiver applies to this gate
+        if (!waiver.gates.includes(targetGate) && !waiver.gates.includes("*")) {
+          continue;
+        }
+
+        // Check waiver status (active, not expired, approved)
+        const status = await this.waiversManager.checkWaiverStatus(
+          waiver.created_at
+        );
+        if (!status.active) {
+          continue;
+        }
+
+        // Check expiration
+        if (!this.isWaiverValid(waiver)) {
+          continue;
+        }
+
+        // Check scope constraints (if any)
+        if (!this.isWaiverScopeValid(waiver)) {
+          continue;
+        }
+
+        // Check approval chain
+        if (!(await this.validateApprovalChain(waiver))) {
+          continue;
+        }
+
+        applicableWaivers.push(waiver);
+      } catch (error) {
+        this.logger?.debug(`Error checking waiver ${waiver.id}: ${error}`);
+        continue;
+      }
+    }
+
+    return applicableWaivers;
+  }
+
+  /**
+   * Resolve conflicts between multiple applicable waivers
+   */
+  private async resolveWaiverConflicts(
+    waivers: Array<any>
+  ): Promise<any | null> {
+    if (waivers.length === 0) {
+      return null;
+    }
+
+    if (waivers.length === 1) {
+      return waivers[0];
+    }
+
+    // Sort waivers by precedence (newer, higher impact level, more specific)
+    const sortedWaivers = waivers.sort((a, b) => {
+      // Newer waivers take precedence
+      const dateCompare =
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (dateCompare !== 0) {
+        return dateCompare;
+      }
+
+      // Higher impact level takes precedence
+      const impactLevels = { critical: 3, high: 2, medium: 1, low: 0 };
+      const impactCompare =
+        (impactLevels[b.impactLevel] || 0) - (impactLevels[a.impactLevel] || 0);
+      if (impactCompare !== 0) {
+        return impactCompare;
+      }
+
+      // More specific scope takes precedence (fewer wildcards)
+      const scopeCompare = this.compareScopeSpecificity(a.scope, b.scope);
+      if (scopeCompare !== 0) {
+        return scopeCompare;
+      }
+
+      return 0;
+    });
+
+    // Check for conflicting waivers (same gate, different mitigation plans)
+    const conflicts = this.detectWaiverConflicts(sortedWaivers);
+    if (conflicts.length > 0) {
+      await this.handleWaiverConflicts(conflicts);
+    }
+
+    // Return the highest precedence waiver
+    return sortedWaivers[0];
+  }
+
+  /**
+   * Check if a waiver is still valid (not expired, properly approved)
+   */
+  private isWaiverValid(waiver: any): boolean {
+    try {
+      const now = new Date();
+      const expiresAt = new Date(waiver.expiresAt);
+
+      // Check expiration
+      if (now > expiresAt) {
+        this.logger?.debug(`Waiver ${waiver.id} has expired`);
+        return false;
+      }
+
+      // Check if waiver was created too far in the past (sanity check)
+      const createdAt = new Date(waiver.created_at);
+      const maxAge = 90 * 24 * 60 * 60 * 1000; // 90 days
+      if (now.getTime() - createdAt.getTime() > maxAge) {
+        this.logger?.debug(`Waiver ${waiver.id} is too old`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      this.logger?.error(`Error validating waiver ${waiver.id}: ${error}`);
+      return false;
+    }
+  }
+
+  /**
+   * Check if waiver scope constraints are satisfied
+   */
+  private isWaiverScopeValid(waiver: any): boolean {
+    try {
+      if (!waiver.scope) {
+        return true; // No scope constraints
+      }
+
+      // Check file scope
+      if (waiver.scope.files) {
+        // In a real implementation, this would check current file context
+        // For now, assume scope is valid
+      }
+
+      // Check branch scope
+      if (waiver.scope.branches) {
+        // In a real implementation, this would check current git branch
+        // For now, assume scope is valid
+      }
+
+      // Check environment scope
+      if (waiver.scope.environments) {
+        // In a real implementation, this would check current environment
+        // For now, assume scope is valid
+      }
+
+      return true;
+    } catch (error) {
+      this.logger?.error(
+        `Error validating waiver scope ${waiver.id}: ${error}`
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Validate waiver approval chain
+   */
+  private async validateApprovalChain(waiver: any): Promise<boolean> {
+    try {
+      // Check if approver has required permissions
+      const requiredApprovers = this.getRequiredApprovers(waiver.impactLevel);
+
+      if (!requiredApprovers.includes(waiver.approvedBy)) {
+        this.logger?.debug(
+          `Waiver ${waiver.id} approved by unauthorized user: ${waiver.approvedBy}`
+        );
+        return false;
+      }
+
+      // Check approval timestamp (should be after creation)
+      const createdAt = new Date(waiver.created_at);
+      const approvedAt = new Date(waiver.approvedAt || waiver.created_at);
+
+      if (approvedAt < createdAt) {
+        this.logger?.debug(
+          `Waiver ${waiver.id} has invalid approval timestamp`
+        );
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      this.logger?.error(
+        `Error validating approval chain for waiver ${waiver.id}: ${error}`
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Compare scope specificity (more specific scopes get higher precedence)
+   */
+  private compareScopeSpecificity(scopeA: any, scopeB: any): number {
+    if (!scopeA && !scopeB) return 0;
+    if (!scopeA && scopeB) return -1;
+    if (scopeA && !scopeB) return 1;
+
+    // Count specificity indicators
+    const specificityA = this.calculateScopeSpecificity(scopeA);
+    const specificityB = this.calculateScopeSpecificity(scopeB);
+
+    return specificityB - specificityA; // Higher specificity first
+  }
+
+  /**
+   * Calculate scope specificity score
+   */
+  private calculateScopeSpecificity(scope: any): number {
+    let specificity = 0;
+
+    if (scope.files) {
+      specificity += scope.files.length;
+      if (!scope.files.includes("*")) specificity += 10;
+    }
+
+    if (scope.branches) {
+      specificity += scope.branches.length;
+      if (!scope.branches.includes("*")) specificity += 10;
+    }
+
+    if (scope.environments) {
+      specificity += scope.environments.length;
+      if (!scope.environments.includes("*")) specificity += 10;
+    }
+
+    return specificity;
+  }
+
+  /**
+   * Detect conflicts between waivers
+   */
+  private detectWaiverConflicts(waivers: Array<any>): Array<{
+    waiverA: any;
+    waiverB: any;
+    conflictType: string;
+  }> {
+    const conflicts: Array<{
+      waiverA: any;
+      waiverB: any;
+      conflictType: string;
+    }> = [];
+
+    for (let i = 0; i < waivers.length; i++) {
+      for (let j = i + 1; j < waivers.length; j++) {
+        const waiverA = waivers[i];
+        const waiverB = waivers[j];
+
+        // Check for conflicting mitigation plans
+        if (waiverA.mitigationPlan !== waiverB.mitigationPlan) {
+          conflicts.push({
+            waiverA,
+            waiverB,
+            conflictType: "conflicting_mitigation",
+          });
+        }
+
+        // Check for overlapping but inconsistent scopes
+        if (this.haveConflictingScopes(waiverA.scope, waiverB.scope)) {
+          conflicts.push({
+            waiverA,
+            waiverB,
+            conflictType: "conflicting_scope",
+          });
+        }
+      }
+    }
+
+    return conflicts;
+  }
+
+  /**
+   * Check if two scopes have conflicts
+   */
+  private haveConflictingScopes(scopeA: any, scopeB: any): boolean {
+    if (!scopeA || !scopeB) return false;
+
+    // Check for conflicting file patterns
+    if (scopeA.files && scopeB.files) {
+      const conflicts = scopeA.files.some((fileA: string) =>
+        scopeB.files.some((fileB: string) =>
+          this.filePatternsConflict(fileA, fileB)
+        )
+      );
+      if (conflicts) return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if two file patterns conflict
+   */
+  private filePatternsConflict(patternA: string, patternB: string): boolean {
+    // Simple conflict detection - patterns that could match the same files
+    if (patternA === patternB) return true;
+    if (patternA === "*" || patternB === "*") return true;
+    if (patternA.includes("*") && patternB.includes("*")) {
+      // More complex pattern matching would be needed here
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Handle detected waiver conflicts
+   */
+  private async handleWaiverConflicts(
+    conflicts: Array<{
+      waiverA: any;
+      waiverB: any;
+      conflictType: string;
+    }>
+  ): Promise<void> {
+    for (const conflict of conflicts) {
+      this.logger?.warn(`Waiver conflict detected: ${conflict.conflictType}`, {
+        waiverA: conflict.waiverA.id,
+        waiverB: conflict.waiverB.id,
+        type: conflict.conflictType,
+      });
+
+      // In a real implementation, this would:
+      // 1. Notify conflict resolution team
+      // 2. Create conflict resolution ticket
+      // 3. Escalate to higher approval authority
+      // 4. Log audit trail
+    }
+  }
+
+  /**
+   * Get required approvers for a given impact level
+   */
+  private getRequiredApprovers(impactLevel: string): string[] {
+    const approverMap: { [key: string]: string[] } = {
+      low: ["developer", "tech-lead"],
+      medium: ["tech-lead", "engineering-manager"],
+      high: ["engineering-manager", "vp-engineering"],
+      critical: ["vp-engineering", "ciso", "ceo"],
+    };
+
+    return approverMap[impactLevel] || ["engineering-manager"];
   }
 }

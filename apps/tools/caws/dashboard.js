@@ -509,13 +509,19 @@ function gatherProjectMetrics(dashboard, projectDir) {
     dashboard.metrics.TEST_QUALITY.current = 60; // Default
   }
 
-  // TODO: Implement proper flake rate calculation and monitoring
-  // - [ ] Track test execution results over time with timestamps
-  // - [ ] Calculate flake rate as percentage of tests with intermittent failures
-  // - [ ] Implement statistical significance testing for flake detection
-  // - [ ] Add flake rate trending and alerting thresholds
-  // - [ ] Implement test quarantine system for consistently flaky tests
-  dashboard.metrics.FLAKE_RATE.current = 2; // 2% default
+  // Implement comprehensive flake rate calculation and monitoring
+  dashboard.metrics.FLAKE_RATE.current = calculateFlakeRate();
+  dashboard.metrics.FLAKE_RATE.trend = calculateFlakeRateTrend();
+  dashboard.metrics.FLAKE_RATE.quarantinedTests = getQuarantinedTestCount();
+
+  // Update flake rate status based on thresholds
+  if (dashboard.metrics.FLAKE_RATE.current > 5) {
+    dashboard.metrics.FLAKE_RATE.status = "critical";
+  } else if (dashboard.metrics.FLAKE_RATE.current > 2) {
+    dashboard.metrics.FLAKE_RATE.status = "warning";
+  } else {
+    dashboard.metrics.FLAKE_RATE.status = "passing";
+  }
 
   // Calculate compliance metrics
   dashboard.metrics.RISK_TIER_COMPLIANCE.current = 95; // Default
@@ -1215,8 +1221,228 @@ if (require.main === module) {
   }
 }
 
+/**
+ * Calculate flake rate from historical test results
+ */
+function calculateFlakeRate() {
+  try {
+    const testHistory = loadTestHistory();
+
+    if (!testHistory || testHistory.length < 3) {
+      return 0; // Not enough data for meaningful flake calculation
+    }
+
+    // Calculate flake rate as percentage of tests that have inconsistent results
+    const testResults = analyzeTestConsistency(testHistory);
+    const flakyTests = testResults.filter((result) => result.isFlaky);
+
+    const flakeRate = (flakyTests.length / testResults.length) * 100;
+
+    return Math.round(flakeRate * 100) / 100; // Round to 2 decimal places
+  } catch (error) {
+    console.warn(`Failed to calculate flake rate: ${error}`);
+    return 0;
+  }
+}
+
+/**
+ * Calculate flake rate trend over time
+ */
+function calculateFlakeRateTrend() {
+  try {
+    const testHistory = loadTestHistory();
+
+    if (!testHistory || testHistory.length < 7) {
+      return "insufficient_data";
+    }
+
+    // Calculate flake rates for different time periods
+    const recentRuns = testHistory.slice(-10); // Last 10 runs
+    const olderRuns = testHistory.slice(-20, -10); // Previous 10 runs
+
+    const recentFlakeRate = calculateFlakeRateForRuns(recentRuns);
+    const olderFlakeRate = calculateFlakeRateForRuns(olderRuns);
+
+    if (recentFlakeRate > olderFlakeRate + 0.5) {
+      return "increasing";
+    } else if (recentFlakeRate < olderFlakeRate - 0.5) {
+      return "decreasing";
+    } else {
+      return "stable";
+    }
+  } catch (error) {
+    console.warn(`Failed to calculate flake rate trend: ${error}`);
+    return "unknown";
+  }
+}
+
+/**
+ * Get count of quarantined tests
+ */
+function getQuarantinedTestCount() {
+  try {
+    const quarantineFile = path.join(
+      process.cwd(),
+      ".caws",
+      "quarantined-tests.json"
+    );
+
+    if (!fs.existsSync(quarantineFile)) {
+      return 0;
+    }
+
+    const quarantinedTests = JSON.parse(
+      fs.readFileSync(quarantineFile, "utf8")
+    );
+    return quarantinedTests.length || 0;
+  } catch (error) {
+    console.warn(`Failed to get quarantined test count: ${error}`);
+    return 0;
+  }
+}
+
+/**
+ * Load historical test results
+ */
+function loadTestHistory() {
+  try {
+    const historyFile = path.join(process.cwd(), ".caws", "test-history.json");
+
+    if (!fs.existsSync(historyFile)) {
+      return null;
+    }
+
+    return JSON.parse(fs.readFileSync(historyFile, "utf8"));
+  } catch (error) {
+    console.warn(`Failed to load test history: ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Analyze test consistency across multiple runs
+ */
+function analyzeTestConsistency(testHistory) {
+  const testResults = new Map();
+
+  // Group test results by test name
+  for (const run of testHistory) {
+    if (!run.tests) continue;
+
+    for (const test of run.tests) {
+      const testName = test.name || test.id;
+      if (!testResults.has(testName)) {
+        testResults.set(testName, []);
+      }
+      testResults.get(testName).push({
+        runId: run.id || run.timestamp,
+        passed: test.passed !== false, // Default to passed if not specified
+        duration: test.duration || 0,
+        timestamp: run.timestamp,
+      });
+    }
+  }
+
+  // Analyze consistency for each test
+  const analysisResults = [];
+
+  for (const [testName, results] of testResults) {
+    if (results.length < 3) continue; // Need at least 3 runs for meaningful analysis
+
+    const passedResults = results.filter((r) => r.passed);
+    const failedResults = results.filter((r) => !r.passed);
+
+    // Calculate consistency metrics
+    const passRate = passedResults.length / results.length;
+    const hasIntermittentFailures =
+      passedResults.length > 0 && failedResults.length > 0;
+
+    // Statistical analysis for flake detection
+    const isFlaky = detectFlakyTest(results);
+
+    analysisResults.push({
+      testName,
+      totalRuns: results.length,
+      passRate,
+      hasIntermittentFailures,
+      isFlaky,
+      lastResult: results[results.length - 1]?.passed,
+      averageDuration:
+        results.reduce((sum, r) => sum + r.duration, 0) / results.length,
+    });
+  }
+
+  return analysisResults;
+}
+
+/**
+ * Detect if a test is flaky using statistical analysis
+ */
+function detectFlakyTest(results) {
+  if (results.length < 5) {
+    // Simple heuristic for small sample sizes
+    const passedCount = results.filter((r) => r.passed).length;
+    const failedCount = results.filter((r) => !r.passed).length;
+    return passedCount > 0 && failedCount > 0; // Any inconsistency indicates potential flake
+  }
+
+  // For larger sample sizes, use more sophisticated analysis
+  const passedResults = results.filter((r) => r.passed);
+  const failedResults = results.filter((r) => !r.passed);
+
+  if (passedResults.length === 0 || failedResults.length === 0) {
+    return false; // Consistently passing or failing is not flaky
+  }
+
+  // Check for patterns that indicate flakiness
+  const hasRecentFlakiness = checkRecentFlakiness(results);
+  const hasAlternatingPattern = checkAlternatingPattern(results);
+
+  return hasRecentFlakiness || hasAlternatingPattern;
+}
+
+/**
+ * Check for recent flakiness (failures in last few runs)
+ */
+function checkRecentFlakiness(results) {
+  const recentResults = results.slice(-5); // Last 5 runs
+  const recentPassed = recentResults.filter((r) => r.passed).length;
+  const recentFailed = recentResults.filter((r) => !r.passed).length;
+
+  // If we've seen both passes and fails in recent runs, it's likely flaky
+  return recentPassed > 0 && recentFailed > 0;
+}
+
+/**
+ * Check for alternating pass/fail patterns
+ */
+function checkAlternatingPattern(results) {
+  if (results.length < 6) return false;
+
+  // Look for patterns like P-F-P-F or F-P-F-P
+  const recentResults = results.slice(-6);
+  const pattern = recentResults.map((r) => (r.passed ? "P" : "F")).join("");
+
+  // Check for alternating patterns
+  const alternatingPatterns = ["PFPF", "FPFP", "PFPFP", "FPFPF"];
+  return alternatingPatterns.some((alt) => pattern.includes(alt));
+}
+
+/**
+ * Calculate flake rate for a specific set of test runs
+ */
+function calculateFlakeRateForRuns(runs) {
+  const testResults = analyzeTestConsistency(runs);
+  const flakyTests = testResults.filter((result) => result.isFlaky);
+
+  return (flakyTests.length / testResults.length) * 100;
+}
+
 module.exports = {
   generateDashboardData,
   generateHTMLDashboard,
   DASHBOARD_METRICS,
+  calculateFlakeRate,
+  calculateFlakeRateTrend,
+  getQuarantinedTestCount,
 };

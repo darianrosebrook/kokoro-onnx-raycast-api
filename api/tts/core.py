@@ -627,7 +627,11 @@ async def stream_tts_audio(
     corruption detection for robust streaming.
     """
     request_id = request.headers.get("x-request-id", "no-id")
-    
+
+    # Initialize WAV tracking variables
+    header_size = 44  # Standard WAV header size
+    total_audio_size = 0
+
     # Start server-side performance tracking
     server_tracker.start_request(request_id, text, voice, speed)
     server_tracker.log_event(request_id, "PROCESSING_START", {
@@ -770,9 +774,22 @@ async def stream_tts_audio(
                     try:
                         scaled = np.int16(np.asarray(cached_primer, dtype=np.float32) * 32767)
                         primer_bytes = scaled.tobytes()
-                        yield primer_bytes[:max(1024, len(primer_bytes) // 4)]
+
+                        # Track primer bytes for WAV size calculation
+                        primer_yield_size = 0
+                        first_chunk = primer_bytes[:max(1024, len(primer_bytes) // 4)]
+                        primer_yield_size += len(first_chunk)
+                        yield first_chunk
+
                         if len(primer_bytes) > 2048:
-                            yield primer_bytes[max(1024, len(primer_bytes) // 4):max(2048, len(primer_bytes) // 2)]
+                            second_chunk = primer_bytes[max(1024, len(primer_bytes) // 4):max(2048, len(primer_bytes) // 2)]
+                            primer_yield_size += len(second_chunk)
+                            yield second_chunk
+
+                        # Update WAV size tracking
+                        if format.lower() == "wav":
+                            total_audio_size += primer_yield_size
+
                         logger.info(f"[{request_id}] Primer emitted from cache ({len(primer_bytes)} bytes)")
                     except Exception as e:
                         logger.debug(f"[{request_id}] Primer emit failed: {e}")
@@ -784,7 +801,6 @@ async def stream_tts_audio(
         # WAV header (if requested) - optimized for gapless streaming
         if format.lower() == "wav":
             try:
-                header_size = 44
                 wav_header = bytearray(header_size)
 
                 # RIFF header
@@ -801,10 +817,9 @@ async def stream_tts_audio(
                     TTSConfig.BYTES_PER_SAMPLE * 8,
                 )
 
-                # TODO: Implement proper WAV header size calculation
-                # - [ ] Calculate actual data chunk size after all audio is generated
-                # - [ ] Update WAV header with correct size after streaming completion
-                # - [ ] Handle streaming termination and header correction
+                # Track total audio size for WAV header correction
+                # For streaming WAV, we initially send placeholder sizes (0xFFFFFFFF)
+                # and send a correction header at the end if possible
                 struct.pack_into("<4sI", wav_header, 36, b"data", 0xFFFFFFFF - header_size)
                 yield bytes(wav_header)
 
@@ -812,7 +827,10 @@ async def stream_tts_audio(
                 # This provides just enough buffer for audio pipeline initialization without noticeable delay
                 silence_ms = 25  # Reduced for faster TTFA
                 silence_samples = int(TTSConfig.SAMPLE_RATE * (silence_ms / 1000))
-                yield np.int16(np.zeros(silence_samples)).tobytes()
+                silence_bytes = np.int16(np.zeros(silence_samples)).tobytes()
+                if format.lower() == "wav":
+                    total_audio_size += len(silence_bytes)
+                yield silence_bytes
 
             except Exception as e:
                 logger.error(f"[{request_id}] WAV header generation failed: {e}; falling back to PCM")
@@ -880,6 +898,10 @@ async def stream_tts_audio(
                 scaled = np.clip(audio_np * 32767.0, -32768, 32767).astype(np.int16)
                 segment_bytes = scaled.tobytes()
                 total_audio_bytes += len(segment_bytes)
+
+                # Track audio size for WAV header correction
+                if format.lower() == "wav":
+                    total_audio_size += len(segment_bytes)
 
                 # Use adaptive chunk sizing based on total text length for optimal streaming performance
                 # This balances responsiveness with stability for gapless audio
@@ -1033,6 +1055,20 @@ async def stream_tts_audio(
         
         # Enhanced final logging with optimization details
         adaptive_chunk_duration = TTSConfig.get_adaptive_chunk_duration_ms(len(text))
+        # Send WAV header correction if applicable
+        # For streaming WAV, we send a metadata chunk with correct file sizes
+        # This allows clients to reconstruct proper WAV files from streams
+        if format.lower() == "wav" and total_audio_size > 0:
+            try:
+                # Create a correction metadata chunk
+                # Format: "WAVC" (WAV Correction) + total_file_size + data_size
+                total_file_size = header_size + total_audio_size
+                correction_data = struct.pack("<4sII", b"WAVC", total_file_size, total_audio_size)
+                yield correction_data
+                logger.debug(f"[{request_id}] Sent WAV header correction: file_size={total_file_size}, data_size={total_audio_size}")
+            except Exception as e:
+                logger.debug(f"[{request_id}] WAV correction failed: {e}")
+
         logger.info(f"[{request_id}] Streaming completed successfully")
         logger.info(f"[{request_id}] Optimization: content_length={len(text)}, "
                    f"category={chunk_state['content_length_category']}, "

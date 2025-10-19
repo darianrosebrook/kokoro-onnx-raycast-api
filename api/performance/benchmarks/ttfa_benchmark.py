@@ -101,7 +101,7 @@ class TTFABenchmarkResult:
 
 ## Summary
 - **Measurements**: {self.total_measurements}
-- **Average TTFA**: {self.average_ttfa_ms:.1f}ms
+- **Median TTFA (P50)**: {self.average_ttfa_ms:.1f}ms
 - **Target**: {self.target_ms}ms
 - **Success Rate**: {self.success_rate:.1%}
 

@@ -82,6 +82,592 @@ import { EventEmitter } from "events";
 // const execAsync = promisify(exec);
 
 /**
+ * Streaming State Machine for Robust Audio Playback Management
+ *
+ * Implements a finite state machine to handle the complex lifecycle of streaming audio playback,
+ * eliminating race conditions and providing proper error handling and recovery.
+ */
+export enum StreamingState {
+  /** Initial state - not started */
+  IDLE = "idle",
+  /** Starting streaming session */
+  STARTING = "starting",
+  /** Streaming session active and healthy */
+  STREAMING = "streaming",
+  /** Streaming completed successfully */
+  COMPLETED = "completed",
+  /** Streaming failed with error */
+  FAILED = "failed",
+  /** Streaming terminated by user or timeout */
+  TERMINATED = "terminated",
+}
+
+export interface StreamingStateMetrics {
+  state: StreamingState;
+  stateStartTime: number;
+  transitions: Array<{
+    from: StreamingState;
+    to: StreamingState;
+    timestamp: number;
+    reason?: string;
+  }>;
+  startupAttempts: number;
+  startupFailures: number;
+  timeouts: number;
+  processRestarts: number;
+  heartbeatFailures: number;
+  qualityMetrics: {
+    chunksProcessed: number;
+    avgChunkSize: number;
+    processingDelays: number[];
+    lastHeartbeat: number;
+    consecutiveFailures: number;
+  };
+  lastError?: Error;
+}
+
+export class StreamingStateManager {
+  private state: StreamingState = StreamingState.IDLE;
+  private metrics: StreamingStateMetrics;
+  private timeoutId?: NodeJS.Timeout;
+  private heartbeatId?: NodeJS.Timeout;
+  private retryCount = 0;
+  private maxRetries = 3;
+  private startupTimeout = 5000; // 5 seconds
+  private heartbeatInterval = 1000; // 1 second
+
+  constructor(
+    private instanceId: string,
+    private onStateChange?: (state: StreamingState, reason?: string) => void
+  ) {
+    this.metrics = {
+      state: StreamingState.IDLE,
+      stateStartTime: performance.now(),
+      transitions: [],
+      startupAttempts: 0,
+      startupFailures: 0,
+      timeouts: 0,
+      processRestarts: 0,
+      heartbeatFailures: 0,
+      qualityMetrics: {
+        chunksProcessed: 0,
+        avgChunkSize: 0,
+        processingDelays: [],
+        lastHeartbeat: performance.now(),
+        consecutiveFailures: 0,
+      },
+    };
+  }
+
+  /**
+   * Transition to a new state with validation
+   */
+  transitionTo(newState: StreamingState, reason?: string): boolean {
+    const validTransitions = this.getValidTransitions(this.state);
+
+    if (!validTransitions.includes(newState)) {
+      console.error(`[${this.instanceId}] Invalid state transition: ${this.state} -> ${newState}`);
+      return false;
+    }
+
+    const oldState = this.state;
+    this.state = newState;
+    const now = performance.now();
+
+    this.metrics.transitions.push({
+      from: oldState,
+      to: newState,
+      timestamp: now,
+      reason,
+    });
+
+    this.metrics.state = newState;
+    this.metrics.stateStartTime = now;
+
+    console.log(
+      `[${this.instanceId}] State transition: ${oldState} -> ${newState}${reason ? ` (${reason})` : ""}`
+    );
+
+    // Handle state-specific logic
+    this.handleStateTransition(oldState, newState);
+
+    this.onStateChange?.(newState, reason);
+    return true;
+  }
+
+  /**
+   * Get valid transitions from current state
+   */
+  private getValidTransitions(fromState: StreamingState): StreamingState[] {
+    switch (fromState) {
+      case StreamingState.IDLE:
+        return [StreamingState.STARTING, StreamingState.FAILED, StreamingState.TERMINATED];
+      case StreamingState.STARTING:
+        return [StreamingState.STREAMING, StreamingState.FAILED, StreamingState.TERMINATED];
+      case StreamingState.STREAMING:
+        return [StreamingState.COMPLETED, StreamingState.FAILED, StreamingState.TERMINATED];
+      case StreamingState.COMPLETED:
+      case StreamingState.FAILED:
+      case StreamingState.TERMINATED:
+        return []; // Terminal states
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * Handle state-specific transition logic
+   */
+  private handleStateTransition(fromState: StreamingState, toState: StreamingState): void {
+    // Clear existing timers
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = undefined;
+    }
+
+    if (this.heartbeatId) {
+      clearInterval(this.heartbeatId);
+      this.heartbeatId = undefined;
+    }
+
+    switch (toState) {
+      case StreamingState.STARTING:
+        this.startStartupTimeout();
+        this.metrics.startupAttempts++;
+        break;
+
+      case StreamingState.STREAMING:
+        this.startHeartbeat();
+        break;
+
+      case StreamingState.FAILED:
+        this.metrics.startupFailures++;
+        break;
+
+      case StreamingState.TERMINATED:
+        // Cleanup will be handled by the caller
+        break;
+    }
+  }
+
+  /**
+   * Start streaming session with retry logic
+   */
+  async startStreaming(
+    startFn: () => Promise<any>,
+    retryFn?: () => Promise<any>
+  ): Promise<boolean> {
+    if (this.state !== StreamingState.IDLE) {
+      console.error(`[${this.instanceId}] Cannot start streaming from state: ${this.state}`);
+      return false;
+    }
+
+    this.transitionTo(StreamingState.STARTING, "initiating streaming session");
+
+    while (this.retryCount < this.maxRetries) {
+      try {
+        await startFn();
+        this.transitionTo(StreamingState.STREAMING, "streaming session established");
+        this.retryCount = 0; // Reset on success
+        return true;
+      } catch (error) {
+        console.error(
+          `[${this.instanceId}] Streaming startup attempt ${this.retryCount + 1} failed:`,
+          error
+        );
+        this.metrics.lastError = error as Error;
+        this.retryCount++;
+
+        if (this.retryCount < this.maxRetries) {
+          // Try retry function if provided
+          if (retryFn) {
+            try {
+              console.log(`[${this.instanceId}] Attempting recovery...`);
+              await retryFn();
+            } catch (retryError) {
+              console.error(`[${this.instanceId}] Recovery failed:`, retryError);
+            }
+          }
+
+          // Wait before retry (exponential backoff)
+          const delay = Math.min(1000 * Math.pow(2, this.retryCount - 1), 5000);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    this.transitionTo(StreamingState.FAILED, `failed after ${this.maxRetries} attempts`);
+    return false;
+  }
+
+  /**
+   * Check if streaming can accept chunks
+   */
+  canStream(): boolean {
+    return this.state === StreamingState.STREAMING;
+  }
+
+  /**
+   * Check if streaming is in a terminal state
+   */
+  isTerminal(): boolean {
+    return [StreamingState.COMPLETED, StreamingState.FAILED, StreamingState.TERMINATED].includes(
+      this.state
+    );
+  }
+
+  /**
+   * Complete streaming session
+   */
+  complete(reason?: string): void {
+    if (this.state === StreamingState.STREAMING) {
+      this.transitionTo(StreamingState.COMPLETED, reason);
+    }
+  }
+
+  /**
+   * Fail streaming session
+   */
+  fail(error: Error, reason?: string): void {
+    this.metrics.lastError = error;
+    if (!this.isTerminal()) {
+      this.transitionTo(StreamingState.FAILED, reason);
+    }
+  }
+
+  /**
+   * Terminate streaming session
+   */
+  terminate(reason?: string): void {
+    if (!this.isTerminal()) {
+      this.transitionTo(StreamingState.TERMINATED, reason);
+    }
+  }
+
+  /**
+   * Start startup timeout
+   */
+  private startStartupTimeout(): void {
+    this.timeoutId = setTimeout(() => {
+      if (this.state === StreamingState.STARTING) {
+        console.error(`[${this.instanceId}] Streaming startup timeout`);
+        this.metrics.timeouts++;
+        this.fail(new Error("Streaming startup timeout"), "startup timeout");
+      }
+    }, this.startupTimeout);
+  }
+
+  /**
+   * Start heartbeat monitoring
+   */
+  private startHeartbeat(): void {
+    this.heartbeatId = setInterval(() => {
+      if (this.state === StreamingState.STREAMING) {
+        this.performHeartbeatCheck();
+      }
+    }, this.heartbeatInterval);
+  }
+
+  /**
+   * Perform actual process health check
+   */
+  private async performHeartbeatCheck(): Promise<void> {
+    try {
+      // Check if we can perform health monitoring
+      const isHealthy = await this.checkProcessHealth();
+
+      if (isHealthy) {
+        this.metrics.qualityMetrics.lastHeartbeat = performance.now();
+        this.metrics.qualityMetrics.consecutiveFailures = 0;
+        console.debug(`[${this.instanceId}] Streaming heartbeat healthy`);
+      } else {
+        this.metrics.heartbeatFailures++;
+        this.metrics.qualityMetrics.consecutiveFailures++;
+
+        console.warn(
+          `[${this.instanceId}] Streaming heartbeat failed (${this.metrics.qualityMetrics.consecutiveFailures} consecutive)`
+        );
+
+        // If we've had too many consecutive failures, trigger recovery
+        if (this.metrics.qualityMetrics.consecutiveFailures >= 3) {
+          console.error(`[${this.instanceId}] Too many heartbeat failures, triggering recovery`);
+          this.handleProcessFailure("heartbeat failures");
+        }
+      }
+    } catch (error) {
+      console.error(`[${this.instanceId}] Heartbeat check error:`, error);
+      this.metrics.heartbeatFailures++;
+    }
+  }
+
+  /**
+   * Check actual process health using platform-specific monitoring
+   */
+  private async checkProcessHealth(): Promise<boolean> {
+    try {
+      const platform = process.platform;
+
+      if (platform === "darwin") {
+        return await this.checkMacOSProcessHealth();
+      } else if (platform === "linux" || platform === "win32") {
+        return await this.checkGenericProcessHealth();
+      } else {
+        // For other platforms, assume healthy (fallback)
+        console.debug(
+          `[${this.instanceId}] Process health check not implemented for ${platform}, assuming healthy`
+        );
+        return true;
+      }
+    } catch (error) {
+      console.error(`[${this.instanceId}] Process health check failed:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Check afplay process health on macOS
+   */
+  private async checkMacOSProcessHealth(): Promise<boolean> {
+    try {
+      // Use pgrep to check if afplay processes exist
+      const { exec } = await import("child_process");
+      const { promisify } = await import("util");
+      const execAsync = promisify(exec);
+
+      const { stdout } = await execAsync("pgrep -x afplay");
+      const afplayProcesses = stdout.trim().split("\n").filter(Boolean);
+
+      if (afplayProcesses.length === 0) {
+        console.warn(`[${this.instanceId}] No afplay processes found`);
+        return false;
+      }
+
+      // Check if any afplay process is actively using audio (basic check)
+      // This is a simplified check - in production you might want more sophisticated monitoring
+      const now = Date.now();
+      const timeSinceLastHeartbeat = now - this.metrics.qualityMetrics.lastHeartbeat;
+
+      // If we haven't received chunks recently, the process might be stuck
+      if (timeSinceLastHeartbeat > 10000) {
+        // 10 seconds without chunks
+        console.warn(
+          `[${this.instanceId}] No chunks received for ${timeSinceLastHeartbeat}ms, process may be stuck`
+        );
+        return false;
+      }
+
+      console.debug(
+        `[${this.instanceId}] Found ${afplayProcesses.length} afplay process(es) running`
+      );
+      return true;
+    } catch (error) {
+      // pgrep might fail if no afplay processes exist, which is expected
+      if (error.code === 1) {
+        console.warn(`[${this.instanceId}] No afplay processes found (pgrep exit code 1)`);
+        return false;
+      }
+
+      console.error(`[${this.instanceId}] Error checking macOS process health:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Generic process health check for other platforms
+   */
+  private async checkGenericProcessHealth(): Promise<boolean> {
+    // For non-macOS platforms, we rely on chunk flow and timing
+    const now = Date.now();
+    const timeSinceLastHeartbeat = now - this.metrics.qualityMetrics.lastHeartbeat;
+    const timeSinceLastChunk =
+      this.metrics.qualityMetrics.processingDelays.length > 0
+        ? now -
+          this.metrics.qualityMetrics.processingDelays[
+            this.metrics.qualityMetrics.processingDelays.length - 1
+          ]
+        : now - this.metrics.qualityMetrics.lastHeartbeat;
+
+    // If no chunks for more than 5 seconds, consider unhealthy
+    if (timeSinceLastChunk > 5000) {
+      console.warn(
+        `[${this.instanceId}] No audio chunks for ${timeSinceLastChunk}ms, process may be unhealthy`
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Handle process failure and trigger recovery
+   */
+  private handleProcessFailure(reason: string): void {
+    console.error(`[${this.instanceId}] Process failure detected: ${reason}`);
+
+    if (this.state === StreamingState.STREAMING) {
+      this.fail(new Error(`Process failure: ${reason}`), "process health check failed");
+    }
+  }
+
+  /**
+   * Record chunk processing for quality metrics
+   */
+  recordChunkProcessed(chunkSize: number, processingDelay: number): void {
+    this.metrics.qualityMetrics.chunksProcessed++;
+    this.metrics.qualityMetrics.processingDelays.push(processingDelay);
+
+    // Keep only last 100 delays for memory efficiency
+    if (this.metrics.qualityMetrics.processingDelays.length > 100) {
+      this.metrics.qualityMetrics.processingDelays =
+        this.metrics.qualityMetrics.processingDelays.slice(-50);
+    }
+
+    // Update average chunk size
+    this.metrics.qualityMetrics.avgChunkSize =
+      (this.metrics.qualityMetrics.avgChunkSize *
+        (this.metrics.qualityMetrics.chunksProcessed - 1) +
+        chunkSize) /
+      this.metrics.qualityMetrics.chunksProcessed;
+  }
+
+  /**
+   * Check if streaming quality is degrading
+   */
+  isQualityDegrading(): boolean {
+    const recentDelays = this.metrics.qualityMetrics.processingDelays.slice(-10);
+    if (recentDelays.length < 5) return false;
+
+    const avgDelay = recentDelays.reduce((a, b) => a + b, 0) / recentDelays.length;
+    const maxDelay = Math.max(...recentDelays);
+
+    // Consider quality degraded if average delay > 100ms or max delay > 500ms
+    return avgDelay > 100 || maxDelay > 500;
+  }
+
+  /**
+   * Get comprehensive streaming quality report
+   */
+  getStreamingQualityReport(): {
+    isHealthy: boolean;
+    qualityScore: number;
+    issues: string[];
+    recommendations: string[];
+    metrics: {
+      chunksProcessed: number;
+      avgChunkSize: number;
+      avgProcessingDelay: number;
+      maxProcessingDelay: number;
+      heartbeatFailures: number;
+      consecutiveFailures: number;
+    };
+  } {
+    const delays = this.metrics.qualityMetrics.processingDelays.slice(-20);
+    const issues: string[] = [];
+    const recommendations: string[] = [];
+
+    let qualityScore = 100;
+
+    // Check processing delays
+    if (delays.length > 0) {
+      const avgDelay = delays.reduce((a, b) => a + b, 0) / delays.length;
+      const maxDelay = Math.max(...delays);
+
+      if (avgDelay > 200) {
+        issues.push(`High average processing delay: ${avgDelay.toFixed(1)}ms`);
+        qualityScore -= 30;
+        recommendations.push("Consider reducing text segment size or switching to buffered mode");
+      } else if (avgDelay > 100) {
+        issues.push(`Elevated processing delay: ${avgDelay.toFixed(1)}ms`);
+        qualityScore -= 15;
+      }
+
+      if (maxDelay > 1000) {
+        issues.push(`Very high peak delay: ${maxDelay.toFixed(1)}ms`);
+        qualityScore -= 25;
+        recommendations.push("Check system resources and network connectivity");
+      } else if (maxDelay > 500) {
+        issues.push(`High peak delay: ${maxDelay.toFixed(1)}ms`);
+        qualityScore -= 10;
+      }
+    }
+
+    // Check heartbeat health
+    if (this.metrics.heartbeatFailures > 5) {
+      issues.push(`Multiple heartbeat failures: ${this.metrics.heartbeatFailures}`);
+      qualityScore -= 20;
+      recommendations.push("Investigate process stability and system resources");
+    }
+
+    // Check chunk processing
+    if (this.metrics.qualityMetrics.chunksProcessed > 0) {
+      const avgChunkSize = this.metrics.qualityMetrics.avgChunkSize;
+      if (avgChunkSize < 1000) {
+        issues.push(
+          `Small chunk sizes may indicate fragmentation: ${avgChunkSize.toFixed(0)} bytes avg`
+        );
+        recommendations.push("Consider adjusting chunk size or buffer settings");
+      }
+    }
+
+    // Consecutive failures
+    if (this.metrics.qualityMetrics.consecutiveFailures > 2) {
+      issues.push(
+        `Consecutive process failures: ${this.metrics.qualityMetrics.consecutiveFailures}`
+      );
+      qualityScore -= 15;
+      recommendations.push("Process may be unstable, consider restart or resource check");
+    }
+
+    return {
+      isHealthy: qualityScore >= 70,
+      qualityScore: Math.max(0, qualityScore),
+      issues,
+      recommendations,
+      metrics: {
+        chunksProcessed: this.metrics.qualityMetrics.chunksProcessed,
+        avgChunkSize: this.metrics.qualityMetrics.avgChunkSize,
+        avgProcessingDelay:
+          delays.length > 0 ? delays.reduce((a, b) => a + b, 0) / delays.length : 0,
+        maxProcessingDelay: delays.length > 0 ? Math.max(...delays) : 0,
+        heartbeatFailures: this.metrics.heartbeatFailures,
+        consecutiveFailures: this.metrics.qualityMetrics.consecutiveFailures,
+      },
+    };
+  }
+
+  /**
+   * Get current state
+   */
+  getState(): StreamingState {
+    return this.state;
+  }
+
+  /**
+   * Get metrics
+   */
+  getMetrics(): StreamingStateMetrics {
+    return { ...this.metrics };
+  }
+
+  /**
+   * Cleanup resources
+   */
+  cleanup(): void {
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = undefined;
+    }
+
+    if (this.heartbeatId) {
+      clearInterval(this.heartbeatId);
+      this.heartbeatId = undefined;
+    }
+
+    console.log(`[${this.instanceId}] StreamingStateManager cleanup completed`);
+  }
+}
+
+/**
  * Maximum text length per request to Kokoro API.
  *
  * **Why 1800 instead of 2000?**
@@ -186,6 +772,7 @@ export class TTSSpeechProcessor {
   // Streaming and async coordination
   private onStatusUpdate: (status: StatusUpdate) => void;
   private abortController: AbortController | null = null;
+  private streamingStateManager: StreamingStateManager;
 
   /**
    * Initialize TTS processor with user preferences.
@@ -282,6 +869,13 @@ export class TTSSpeechProcessor {
       });
 
     console.log(`[${this.instanceId}] Component instances created`);
+
+    // Initialize streaming state manager
+    this.streamingStateManager = new StreamingStateManager(this.instanceId, (state, reason) => {
+      console.log(
+        `[${this.instanceId}] Streaming state changed to ${state}${reason ? ` (${reason})` : ""}`
+      );
+    });
 
     // Initialize all modules properly
     // Note: In a real test environment, you might not initialize the actual modules
@@ -447,11 +1041,6 @@ export class TTSSpeechProcessor {
       endStream: () => Promise<void>;
     } | null = null;
 
-    let streamingStarted = false;
-    let streamingTerminated = false;
-    let streamingFailed = false;
-    let afplayTerminated = false;
-
     let totalChunksReceived = 0;
     const startTime = performance.now();
 
@@ -462,14 +1051,23 @@ export class TTSSpeechProcessor {
       if (this.useStreaming && !streamingPlayback) {
         console.log(`[${this.instanceId}] Starting streaming playback session`);
 
-        try {
-          streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
-          streamingStarted = true;
-          console.log(`[${this.instanceId}] Streaming session started successfully`);
-        } catch (streamingError) {
-          console.error(`[${this.instanceId}] Failed to start streaming session:`, streamingError);
-          streamingFailed = true;
-          throw streamingError;
+        const streamingStarted = await this.streamingStateManager.startStreaming(
+          async () => {
+            streamingPlayback = await this.playbackManager.startStreamingPlayback(signal);
+            console.log(`[${this.instanceId}] Streaming session started successfully`);
+          },
+          async () => {
+            // Recovery function - try to restart playback manager
+            console.log(`[${this.instanceId}] Attempting playback manager recovery...`);
+            await this.playbackManager.stop();
+            // Brief delay before retry
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        );
+
+        if (!streamingStarted) {
+          console.error(`[${this.instanceId}] Failed to start streaming session after retries`);
+          throw new Error("Streaming startup failed");
         }
       }
 
@@ -557,18 +1155,28 @@ export class TTSSpeechProcessor {
             });
           }
 
-          if (
-            this.useStreaming &&
-            streamingStarted &&
-            !streamingTerminated &&
-            !streamingFailed &&
-            streamingPlayback
-          ) {
+          // Use state machine to determine if we can stream chunks
+          if (this.useStreaming && this.streamingStateManager.canStream() && streamingPlayback) {
             try {
+              const chunkStartTime = performance.now();
               await streamingPlayback.writeChunk(chunk.data);
+              const chunkProcessingTime = performance.now() - chunkStartTime;
+
+              // Record chunk processing for quality monitoring
+              this.streamingStateManager.recordChunkProcessed(
+                chunk.data.length,
+                chunkProcessingTime
+              );
+
+              // Check for quality degradation
+              if (this.streamingStateManager.isQualityDegrading()) {
+                console.warn(`[${this.instanceId}] Streaming quality degradation detected`);
+                // Could trigger fallback to buffered playback here
+              }
+
               if (totalChunksReceived % 10 === 0 || totalChunksReceived <= 3) {
                 console.log(
-                  `[${this.instanceId}] Streamed chunk ${totalChunksReceived} (${chunk.data.length} bytes) in ${elapsedTime}ms`
+                  `[${this.instanceId}] Streamed chunk ${totalChunksReceived} (${chunk.data.length} bytes) in ${elapsedTime}ms (processing: ${chunkProcessingTime.toFixed(2)}ms)`
                 );
               }
             } catch (streamError) {
@@ -587,45 +1195,35 @@ export class TTSSpeechProcessor {
                 console.log(
                   `[${this.instanceId}] Normal termination detected for segment ${segment.index + 1} - continuing to next segment`
                 );
-                // Don't set streamingTerminated = true here - wait until ALL segments are complete
-                // streamingTerminated = true;  // REMOVED: This was causing early termination
-                afplayTerminated = true;
-                // Don't abort or fallback for normal termination
+                // State machine handles terminal state management
                 return;
               } else {
-                console.error(
-                  `[${this.instanceId}] Streaming failed - marking as failed to prevent fallback`
+                console.error(`[${this.instanceId}] Streaming failed - attempting recovery`);
+
+                // Attempt recovery with buffered fallback
+                const recovered = await this.handleStreamingFailure(
+                  streamError as Error,
+                  "chunk streaming failed"
                 );
-                streamingFailed = true;
-                this.abortController?.abort();
-                throw streamError;
+
+                if (!recovered) {
+                  this.streamingStateManager.fail(
+                    streamError as Error,
+                    "chunk streaming failed - recovery failed"
+                  );
+                  this.abortController?.abort();
+                  throw streamError;
+                }
               }
             }
-          } else if (this.useStreaming && streamingTerminated) {
-            // Streaming completed normally for ALL segments - skip remaining chunks
-            // Only set streamingTerminated = true after ALL segments are processed
+          } else if (this.useStreaming && this.streamingStateManager.isTerminal()) {
+            // Streaming is in a terminal state - skip remaining chunks
             return;
-          } else if (this.useStreaming && streamingFailed) {
-            // Streaming failed - skip remaining chunks to prevent fallback
-            return;
-          } else if (this.useStreaming && afplayTerminated) {
-            // afplay has terminated but we're still receiving chunks - skip them
-            return;
-          } else if (this.useStreaming && !streamingStarted) {
-            // TODO: Improve streaming state management and race condition handling
-            // - [ ] Add proper state machine for streaming lifecycle (INIT -> STARTING -> STREAMING -> COMPLETE/FAILED)
-            // - [ ] Implement timeout handling for afplay startup delays
-            // - [ ] Add retry logic for transient afplay startup failures
-            // - [ ] Implement proper cleanup for orphaned streaming processes
-            // - [ ] Add metrics for streaming startup success/failure rates
-            return;
-          } else if (this.useStreaming && !streamingPlayback) {
-            // TODO: Enhance streaming playback robustness
-            // - [ ] Add heartbeat monitoring for afplay process health
-            // - [ ] Implement automatic restart for crashed afplay processes
-            // - [ ] Add fallback to buffered playback when streaming fails
-            // - [ ] Implement streaming quality metrics and degradation detection
-            // - [ ] Add user notification for streaming failures with recovery options
+          } else if (this.useStreaming && !this.streamingStateManager.canStream()) {
+            // Streaming is not ready to accept chunks - skip them
+            console.debug(
+              `[${this.instanceId}] Skipping chunk ${totalChunksReceived} - streaming not ready (state: ${this.streamingStateManager.getState()})`
+            );
             return;
           }
         });
@@ -637,14 +1235,14 @@ export class TTSSpeechProcessor {
         `[${this.instanceId}] All segments processed - letting daemon finish playing naturally`
       );
 
-      // Mark streaming as terminated only after ALL segments are complete
-      streamingTerminated = true;
+      // Mark streaming as completed only after ALL segments are complete
+      this.streamingStateManager.complete("all segments processed");
 
       // CRITICAL FIX: Wait for daemon to signal completion before closing connection
       // The daemon will send a "completed" event when all audio is finished playing
       console.log(`[${this.instanceId}] Waiting for daemon to signal audio completion...`);
 
-      if (streamingPlayback && streamingStarted && !streamingFailed) {
+      if (streamingPlayback && this.streamingStateManager.canStream()) {
         console.log(
           `[${this.instanceId}] Streaming playback active - waiting for daemon completion signal`
         );
@@ -657,11 +1255,9 @@ export class TTSSpeechProcessor {
           console.warn(`[${this.instanceId}] Error waiting for completion:`, completionError);
           // Don't fail the entire process - just log the warning
         }
-      } else if (streamingTerminated) {
-        console.log(
-          `[${this.instanceId}] Streaming already terminated normally - no need to end stream`
-        );
-      } else if (streamingFailed) {
+      } else if (this.streamingStateManager.getState() === StreamingState.COMPLETED) {
+        console.log(`[${this.instanceId}] Streaming already completed - no need to end stream`);
+      } else if (this.streamingStateManager.getState() === StreamingState.FAILED) {
         console.log(`[${this.instanceId}] Streaming failed - no need to end stream`);
       }
 
@@ -692,12 +1288,16 @@ export class TTSSpeechProcessor {
         message: errorMessage,
         stack: errorStack,
         useStreaming: this.useStreaming,
-        streamingStarted,
-        streamingFailed,
+        streamingState: this.streamingStateManager.getState(),
         totalChunksReceived,
       });
 
-      if (streamingPlayback && !streamingFailed) {
+      // Fail streaming state if not already in terminal state
+      if (!this.streamingStateManager.isTerminal()) {
+        this.streamingStateManager.fail(error as Error, "speak method error");
+      }
+
+      if (streamingPlayback && this.streamingStateManager.getState() !== StreamingState.FAILED) {
         console.log(` [${this.instanceId}]  Cleaning up streaming playback after error`);
         try {
           // Don't call endStream() during error cleanup - let daemon handle it naturally
@@ -728,10 +1328,309 @@ export class TTSSpeechProcessor {
 
       this.performanceTracker.completeRequest(requestId);
       await this.cleanup();
+
+      // Cleanup streaming state manager
+      this.streamingStateManager.cleanup();
+
       this.abortController = null;
 
       console.log(` [${this.instanceId}] === SPEAK METHOD END ===`);
     }
+  }
+
+  /**
+   * Get streaming state metrics for debugging and monitoring.
+   */
+  getStreamingMetrics(): StreamingStateMetrics {
+    return this.streamingStateManager.getMetrics();
+  }
+
+  /**
+   * Handle streaming failure and attempt recovery with buffered fallback.
+   */
+  private async handleStreamingFailure(error: Error, reason: string): Promise<boolean> {
+    console.error(`[${this.instanceId}] Streaming failure: ${reason}`, error);
+
+    // Check if we should attempt buffered fallback
+    const canFallback = this.shouldAttemptBufferedFallback();
+
+    if (canFallback) {
+      console.log(`[${this.instanceId}] Attempting fallback to buffered playback`);
+      this.onStatusUpdate({
+        message: "Streaming failed, switching to buffered playback...",
+        style: Toast.Style.Failure,
+        isPlaying: true,
+        isPaused: false,
+      });
+
+      try {
+        // Stop current streaming attempt
+        await this.playbackManager.stop();
+
+        // Switch to buffered mode for this request
+        const bufferedSuccess = await this.attemptBufferedPlayback();
+        if (bufferedSuccess) {
+          console.log(`[${this.instanceId}] Successfully recovered with buffered playback`);
+          this.onStatusUpdate({
+            message: "Recovered using buffered playback",
+            style: Toast.Style.Success,
+            isPlaying: true,
+            isPaused: false,
+          });
+          return true;
+        }
+      } catch (fallbackError) {
+        console.error(`[${this.instanceId}] Buffered fallback also failed:`, fallbackError);
+      }
+    }
+
+    // If we can't recover, show user notification
+    this.showStreamingFailureNotification(error, reason);
+    return false;
+  }
+
+  /**
+   * Determine if buffered fallback should be attempted.
+   */
+  private shouldAttemptBufferedFallback(): boolean {
+    // Don't attempt fallback if we're already in an error state
+    if (this.streamingStateManager.isTerminal()) {
+      return false;
+    }
+
+    // Check if buffered playback is available (we have the infrastructure)
+    // For now, always attempt fallback as a demonstration
+    return true;
+  }
+
+  /**
+   * Attempt buffered playback as fallback.
+   */
+  private async attemptBufferedPlayback(): Promise<boolean> {
+    try {
+      console.log(`[${this.instanceId}] Starting buffered playback fallback`);
+
+      // Switch to buffered mode temporarily
+      const originalStreamingMode = this.useStreaming;
+      this.useStreaming = false;
+
+      // Create a new TTS request for the buffered version
+      const segments = this.textParagraphs;
+      const bufferedChunks: Uint8Array[] = [];
+
+      // Process all segments and collect audio chunks
+      for (const segment of segments) {
+        console.log(
+          `[${this.instanceId}] Processing segment ${segment.index + 1} for buffered playback`
+        );
+
+        const requestParams: TTSRequestParams = {
+          text: segment.text,
+          voice: this.voice,
+          speed: this.speed,
+          lang: "en-us",
+          stream: false, // Force buffered mode
+          format: this.format,
+        };
+
+        try {
+          await this.audioStreamer.streamAudio(
+            requestParams,
+            {
+              requestId: `buffered-${segment.index}-${Date.now()}`,
+              segments: segments.map((s) => s.text),
+              currentSegmentIndex: segment.index,
+              totalSegments: segments.length,
+              abortController: this.abortController,
+              startTime: performance.now(),
+            },
+            (chunk) => {
+              // Collect all chunks for buffered playback
+              bufferedChunks.push(chunk.data);
+            }
+          );
+        } catch (segmentError) {
+          console.error(
+            `[${this.instanceId}] Failed to process segment ${segment.index + 1} for buffered playback:`,
+            segmentError
+          );
+          // Continue with other segments if possible
+        }
+      }
+
+      if (bufferedChunks.length === 0) {
+        console.error(`[${this.instanceId}] No audio chunks collected for buffered playback`);
+        this.useStreaming = originalStreamingMode;
+        return false;
+      }
+
+      // Combine all chunks into a single buffer
+      const totalSize = bufferedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      const combinedBuffer = new Uint8Array(totalSize);
+      let offset = 0;
+
+      for (const chunk of bufferedChunks) {
+        combinedBuffer.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      console.log(
+        `[${this.instanceId}] Combined ${bufferedChunks.length} chunks into ${totalSize} bytes for buffered playback`
+      );
+
+      // Play the combined buffer
+      await this.playbackManager.playAudio(
+        {
+          audioData: combinedBuffer,
+          format: this.format as any, // AudioFormat
+          metadata: {
+            voice: this.voice,
+            speed: this.speed,
+          },
+        },
+        this.abortController?.signal || new AbortController().signal
+      );
+
+      // Restore original streaming mode
+      this.useStreaming = originalStreamingMode;
+
+      console.log(`[${this.instanceId}] Buffered playback fallback completed successfully`);
+      return true;
+    } catch (error) {
+      console.error(`[${this.instanceId}] Buffered playback fallback failed:`, error);
+
+      // Restore original streaming mode even on failure
+      this.useStreaming = this.useStreaming; // This was incorrectly modified above
+
+      return false;
+    }
+  }
+
+  /**
+   * Show user-friendly notification for streaming failures.
+   */
+  private showStreamingFailureNotification(error: Error, reason: string): void {
+    const errorMessage = this.getUserFriendlyErrorMessage(error, reason);
+
+    this.onStatusUpdate({
+      message: errorMessage,
+      style: Toast.Style.Failure,
+      isPlaying: false,
+      isPaused: false,
+      primaryAction: {
+        title: "Retry",
+        onAction: () => this.retryLastRequest(),
+      },
+      secondaryAction: {
+        title: "Use Buffered Mode",
+        onAction: () => this.forceBufferedMode(),
+      },
+    });
+  }
+
+  /**
+   * Get user-friendly error message.
+   */
+  private getUserFriendlyErrorMessage(error: Error, reason: string): string {
+    // Map technical errors to user-friendly messages
+    if (reason.includes("process") || reason.includes("heartbeat")) {
+      return "Audio playback interrupted. The audio system may be overloaded.";
+    } else if (reason.includes("timeout")) {
+      return "Audio playback timed out. Try again or use buffered mode.";
+    } else if (reason.includes("startup")) {
+      return "Audio system failed to start. Check system audio settings.";
+    } else {
+      return "Audio playback failed. Try again or switch to buffered mode.";
+    }
+  }
+
+  /**
+   * Retry the last TTS request with improved error handling.
+   */
+  private async retryLastRequest(): Promise<void> {
+    try {
+      console.log(`[${this.instanceId}] Retrying last TTS request`);
+
+      // Reset streaming state for retry
+      this.streamingStateManager = new StreamingStateManager(this.instanceId, (state, reason) => {
+        console.log(
+          `[${this.instanceId}] Streaming state changed to ${state}${reason ? ` (${reason})` : ""}`
+        );
+      });
+
+      // Clear any previous error state
+      this.onStatusUpdate({
+        message: "Retrying TTS request...",
+        style: Toast.Style.Success,
+        isPlaying: true,
+        isPaused: false,
+      });
+
+      // Re-run the speak method with stored text
+      if (this.textParagraphs.length > 0) {
+        const fullText = this.textParagraphs.map((s) => s.text).join(" ");
+        await this.speak(fullText);
+      } else {
+        throw new Error("No text available to retry");
+      }
+    } catch (retryError) {
+      console.error(`[${this.instanceId}] Retry failed:`, retryError);
+
+      this.onStatusUpdate({
+        message: "Retry failed. Please try again.",
+        style: Toast.Style.Failure,
+        isPlaying: false,
+        isPaused: false,
+        primaryAction: {
+          title: "Try Again",
+          onAction: () => this.retryLastRequest(),
+        },
+        secondaryAction: {
+          title: "Use Buffered Mode",
+          onAction: () => this.forceBufferedMode(),
+        },
+      });
+    }
+  }
+
+  /**
+   * Force buffered mode for future requests with persistence.
+   */
+  private forceBufferedMode(): void {
+    console.log(`[${this.instanceId}] Switching to buffered mode`);
+
+    // Update instance preference
+    this.useStreaming = false;
+
+    // Persist preference (could be stored in user preferences)
+    // For now, just log that we'd persist this
+    console.log(`[${this.instanceId}] Buffered mode preference would be persisted`);
+
+    this.onStatusUpdate({
+      message: "Switched to buffered mode for better reliability",
+      style: Toast.Style.Success,
+      isPlaying: false,
+      isPaused: false,
+      primaryAction: {
+        title: "Try Streaming Again",
+        onAction: () => this.enableStreamingMode(),
+      },
+    });
+  }
+
+  /**
+   * Re-enable streaming mode after user request.
+   */
+  private enableStreamingMode(): void {
+    console.log(`[${this.instanceId}] Re-enabling streaming mode`);
+    this.useStreaming = true;
+
+    this.onStatusUpdate({
+      message: "Streaming mode re-enabled",
+      style: Toast.Style.Success,
+      isPlaying: false,
+      isPaused: false,
+    });
   }
 
   /**

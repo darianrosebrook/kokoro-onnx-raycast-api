@@ -870,6 +870,74 @@ class TTSConfig:
         return int(chunk_duration_ms / 1000 * cls.SAMPLE_RATE * cls.BYTES_PER_SAMPLE)
 
     @classmethod
+    def validate_configuration(cls) -> None:
+        """
+        Validate TTS configuration parameters at startup.
+
+        Performs comprehensive validation of all configuration parameters,
+        correcting inconsistencies and logging warnings for potential issues.
+        This ensures the system starts in a known good state.
+
+        Raises:
+            SystemExit: If configuration errors are critical and cannot be auto-corrected
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info("🔧 Verifying TTS configuration parameters...")
+
+        # Calculate expected chunk size for validation
+        expected_samples = int(cls.CHUNK_DURATION_MS / 1000 * cls.SAMPLE_RATE)
+        expected_bytes = expected_samples * cls.BYTES_PER_SAMPLE
+
+        # Verify chunk size calculation
+        if cls.CHUNK_SIZE_BYTES != expected_bytes:
+            logger.warning(
+                f"⚠️  CHUNK_SIZE_BYTES mismatch! Expected {expected_bytes}, got {cls.CHUNK_SIZE_BYTES}"
+            )
+            logger.info("🔧 Correcting chunk size calculation...")
+
+            # Automatically correct the chunk size
+            cls.CHUNK_SIZE_BYTES = expected_bytes
+
+            logger.info(f"✅ Updated CHUNK_SIZE_BYTES to {cls.CHUNK_SIZE_BYTES} bytes")
+
+        # Validate performance parameters
+        if cls.MAX_CONCURRENT_SEGMENTS < 1:
+            logger.warning("⚠️  MAX_CONCURRENT_SEGMENTS must be at least 1, correcting to 1")
+            cls.MAX_CONCURRENT_SEGMENTS = 1
+        elif cls.MAX_CONCURRENT_SEGMENTS > 8:
+            logger.warning(
+                f"⚠️  MAX_CONCURRENT_SEGMENTS ({cls.MAX_CONCURRENT_SEGMENTS}) may cause resource exhaustion"
+            )
+            logger.info("💡 Consider reducing MAX_CONCURRENT_SEGMENTS for better stability")
+
+        # Validate text processing limits
+        if cls.MAX_TEXT_LENGTH < 100:
+            logger.warning(f"⚠️  MAX_TEXT_LENGTH ({cls.MAX_TEXT_LENGTH}) is very low, may cause issues")
+        elif cls.MAX_TEXT_LENGTH > 10000:
+            logger.warning(f"⚠️  MAX_TEXT_LENGTH ({cls.MAX_TEXT_LENGTH}) is very high, may cause performance issues")
+
+        # Validate segment length
+        if cls.MAX_SEGMENT_LENGTH < 50:
+            logger.warning(f"⚠️  MAX_SEGMENT_LENGTH ({cls.MAX_SEGMENT_LENGTH}) is very low")
+        elif cls.MAX_SEGMENT_LENGTH > cls.MAX_TEXT_LENGTH:
+            logger.warning("⚠️  MAX_SEGMENT_LENGTH cannot exceed MAX_TEXT_LENGTH, correcting...")
+            cls.MAX_SEGMENT_LENGTH = cls.MAX_TEXT_LENGTH
+
+        # Validate timeouts
+        if cls.SEGMENT_INFERENCE_TIMEOUT_SECONDS < 5:
+            logger.warning(f"⚠️  SEGMENT_INFERENCE_TIMEOUT_SECONDS ({cls.SEGMENT_INFERENCE_TIMEOUT_SECONDS}) is very low")
+        if cls.STREAM_IDLE_TIMEOUT_SECONDS < 10:
+            logger.warning(f"⚠️  STREAM_IDLE_TIMEOUT_SECONDS ({cls.STREAM_IDLE_TIMEOUT_SECONDS}) is very low")
+
+        # Validate sample rate and audio parameters
+        if cls.SAMPLE_RATE not in [22050, 24000, 44100, 48000]:
+            logger.warning(f"⚠️  SAMPLE_RATE ({cls.SAMPLE_RATE}) is non-standard, may cause compatibility issues")
+
+        logger.info("✅ Configuration validation complete")
+
+    @classmethod
     def get_benchmark_cache_duration(cls) -> int:
         """
         Get the benchmark cache duration in seconds based on configured frequency.

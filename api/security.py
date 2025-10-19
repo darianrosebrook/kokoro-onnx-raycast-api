@@ -320,7 +320,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 "input_validation_failed",
                 client_ip,
                 correlation_id,
-                details=validation_result["errors"]
+                details={"errors": validation_result["errors"]}
             )
             return self._create_security_response(400, "Invalid request parameters")
 

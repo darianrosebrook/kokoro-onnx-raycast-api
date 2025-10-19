@@ -87,20 +87,316 @@ def get_mutation_status() -> Dict[str, Any]:
 
 
 def get_test_status() -> Dict[str, Any]:
-    """Get test execution status."""
-    # TODO: Implement test result parsing from CI/artifacts
-    # - [ ] Parse pytest/junit XML output files
-    # - [ ] Extract test counts, failures, and timing data
-    # - [ ] Calculate flake rates from historical runs
-    # - [ ] Integrate with CI systems for real-time status
-    return {
-        'status': 'recent_run',
-        'total_tests': 218,
-        'passed': 187,
-        'failed': 31,
-        'flake_rate': 0.14,
-        'last_run': 'recent'
+    """Get test execution status from CI artifacts and recent runs."""
+    try:
+        # Try to parse test results from artifacts directory
+        artifact_results = parse_test_artifacts()
+        if artifact_results:
+            return artifact_results
+
+        # Fallback to parsing recent test runs
+        recent_results = parse_recent_test_runs()
+        if recent_results:
+            return recent_results
+
+        # Final fallback to static data (for development)
+        logger.warning("No test results found, using fallback data")
+        return {
+            'status': 'no_data',
+            'total_tests': 0,
+            'passed': 0,
+            'failed': 0,
+            'flake_rate': 0.0,
+            'last_run': 'never',
+            'message': 'No test results available'
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get test status: {e}")
+        return {
+            'status': 'error',
+            'total_tests': 0,
+            'passed': 0,
+            'failed': 0,
+            'flake_rate': 0.0,
+            'last_run': 'error',
+            'error': str(e)
+        }
+
+
+def parse_test_artifacts() -> Optional[Dict[str, Any]]:
+    """Parse test results from CI artifacts directory."""
+    try:
+        artifacts_dir = Path('artifacts')
+        if not artifacts_dir.exists():
+            return None
+
+        # Look for test result files in various formats
+        test_results = []
+
+        # Parse pytest results
+        pytest_files = list(artifacts_dir.glob('**/pytest-results.json')) + \
+                      list(artifacts_dir.glob('**/test-results.json'))
+        for pytest_file in pytest_files:
+            try:
+                with open(pytest_file, 'r') as f:
+                    data = json.load(f)
+                    test_results.append(parse_pytest_results(data))
+            except Exception as e:
+                logger.debug(f"Failed to parse pytest results {pytest_file}: {e}")
+
+        # Parse JUnit XML results
+        junit_files = list(artifacts_dir.glob('**/junit.xml')) + \
+                     list(artifacts_dir.glob('**/test-results.xml'))
+        for junit_file in junit_files:
+            try:
+                result = parse_junit_xml(junit_file)
+                if result:
+                    test_results.append(result)
+            except Exception as e:
+                logger.debug(f"Failed to parse JUnit XML {junit_file}: {e}")
+
+        # Parse coverage reports
+        coverage_files = list(artifacts_dir.glob('**/coverage.json')) + \
+                        list(artifacts_dir.glob('**/coverage.xml'))
+        coverage_data = None
+        for coverage_file in coverage_files:
+            try:
+                coverage_data = parse_coverage_report(coverage_file)
+                break  # Use the first valid coverage report
+            except Exception as e:
+                logger.debug(f"Failed to parse coverage {coverage_file}: {e}")
+
+        if not test_results:
+            return None
+
+        # Aggregate results from multiple test runs
+        return aggregate_test_results(test_results, coverage_data)
+
+    except Exception as e:
+        logger.debug(f"Failed to parse test artifacts: {e}")
+        return None
+
+
+def parse_recent_test_runs() -> Optional[Dict[str, Any]]:
+    """Parse test results from recent test executions."""
+    try:
+        # Look for recent pytest cache or result files
+        possible_locations = [
+            Path('.pytest_cache'),
+            Path('tests/.pytest_cache'),
+            Path('.tox'),
+            Path('htmlcov'),
+        ]
+
+        # Try to find and parse recent test results
+        for location in possible_locations:
+            if location.exists():
+                # Look for result files in this location
+                result_files = list(location.glob('**/*.json')) + list(location.glob('**/*.xml'))
+                for result_file in result_files:
+                    try:
+                        if result_file.suffix == '.json':
+                            with open(result_file, 'r') as f:
+                                data = json.load(f)
+                            if 'tests' in data or 'test_cases' in data:
+                                return parse_pytest_results(data)
+                        elif result_file.suffix == '.xml':
+                            result = parse_junit_xml(result_file)
+                            if result:
+                                return result
+                    except Exception as e:
+                        logger.debug(f"Failed to parse {result_file}: {e}")
+
+        # Check for test result files in common locations
+        common_files = [
+            Path('test-results.json'),
+            Path('pytest-results.json'),
+            Path('test_output.json'),
+            Path('reports/test-results.json'),
+        ]
+
+        for result_file in common_files:
+            if result_file.exists():
+                try:
+                    with open(result_file, 'r') as f:
+                        data = json.load(f)
+                    return parse_pytest_results(data)
+                except Exception as e:
+                    logger.debug(f"Failed to parse {result_file}: {e}")
+
+        return None
+
+    except Exception as e:
+        logger.debug(f"Failed to parse recent test runs: {e}")
+        return None
+
+
+def parse_pytest_results(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse pytest JSON results."""
+    try:
+        # Extract test summary
+        summary = data.get('summary', {})
+        tests = data.get('tests', [])
+
+        total_tests = summary.get('num_tests_run', len(tests))
+        passed = summary.get('passed', 0)
+        failed = summary.get('failed', 0)
+        errors = summary.get('errors', 0)
+        skipped = summary.get('skipped', 0)
+
+        # Calculate success rate
+        successful_tests = passed
+        total_executed = passed + failed + errors
+
+        # Calculate flake rate (estimate based on recent failures)
+        flake_rate = min(0.5, failed / max(1, total_executed))  # Cap at 50%
+
+        # Get last run timestamp
+        created = data.get('created', time.time())
+        last_run = datetime.fromtimestamp(created).isoformat()
+
+        return {
+            'status': 'completed' if total_executed > 0 else 'no_tests',
+            'total_tests': total_tests,
+            'passed': passed,
+            'failed': failed,
+            'errors': errors,
+            'skipped': skipped,
+            'success_rate': successful_tests / max(1, total_executed),
+            'flake_rate': flake_rate,
+            'last_run': last_run,
+            'source': 'pytest'
+        }
+
+    except Exception as e:
+        logger.debug(f"Failed to parse pytest results: {e}")
+        return None
+
+
+def parse_junit_xml(xml_file: Path) -> Optional[Dict[str, Any]]:
+    """Parse JUnit XML test results."""
+    try:
+        import xml.etree.ElementTree as ET
+
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        # Parse test suites
+        total_tests = 0
+        total_passed = 0
+        total_failed = 0
+        total_errors = 0
+        total_skipped = 0
+
+        for testsuite in root:
+            if testsuite.tag == 'testsuite':
+                total_tests += int(testsuite.get('tests', 0))
+                total_failed += int(testsuite.get('failures', 0))
+                total_errors += int(testsuite.get('errors', 0))
+                total_skipped += int(testsuite.get('skipped', 0))
+
+                # Count passed tests
+                passed_in_suite = int(testsuite.get('tests', 0)) - \
+                                int(testsuite.get('failures', 0)) - \
+                                int(testsuite.get('errors', 0)) - \
+                                int(testsuite.get('skipped', 0))
+                total_passed += passed_in_suite
+
+        total_executed = total_passed + total_failed + total_errors
+        success_rate = total_passed / max(1, total_executed)
+        flake_rate = min(0.5, total_failed / max(1, total_executed))
+
+        # Get timestamp from file modification time
+        last_run = datetime.fromtimestamp(xml_file.stat().st_mtime).isoformat()
+
+        return {
+            'status': 'completed' if total_executed > 0 else 'no_tests',
+            'total_tests': total_tests,
+            'passed': total_passed,
+            'failed': total_failed,
+            'errors': total_errors,
+            'skipped': total_skipped,
+            'success_rate': success_rate,
+            'flake_rate': flake_rate,
+            'last_run': last_run,
+            'source': 'junit'
+        }
+
+    except Exception as e:
+        logger.debug(f"Failed to parse JUnit XML {xml_file}: {e}")
+        return None
+
+
+def parse_coverage_report(coverage_file: Path) -> Optional[Dict[str, Any]]:
+    """Parse coverage report data."""
+    try:
+        if coverage_file.suffix == '.json':
+            with open(coverage_file, 'r') as f:
+                data = json.load(f)
+            # Extract coverage percentage
+            if isinstance(data, dict) and 'total' in data:
+                total = data['total']
+                if isinstance(total, dict) and 'percent_covered' in total:
+                    return {'coverage_percent': total['percent_covered']}
+        elif coverage_file.suffix == '.xml':
+            # Basic XML coverage parsing (Cobertura format)
+            import xml.etree.ElementTree as ET
+            tree = ET.parse(coverage_file)
+            root = tree.getroot()
+            line_rate = root.get('line-rate')
+            if line_rate:
+                return {'coverage_percent': float(line_rate) * 100}
+
+        return None
+
+    except Exception as e:
+        logger.debug(f"Failed to parse coverage report {coverage_file}: {e}")
+        return None
+
+
+def aggregate_test_results(results_list: List[Dict[str, Any]], coverage_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Aggregate multiple test result sets."""
+    if not results_list:
+        return None
+
+    # Use the most recent results as primary
+    primary_result = max(results_list, key=lambda x: x.get('last_run', '1970-01-01'))
+
+    # Aggregate counts across all results
+    total_tests = sum(r.get('total_tests', 0) for r in results_list)
+    total_passed = sum(r.get('passed', 0) for r in results_list)
+    total_failed = sum(r.get('failed', 0) for r in results_list)
+    total_errors = sum(r.get('errors', 0) for r in results_list)
+    total_skipped = sum(r.get('skipped', 0) for r in results_list)
+
+    # Calculate aggregate metrics
+    total_executed = total_passed + total_failed + total_errors
+    success_rate = total_passed / max(1, total_executed)
+
+    # Average flake rate across runs
+    flake_rates = [r.get('flake_rate', 0) for r in results_list if r.get('flake_rate') is not None]
+    avg_flake_rate = sum(flake_rates) / max(1, len(flake_rates)) if flake_rates else 0
+
+    result = {
+        'status': primary_result.get('status', 'completed'),
+        'total_tests': total_tests,
+        'passed': total_passed,
+        'failed': total_failed,
+        'errors': total_errors,
+        'skipped': total_skipped,
+        'success_rate': success_rate,
+        'flake_rate': avg_flake_rate,
+        'last_run': primary_result.get('last_run', datetime.now().isoformat()),
+        'sources': [r.get('source', 'unknown') for r in results_list],
+        'aggregated': True
     }
+
+    # Add coverage data if available
+    if coverage_data:
+        result['coverage'] = coverage_data
+
+    return result
 
 
 def get_contract_status() -> Dict[str, Any]:

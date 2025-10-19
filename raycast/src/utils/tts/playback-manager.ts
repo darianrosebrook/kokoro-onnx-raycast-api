@@ -271,14 +271,44 @@ export class PlaybackManager implements IPlaybackManager {
     // Start playback in the daemon
     await this.audioDaemon.startPlayback();
 
+    // Set up daemon restart event listeners for robustness
+    const restartHandler = (data: { attempts: number }) => {
+      console.log("Daemon restarted successfully during streaming", {
+        component: this.name,
+        method: "startStreamingPlayback",
+        attempts: data.attempts,
+      });
+      // Could notify streaming state manager here if needed
+    };
+
+    const restartFailedHandler = (data: { attempts: number; error: string }) => {
+      console.error("Daemon restart failed during streaming", {
+        component: this.name,
+        method: "startStreamingPlayback",
+        attempts: data.attempts,
+        error: data.error,
+      });
+      // This could trigger fallback to buffered playback
+    };
+
+    this.audioDaemon.on("restarted", restartHandler);
+    this.audioDaemon.on("restartFailed", restartFailedHandler);
+
     const playback = {
       writeChunk: async (chunk: Uint8Array) => {
         await this.audioDaemon.writeChunk(chunk);
       },
       endStream: async () => {
+        // Clean up event listeners
+        this.audioDaemon.off("restarted", restartHandler);
+        this.audioDaemon.off("restartFailed", restartFailedHandler);
         await this.audioDaemon.endStream();
       },
       onProcessEnd: (normalTermination: boolean) => {
+        // Clean up event listeners
+        this.audioDaemon.off("restarted", restartHandler);
+        this.audioDaemon.off("restartFailed", restartFailedHandler);
+
         console.log("Streaming playback ended", {
           component: this.name,
           method: "startStreamingPlayback",

@@ -623,23 +623,846 @@ export class SecurityProvenanceManager extends CawsBaseTool {
   private async runSAST(
     projectDir: string
   ): Promise<{ passed: boolean; vulnerabilities: number }> {
-    // TODO: Implement SAST integration for security scanning
-    // - [ ] Integrate with Snyk or SonarQube SAST tools
-    // - [ ] Parse and report security vulnerabilities
-    // - [ ] Configure severity thresholds and blocking rules
-    // - [ ] Generate security reports and trend analysis
-    return { passed: true, vulnerabilities: 0 };
+    try {
+      const sastResults = await this.runComprehensiveSAST(projectDir);
+      const criticalVulnerabilities = sastResults.filter(
+        (v) => v.severity === "CRITICAL" || v.severity === "HIGH"
+      );
+
+      this.logger?.info(
+        `SAST completed: ${sastResults.length} total issues, ${criticalVulnerabilities.length} critical/high`
+      );
+
+      return {
+        passed: criticalVulnerabilities.length === 0,
+        vulnerabilities: sastResults.length,
+      };
+    } catch (error) {
+      this.logger?.error(`SAST failed: ${error}`);
+      return { passed: false, vulnerabilities: -1 };
+    }
+  }
+
+  private async runComprehensiveSAST(projectDir: string): Promise<
+    Array<{
+      file: string;
+      line: number;
+      severity: string;
+      rule: string;
+      message: string;
+      tool: string;
+    }>
+  > {
+    const findings: Array<{
+      file: string;
+      line: number;
+      severity: string;
+      rule: string;
+      message: string;
+      tool: string;
+    }> = [];
+
+    // Run ESLint with security plugins
+    try {
+      const eslintFindings = await this.runESLintSecurity(projectDir);
+      findings.push(...eslintFindings);
+    } catch (error) {
+      this.logger?.debug(`ESLint security scan failed: ${error}`);
+    }
+
+    // Run Node.js security linting
+    try {
+      const nodeFindings = await this.runNodeSecurityScan(projectDir);
+      findings.push(...nodeFindings);
+    } catch (error) {
+      this.logger?.debug(`Node security scan failed: ${error}`);
+    }
+
+    // Run TypeScript strict checks for security
+    try {
+      const tsFindings = await this.runTypeScriptSecurityChecks(projectDir);
+      findings.push(...tsFindings);
+    } catch (error) {
+      this.logger?.debug(`TypeScript security checks failed: ${error}`);
+    }
+
+    return findings;
+  }
+
+  private async runESLintSecurity(projectDir: string): Promise<
+    Array<{
+      file: string;
+      line: number;
+      severity: string;
+      rule: string;
+      message: string;
+      tool: string;
+    }>
+  > {
+    const findings: Array<{
+      file: string;
+      line: number;
+      severity: string;
+      rule: string;
+      message: string;
+      tool: string;
+    }> = [];
+
+    try {
+      // Check if ESLint is available
+      const eslintConfig = path
+        .join(
+          projectDir,
+          ".eslintrc.js",
+          ".eslintrc.json",
+          ".eslintrc.yml",
+          "eslint.config.js"
+        )
+        .find((config) => {
+          return fs.existsSync(path.join(projectDir, config));
+        });
+
+      if (!eslintConfig) {
+        return findings; // No ESLint config found
+      }
+
+      // Run ESLint programmatically if available
+      try {
+        const { ESLint } = await import("eslint");
+        const eslint = new ESLint({
+          cwd: projectDir,
+          useEslintrc: true,
+        });
+
+        const results = await eslint.lintFiles([
+          "**/*.js",
+          "**/*.ts",
+          "**/*.tsx",
+        ]);
+
+        for (const result of results) {
+          for (const message of result.messages) {
+            if (
+              message.ruleId &&
+              (message.ruleId.includes("security") ||
+                message.ruleId.includes("xss") ||
+                message.ruleId.includes("injection") ||
+                message.ruleId.includes("crypto"))
+            ) {
+              findings.push({
+                file: result.filePath,
+                line: message.line,
+                severity:
+                  message.severity === 2
+                    ? "HIGH"
+                    : message.severity === 1
+                    ? "MEDIUM"
+                    : "LOW",
+                rule: message.ruleId,
+                message: message.message,
+                tool: "eslint",
+              });
+            }
+          }
+        }
+      } catch (importError) {
+        this.logger?.debug(
+          `ESLint programmatic API not available: ${importError}`
+        );
+      }
+    } catch (error) {
+      this.logger?.debug(`ESLint security scan setup failed: ${error}`);
+    }
+
+    return findings;
+  }
+
+  private async runNodeSecurityScan(projectDir: string): Promise<
+    Array<{
+      file: string;
+      line: number;
+      severity: string;
+      rule: string;
+      message: string;
+      tool: string;
+    }>
+  > {
+    const findings: Array<{
+      file: string;
+      line: number;
+      severity: string;
+      rule: string;
+      message: string;
+      tool: string;
+    }> = [];
+
+    try {
+      // Scan for common Node.js security issues
+      const scanFiles = await this.findJavaScriptFiles(projectDir);
+
+      for (const file of scanFiles) {
+        try {
+          const content = fs.readFileSync(file, "utf-8");
+          const lines = content.split("\n");
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineNumber = i + 1;
+
+            // Check for dangerous patterns
+            if (line.includes("eval(")) {
+              findings.push({
+                file,
+                line: lineNumber,
+                severity: "CRITICAL",
+                rule: "no-eval",
+                message: "Use of eval() function detected - high security risk",
+                tool: "node-security",
+              });
+            }
+
+            if (line.includes("child_process.exec") && line.includes("shell")) {
+              findings.push({
+                file,
+                line: lineNumber,
+                severity: "HIGH",
+                rule: "shell-injection",
+                message: "Potential shell injection vulnerability",
+                tool: "node-security",
+              });
+            }
+
+            if (
+              line.includes("fs.") &&
+              line.includes("..") &&
+              !line.includes("path.resolve")
+            ) {
+              findings.push({
+                file,
+                line: lineNumber,
+                severity: "HIGH",
+                rule: "path-traversal",
+                message: "Potential path traversal vulnerability",
+                tool: "node-security",
+              });
+            }
+
+            if (line.includes("innerHTML") || line.includes("outerHTML")) {
+              findings.push({
+                file,
+                line: lineNumber,
+                severity: "MEDIUM",
+                rule: "xss-risk",
+                message: "Potential XSS vulnerability with HTML injection",
+                tool: "node-security",
+              });
+            }
+          }
+        } catch (fileError) {
+          this.logger?.debug(`Failed to scan file ${file}: ${fileError}`);
+        }
+      }
+    } catch (error) {
+      this.logger?.debug(`Node security scan failed: ${error}`);
+    }
+
+    return findings;
+  }
+
+  private async runTypeScriptSecurityChecks(projectDir: string): Promise<
+    Array<{
+      file: string;
+      line: number;
+      severity: string;
+      rule: string;
+      message: string;
+      tool: string;
+    }>
+  > {
+    const findings: Array<{
+      file: string;
+      line: number;
+      severity: string;
+      rule: string;
+      message: string;
+      tool: string;
+    }> = [];
+
+    try {
+      const tsFiles = await this.findTypeScriptFiles(projectDir);
+
+      for (const file of tsFiles) {
+        try {
+          const content = fs.readFileSync(file, "utf-8");
+          const lines = content.split("\n");
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineNumber = i + 1;
+
+            // Check for TypeScript security issues
+            if (line.includes("as any") && !line.includes("//")) {
+              findings.push({
+                file,
+                line: lineNumber,
+                severity: "MEDIUM",
+                rule: "no-any-cast",
+                message: "Type assertion to any bypasses type safety",
+                tool: "typescript-security",
+              });
+            }
+
+            if (line.includes("Function(") || line.includes("new Function")) {
+              findings.push({
+                file,
+                line: lineNumber,
+                severity: "HIGH",
+                rule: "no-function-constructor",
+                message:
+                  "Function constructor usage can lead to code injection",
+                tool: "typescript-security",
+              });
+            }
+          }
+        } catch (fileError) {
+          this.logger?.debug(
+            `Failed to scan TypeScript file ${file}: ${fileError}`
+          );
+        }
+      }
+    } catch (error) {
+      this.logger?.debug(`TypeScript security checks failed: ${error}`);
+    }
+
+    return findings;
+  }
+
+  private async findJavaScriptFiles(projectDir: string): Promise<string[]> {
+    const files: string[] = [];
+
+    const walk = (dir: string) => {
+      const items = fs.readdirSync(dir);
+
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+
+        if (
+          stat.isDirectory() &&
+          !item.startsWith(".") &&
+          item !== "node_modules"
+        ) {
+          walk(fullPath);
+        } else if (
+          stat.isFile() &&
+          (item.endsWith(".js") ||
+            item.endsWith(".mjs") ||
+            item.endsWith(".cjs"))
+        ) {
+          files.push(fullPath);
+        }
+      }
+    };
+
+    walk(projectDir);
+    return files;
+  }
+
+  private async findTypeScriptFiles(projectDir: string): Promise<string[]> {
+    const files: string[] = [];
+
+    const walk = (dir: string) => {
+      const items = fs.readdirSync(dir);
+
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+
+        if (
+          stat.isDirectory() &&
+          !item.startsWith(".") &&
+          item !== "node_modules"
+        ) {
+          walk(fullPath);
+        } else if (
+          stat.isFile() &&
+          (item.endsWith(".ts") || item.endsWith(".tsx"))
+        ) {
+          files.push(fullPath);
+        }
+      }
+    };
+
+    walk(projectDir);
+    return files;
   }
 
   private async scanDependencies(
     projectDir: string
   ): Promise<{ passed: boolean; vulnerable: number }> {
-    // TODO: Implement dependency vulnerability scanning
-    // - [ ] Integrate with npm audit or Snyk dependency scanning
-    // - [ ] Parse vulnerability reports and severity levels
-    // - [ ] Implement dependency update recommendations
-    // - [ ] Configure allowlists for acceptable vulnerabilities
-    return { passed: true, vulnerable: 0 };
+    try {
+      const scanResults = await this.runDependencyVulnerabilityScan(projectDir);
+      const criticalVulnerabilities = scanResults.filter(
+        (v) => v.severity === "CRITICAL" || v.severity === "HIGH"
+      );
+
+      this.logger?.info(
+        `Dependency scan completed: ${scanResults.length} vulnerabilities found, ${criticalVulnerabilities.length} critical/high`
+      );
+
+      return {
+        passed: criticalVulnerabilities.length === 0,
+        vulnerable: scanResults.length,
+      };
+    } catch (error) {
+      this.logger?.error(`Dependency scan failed: ${error}`);
+      return { passed: false, vulnerable: -1 };
+    }
+  }
+
+  private async runDependencyVulnerabilityScan(projectDir: string): Promise<
+    Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }>
+  > {
+    const vulnerabilities: Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }> = [];
+
+    // Try npm audit first
+    try {
+      const npmResults = await this.runNPMAudit(projectDir);
+      vulnerabilities.push(...npmResults);
+    } catch (error) {
+      this.logger?.debug(`npm audit failed: ${error}`);
+    }
+
+    // Try yarn audit if npm failed
+    if (vulnerabilities.length === 0) {
+      try {
+        const yarnResults = await this.runYarnAudit(projectDir);
+        vulnerabilities.push(...yarnResults);
+      } catch (error) {
+        this.logger?.debug(`yarn audit failed: ${error}`);
+      }
+    }
+
+    // Try pip audit for Python dependencies
+    try {
+      const pipResults = await this.runPipAudit(projectDir);
+      vulnerabilities.push(...pipResults);
+    } catch (error) {
+      this.logger?.debug(`pip audit failed: ${error}`);
+    }
+
+    // If no automated tools available, check for known vulnerable patterns
+    if (vulnerabilities.length === 0) {
+      try {
+        const manualResults = await this.checkKnownVulnerablePackages(
+          projectDir
+        );
+        vulnerabilities.push(...manualResults);
+      } catch (error) {
+        this.logger?.debug(`Manual vulnerability check failed: ${error}`);
+      }
+    }
+
+    return vulnerabilities;
+  }
+
+  private async runNPMAudit(projectDir: string): Promise<
+    Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }>
+  > {
+    const vulnerabilities: Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }> = [];
+
+    try {
+      const { spawn } = await import("child_process");
+      const { promisify } = await import("util");
+      const exec = promisify(spawn);
+
+      // Run npm audit
+      const auditProcess = spawn("npm", ["audit", "--json"], {
+        cwd: projectDir,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      auditProcess.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      auditProcess.stderr?.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      await new Promise((resolve, reject) => {
+        auditProcess.on("close", (code) => {
+          if (code === 0 || code === 1) {
+            // npm audit returns 1 when vulnerabilities found
+            resolve({ code, stdout, stderr });
+          } else {
+            reject(new Error(`npm audit failed with code ${code}: ${stderr}`));
+          }
+        });
+      });
+
+      if (stdout) {
+        const auditData = JSON.parse(stdout);
+        if (auditData.vulnerabilities) {
+          for (const [pkgName, vulnData] of Object.entries(
+            auditData.vulnerabilities
+          )) {
+            const vuln = vulnData as any;
+            vulnerabilities.push({
+              package: pkgName,
+              version: vuln.version || "unknown",
+              severity: this.mapNPMSeverity(vuln.severity),
+              vulnerability: vuln.title || vuln.name || "Unknown vulnerability",
+              description: vuln.overview || "No description available",
+              fixedIn: vuln.fixAvailable
+                ? vuln.fixAvailable.version
+                : undefined,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      this.logger?.debug(`npm audit execution failed: ${error}`);
+    }
+
+    return vulnerabilities;
+  }
+
+  private async runYarnAudit(projectDir: string): Promise<
+    Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }>
+  > {
+    const vulnerabilities: Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }> = [];
+
+    try {
+      const { spawn } = await import("child_process");
+
+      const auditProcess = spawn("yarn", ["audit", "--json"], {
+        cwd: projectDir,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      let stdout = "";
+
+      auditProcess.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      await new Promise((resolve, reject) => {
+        auditProcess.on("close", (code) => {
+          if (code === 0 || code === 1) {
+            resolve({ code, stdout });
+          } else {
+            reject(new Error(`yarn audit failed with code ${code}`));
+          }
+        });
+      });
+
+      if (stdout) {
+        const lines = stdout.trim().split("\n");
+        for (const line of lines) {
+          try {
+            const auditEntry = JSON.parse(line);
+            if (auditEntry.type === "auditAdvisory") {
+              vulnerabilities.push({
+                package: auditEntry.data.advisory.module_name,
+                version: auditEntry.data.advisory.vulnerable_versions,
+                severity: this.mapYarnSeverity(
+                  auditEntry.data.advisory.severity
+                ),
+                vulnerability: auditEntry.data.advisory.title,
+                description: auditEntry.data.advisory.overview,
+                fixedIn: auditEntry.data.advisory.patched_versions,
+              });
+            }
+          } catch (parseError) {
+            // Skip malformed JSON lines
+          }
+        }
+      }
+    } catch (error) {
+      this.logger?.debug(`yarn audit execution failed: ${error}`);
+    }
+
+    return vulnerabilities;
+  }
+
+  private async runPipAudit(projectDir: string): Promise<
+    Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }>
+  > {
+    const vulnerabilities: Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }> = [];
+
+    try {
+      const { spawn } = await import("child_process");
+
+      // Try pip-audit if available
+      const auditProcess = spawn("pip-audit", ["--format", "json"], {
+        cwd: projectDir,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      auditProcess.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      auditProcess.stderr?.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      await new Promise((resolve, reject) => {
+        auditProcess.on("close", (code) => {
+          if (code === 0 || code === 1) {
+            resolve({ code, stdout, stderr });
+          } else {
+            reject(new Error(`pip-audit failed with code ${code}: ${stderr}`));
+          }
+        });
+      });
+
+      if (stdout) {
+        const auditData = JSON.parse(stdout);
+        for (const vuln of auditData) {
+          vulnerabilities.push({
+            package: vuln.name,
+            version: vuln.version,
+            severity: this.mapPipSeverity(vuln.severity || "UNKNOWN"),
+            vulnerability: vuln.vulnerability_id || vuln.id || "Unknown",
+            description: vuln.description || "No description available",
+            fixedIn: vuln.fixed_version,
+          });
+        }
+      }
+    } catch (error) {
+      this.logger?.debug(`pip audit execution failed: ${error}`);
+    }
+
+    return vulnerabilities;
+  }
+
+  private async checkKnownVulnerablePackages(projectDir: string): Promise<
+    Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }>
+  > {
+    const vulnerabilities: Array<{
+      package: string;
+      version: string;
+      severity: string;
+      vulnerability: string;
+      description: string;
+      fixedIn?: string;
+    }> = [];
+
+    try {
+      // Check package.json for Node.js dependencies
+      const packageJsonPath = path.join(projectDir, "package.json");
+      if (fs.existsSync(packageJsonPath)) {
+        const packageJson = JSON.parse(
+          fs.readFileSync(packageJsonPath, "utf-8")
+        );
+        const dependencies = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
+
+        // Check for known vulnerable packages (basic patterns)
+        const knownVulnerabilities = {
+          lodash: { maxSafeVersion: "4.17.20", severity: "HIGH" },
+          axios: { maxSafeVersion: "0.21.1", severity: "CRITICAL" },
+          express: { maxSafeVersion: "4.17.3", severity: "HIGH" },
+        };
+
+        for (const [pkg, version] of Object.entries(dependencies)) {
+          if (knownVulnerabilities[pkg]) {
+            const vuln = knownVulnerabilities[pkg];
+            if (
+              this.isVersionVulnerable(version as string, vuln.maxSafeVersion)
+            ) {
+              vulnerabilities.push({
+                package: pkg,
+                version: version as string,
+                severity: vuln.severity,
+                vulnerability: `Outdated ${pkg} version`,
+                description: `${pkg} version ${version} is vulnerable. Update to ${vuln.maxSafeVersion} or later.`,
+                fixedIn: vuln.maxSafeVersion,
+              });
+            }
+          }
+        }
+      }
+
+      // Check requirements.txt for Python dependencies
+      const requirementsPath = path.join(projectDir, "requirements.txt");
+      if (fs.existsSync(requirementsPath)) {
+        const requirements = fs
+          .readFileSync(requirementsPath, "utf-8")
+          .split("\n");
+
+        for (const req of requirements) {
+          if (req.trim() && !req.startsWith("#")) {
+            const match = req.match(/^([a-zA-Z0-9\-_.]+)([<>=!~]+)(.+)$/);
+            if (match) {
+              const [, pkg, , version] = match;
+
+              // Basic check for known vulnerable Python packages
+              const knownVulns = {
+                requests: { maxSafeVersion: "2.25.0", severity: "HIGH" },
+                urllib3: { maxSafeVersion: "1.26.5", severity: "CRITICAL" },
+              };
+
+              if (
+                knownVulns[pkg] &&
+                this.isVersionVulnerable(
+                  version,
+                  knownVulns[pkg].maxSafeVersion
+                )
+              ) {
+                const vuln = knownVulns[pkg];
+                vulnerabilities.push({
+                  package: pkg,
+                  version: version,
+                  severity: vuln.severity,
+                  vulnerability: `Outdated ${pkg} version`,
+                  description: `${pkg} version ${version} is vulnerable. Update to ${vuln.maxSafeVersion} or later.`,
+                  fixedIn: vuln.maxSafeVersion,
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      this.logger?.debug(`Manual vulnerability check failed: ${error}`);
+    }
+
+    return vulnerabilities;
+  }
+
+  private mapNPMSeverity(severity: string): string {
+    const severityMap: { [key: string]: string } = {
+      critical: "CRITICAL",
+      high: "HIGH",
+      moderate: "MEDIUM",
+      low: "LOW",
+      info: "INFO",
+    };
+    return severityMap[severity.toLowerCase()] || "MEDIUM";
+  }
+
+  private mapYarnSeverity(severity: string): string {
+    const severityMap: { [key: string]: string } = {
+      critical: "CRITICAL",
+      high: "HIGH",
+      moderate: "MEDIUM",
+      low: "LOW",
+      info: "INFO",
+    };
+    return severityMap[severity.toLowerCase()] || "MEDIUM";
+  }
+
+  private mapPipSeverity(severity: string): string {
+    const severityMap: { [key: string]: string } = {
+      CRITICAL: "CRITICAL",
+      HIGH: "HIGH",
+      MODERATE: "MEDIUM",
+      LOW: "LOW",
+      UNKNOWN: "MEDIUM",
+    };
+    return severityMap[severity.toUpperCase()] || "MEDIUM";
+  }
+
+  private isVersionVulnerable(
+    currentVersion: string,
+    maxSafeVersion: string
+  ): boolean {
+    try {
+      // Simple version comparison (basic implementation)
+      const current = currentVersion
+        .replace(/[^0-9.]/g, "")
+        .split(".")
+        .map(Number);
+      const safe = maxSafeVersion
+        .replace(/[^0-9.]/g, "")
+        .split(".")
+        .map(Number);
+
+      for (let i = 0; i < Math.max(current.length, safe.length); i++) {
+        const c = current[i] || 0;
+        const s = safe[i] || 0;
+        if (c < s) return true;
+        if (c > s) return false;
+      }
+      return false;
+    } catch (error) {
+      // If version comparison fails, assume it's vulnerable
+      return true;
+    }
   }
 
   private hashFile(filePath: string): string {
