@@ -263,9 +263,25 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
     neural_engine_cores = capabilities.get('neural_engine_cores', 0)
     memory_gb = capabilities.get('memory_gb', 8)
     
+    # Check if we have benchmarked optimal configuration
+    optimal_mlcompute = capabilities.get('optimal_mlcompute_units')
+    if optimal_mlcompute:
+        logger.info(f" Using benchmarked optimal MLComputeUnits: {optimal_mlcompute}")
+        default_mlcompute = optimal_mlcompute
+    else:
+        default_mlcompute = 'ALL'  # Use ALL to maximize Neural Engine utilization on Apple Silicon
+
+    # Set environment variables to maximize Neural Engine utilization
+    if neural_engine_cores > 0:
+        os.environ['MLCOMPUTE_UNITS'] = default_mlcompute
+        os.environ['COREML_NEURAL_ENGINE_ENABLED'] = '1'
+        os.environ['COREML_USE_NEURAL_ENGINE'] = '1'
+        os.environ['COREML_OPTIMIZE_FOR_NEURAL_ENGINE'] = '1'
+        logger.info(f" Set Neural Engine environment variables for {default_mlcompute} configuration")
+
     # Initialize base options
     coreml_options = {
-        'MLComputeUnits': 'CPUAndGPU',  # Default fallback
+        'MLComputeUnits': default_mlcompute,
         'ModelFormat': 'MLProgram',     # Modern format for better performance
         'AllowLowPrecisionAccumulationOnGPU': '1',  # Enable FP16 for better performance
         'RequireStaticInputShapes': '0',  # Allow dynamic shapes for flexibility
@@ -277,7 +293,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
         
         # M1 Max / M2 Max optimization strategy
         coreml_options.update({
-            'MLComputeUnits': 'CPUAndNeuralEngine',  # Maximize Neural Engine utilization
+            'MLComputeUnits': 'ALL',  # Maximize ALL compute unit utilization including Neural Engine
             'AllowLowPrecisionAccumulationOnGPU': '1',  # Enable FP16 for better performance
             'ModelFormat': 'MLProgram',  # Use MLProgram for newer devices
             'RequireStaticInputShapes': '0',  # Allow dynamic shapes for flexibility
@@ -292,7 +308,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
         logger.info(f" M3 detected with {neural_engine_cores} Neural Engine cores")
         
         coreml_options.update({
-            'MLComputeUnits': 'CPUAndNeuralEngine',
+            'MLComputeUnits': 'ALL',
             'ModelFormat': 'MLProgram',
             'AllowLowPrecisionAccumulationOnGPU': '1',
         })
@@ -301,7 +317,7 @@ def create_coreml_provider_options(capabilities: Dict[str, Any]) -> Dict[str, An
         logger.info(f" M1/M2 detected with {neural_engine_cores} Neural Engine cores")
         
         coreml_options.update({
-            'MLComputeUnits': 'CPUAndNeuralEngine',
+            'MLComputeUnits': 'ALL',
             'ModelFormat': 'MLProgram',
         })
         
@@ -893,6 +909,95 @@ def benchmark_mlcompute_units_if_needed(capabilities: Dict[str, Any]) -> str:
         logger.warning(f" Failed to cache MLComputeUnits configuration: {e}")
     
     return optimal_config
+
+
+def verify_neural_engine_utilization() -> Dict[str, Any]:
+    """
+    Verify that the Neural Engine is actually being utilized.
+
+    This function checks system metrics to confirm Neural Engine usage
+    and provides diagnostic information for optimization.
+
+    @returns Dict[str, Any]: Neural Engine utilization metrics
+    """
+    try:
+        import subprocess
+        import re
+
+        result = {
+            'neural_engine_active': False,
+            'utilization_percentage': 0.0,
+            'diagnostic_info': {},
+            'recommendations': []
+        }
+
+        # Check for Neural Engine activity using system_profiler
+        try:
+            output = subprocess.run(['system_profiler', 'SPHardwareDataType'],
+                                  capture_output=True, text=True, timeout=10)
+            if output.returncode == 0:
+                # Look for Apple Silicon indicators
+                if 'Apple M' in output.stdout:
+                    result['apple_silicon_detected'] = True
+                else:
+                    result['apple_silicon_detected'] = False
+                    result['recommendations'].append("Apple Silicon not detected - Neural Engine not available")
+        except (subprocess.SubprocessError, FileNotFoundError):
+            result['diagnostic_info']['system_profiler_error'] = "system_profiler not available"
+
+        # Check powermetrics for Neural Engine usage (requires sudo)
+        try:
+            # Try to get powermetrics output (may require sudo)
+            pm_output = subprocess.run(['powermetrics', '--samplers', 'cpu_power', '-n', '1', '-i', '1000'],
+                                     capture_output=True, text=True, timeout=15)
+
+            if pm_output.returncode == 0:
+                # Parse for Neural Engine information
+                if 'ANE' in pm_output.stdout or 'Neural Engine' in pm_output.stdout:
+                    result['neural_engine_active'] = True
+
+                    # Try to extract utilization percentage
+                    ane_match = re.search(r'ANE.*?(\d+(?:\.\d+)?)%', pm_output.stdout)
+                    if ane_match:
+                        result['utilization_percentage'] = float(ane_match.group(1))
+
+                result['diagnostic_info']['powermetrics_available'] = True
+            else:
+                result['diagnostic_info']['powermetrics_error'] = "powermetrics requires sudo or is not available"
+                result['recommendations'].append("Consider running with sudo to get detailed Neural Engine metrics")
+
+        except (subprocess.SubprocessError, FileNotFoundError):
+            result['diagnostic_info']['powermetrics_error'] = "powermetrics not available"
+            result['recommendations'].append("Install or configure powermetrics for detailed diagnostics")
+
+        # Check environment variables
+        env_vars = ['MLCOMPUTE_UNITS', 'COREML_NEURAL_ENGINE_ENABLED', 'COREML_USE_NEURAL_ENGINE']
+        env_status = {}
+        for var in env_vars:
+            env_status[var] = os.environ.get(var)
+
+        result['environment_variables'] = env_status
+
+        # Provide recommendations based on findings
+        if not result['neural_engine_active'] and result.get('apple_silicon_detected', True):
+            result['recommendations'].extend([
+                "Neural Engine not detected as active",
+                "Verify MLComputeUnits is set to 'ALL'",
+                "Check that CoreML model is compatible with Neural Engine",
+                "Consider model optimization for Neural Engine compatibility"
+            ])
+
+        if result['utilization_percentage'] == 0.0 and result['neural_engine_active']:
+            result['recommendations'].append("Neural Engine detected but 0% utilization - investigate workload compatibility")
+
+        return result
+
+    except Exception as e:
+        logger.debug(f"Failed to verify Neural Engine utilization: {e}")
+        return {
+            'error': str(e),
+            'recommendations': ["Manual verification required - check system monitoring tools"]
+        }
 
 
 def cleanup_coreml_contexts(aggressive: bool = False):

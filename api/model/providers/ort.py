@@ -124,9 +124,17 @@ def get_cached_provider_options(provider_name: str, capabilities: Dict[str, Any]
     provider_options = {}
     
     if provider_name == "CoreMLExecutionProvider":
-        # Import CoreML-specific options
-        from .coreml import create_coreml_provider_options
-        provider_options = create_coreml_provider_options(capabilities)
+        # Import CoreML-specific options and benchmarking
+        from .coreml import create_coreml_provider_options, benchmark_mlcompute_units_if_needed
+
+        # Run MLComputeUnits benchmarking to get optimal configuration
+        optimal_config = benchmark_mlcompute_units_if_needed(capabilities)
+
+        # Override the MLComputeUnits in capabilities for create_coreml_provider_options
+        capabilities_with_optimal = capabilities.copy()
+        capabilities_with_optimal['optimal_mlcompute_units'] = optimal_config
+
+        provider_options = create_coreml_provider_options(capabilities_with_optimal)
         
     elif provider_name == "CPUExecutionProvider":
         # CPU provider optimizations

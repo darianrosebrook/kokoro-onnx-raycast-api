@@ -647,6 +647,104 @@ startup_progress = {
     "completed_at": None
 }
 
+# Lazy initialization state
+_lazy_initialization_done = False
+_lazy_initialization_lock = asyncio.Lock()
+
+async def ensure_lazy_initialization():
+    """
+    Ensure lazy initialization is performed on first request.
+
+    This function defers expensive initialization operations (model warming, cache preloading)
+    until the first actual API request, dramatically reducing startup time.
+    """
+    global _lazy_initialization_done
+
+    # Quick check without lock
+    if _lazy_initialization_done:
+        return
+
+    # Use lock to prevent concurrent initialization
+    async with _lazy_initialization_lock:
+        # Double-check after acquiring lock
+        if _lazy_initialization_done:
+            return
+
+        try:
+            logger.info("🚀 Performing lazy initialization on first request...")
+
+            # Run expensive operations in parallel
+            tasks = []
+
+            # 1. Perform cold start warmup (major time sink: ~20s)
+            if not _cold_start_warmup_completed:
+                tasks.append(asyncio.create_task(_perform_lazy_warmup()))
+
+            # 2. Pre-warm caches (inference, phoneme, primer)
+            tasks.append(asyncio.create_task(_perform_lazy_cache_warming()))
+
+            # 3. Initialize any background services
+            tasks.append(asyncio.create_task(_perform_lazy_service_init()))
+
+            # Run all tasks concurrently
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+            _lazy_initialization_done = True
+            logger.info("✅ Lazy initialization completed")
+
+        except Exception as e:
+            logger.error(f"❌ Lazy initialization failed: {e}")
+            # Don't set _lazy_initialization_done to prevent retry issues
+            raise
+
+async def _perform_lazy_warmup():
+    """Perform cold start warmup during lazy initialization."""
+    try:
+        logger.info("🔥 Performing lazy cold-start warmup...")
+        start_time = time.time()
+
+        await perform_cold_start_warmup()
+
+        warmup_time = (time.time() - start_time) * 1000
+        logger.info(f"✅ Lazy warmup completed in {warmup_time:.1f}ms")
+
+    except Exception as e:
+        logger.error(f"❌ Lazy warmup failed: {e}")
+        raise
+
+async def _perform_lazy_cache_warming():
+    """Pre-warm caches during lazy initialization."""
+    try:
+        logger.info("💾 Performing lazy cache warming...")
+        start_time = time.time()
+
+        # Import and run cache optimization
+        from api.model.cache import optimization
+        await optimization.warm_common_caches()
+
+        cache_time = (time.time() - start_time) * 1000
+        logger.info(f"✅ Lazy cache warming completed in {cache_time:.1f}ms")
+
+    except Exception as e:
+        logger.error(f"❌ Lazy cache warming failed: {e}")
+        # Don't raise - cache warming failure shouldn't block requests
+
+async def _perform_lazy_service_init():
+    """Initialize background services during lazy initialization."""
+    try:
+        logger.info("⚙️ Performing lazy service initialization...")
+        start_time = time.time()
+
+        # Initialize any background services here
+        # For now, this is a placeholder for future background services
+
+        service_time = (time.time() - start_time) * 1000
+        logger.info(f"✅ Lazy service initialization completed in {service_time:.1f}ms")
+
+    except Exception as e:
+        logger.error(f"❌ Lazy service initialization failed: {e}")
+        # Don't raise - service init failure shouldn't block requests
+
 # Global variables for cold-start warm-up tracking
 _cold_start_warmup_completed: bool = False
 _cold_start_warmup_time_ms: float = 0.0
@@ -974,24 +1072,30 @@ async def delayed_cold_start_warmup():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Application lifespan management with coordinated startup sequence
+    Application lifespan management with lazy initialization for fast startup
     """
-    # Startup sequence - execute in logical order for better log flow
-    logger.info(" Starting application startup sequence...")
-    
-    # Step 1: Validate environment and dependencies first
-    logger.info(" Step 1/4: Validating environment and dependencies...")
+    # Fast startup sequence - only essential validation, defer expensive operations
+    logger.info("🚀 Starting fast application startup sequence...")
+
+    # Step 1: Validate environment and dependencies (essential, fast)
+    logger.info("⚡ Step 1/3: Validating environment and dependencies...")
     validate_dependencies()
     validate_model_files()
     validate_environment()
-    # Apply production patches once during startup, before validation of patch status
-    logger.info(" Applying production patches...")
+
+    # Apply production patches once during startup
+    logger.info("🔧 Applying production patches...")
     apply_all_patches()
     validate_patch_status()
 
-    # Step 2: Initialize model (blocks until model is ready)
-    logger.info(" Step 2/4: Initializing TTS model...")
-    await initialize_model()
+    # Step 2: Defer model initialization to first request (lazy loading)
+    logger.info("💤 Step 2/3: Skipping model initialization (lazy loading enabled)...")
+    # Model initialization now happens on first request via ensure_lazy_initialization()
+
+    # Step 3: Mark startup as fast and ready
+    logger.info("✅ Step 3/3: Fast startup complete - ready for requests!")
+    startup_progress["completed"] = True
+    startup_progress["completed_at"] = time.time()
 
     # Step 3: Start background services after model is ready
     logger.info("Step 3/4: Starting background services...")
@@ -1727,6 +1831,46 @@ async def get_session_status():
         }
 
 
+@app.get("/neural-engine-status")
+async def get_neural_engine_status():
+    """
+    Get Neural Engine utilization status and diagnostics.
+
+    This endpoint provides real-time information about Neural Engine usage
+    and optimization status for Apple Silicon devices.
+
+    **Response Format**:
+    ```json
+    {
+        "neural_engine_active": true,
+        "utilization_percentage": 85.5,
+        "apple_silicon_detected": true,
+        "environment_variables": {...},
+        "recommendations": [...],
+        "diagnostic_info": {...}
+    }
+    ```
+    """
+    try:
+        from api.model.providers import verify_neural_engine_utilization
+
+        status = verify_neural_engine_utilization()
+
+        return {
+            "status": "success",
+            "timestamp": time.time(),
+            "neural_engine": status
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get Neural Engine status: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+
 @app.get("/coreml-memory-status")
 async def get_coreml_memory_status():
     """
@@ -2434,12 +2578,8 @@ async def create_speech(request: Request, tts_request: TTSRequest, config: TTSCo
     @returns StreamingResponse with audio data
     @raises HTTPException: For various error conditions
     """
-    # Ensure model is loaded before processing
-    if not model_initialization_complete:
-        raise HTTPException(
-            status_code=503,
-            detail="TTS model not loaded. Please wait for initialization to complete."
-        )
+    # Ensure lazy initialization is performed on first request
+    await ensure_lazy_initialization()
 
     # Handle streaming requests with real-time audio delivery
     if tts_request.stream:

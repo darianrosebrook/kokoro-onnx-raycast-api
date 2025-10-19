@@ -42,5 +42,6 @@ __all__ = [
     'create_coreml_provider_options',
     'test_mlcompute_units_configuration',
     'benchmark_mlcompute_units_if_needed',
+    'verify_neural_engine_utilization',
     'clear_provider_options_cache'
 ]
