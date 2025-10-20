@@ -469,3 +469,4 @@ def get_buffer_monitor() -> StreamingBufferMonitor:
     if _buffer_monitor is None:
         _buffer_monitor = StreamingBufferMonitor()
     return _buffer_monitor
+

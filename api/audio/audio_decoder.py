@@ -346,3 +346,4 @@ def get_playback_synchronizer() -> PlaybackSynchronizer:
     if _synchronizer is None:
         _synchronizer = PlaybackSynchronizer()
     return _synchronizer
+

@@ -673,7 +673,13 @@ async def ensure_lazy_initialization():
         try:
             logger.info("🚀 Performing lazy initialization on first request...")
 
-            # Run expensive operations in parallel
+            # Step 1: Initialize the model first (required for warmup)
+            if not model_initialization_complete:
+                logger.info("📦 Initializing model for lazy loading...")
+                await initialize_model()
+                logger.info("✅ Model initialization completed")
+
+            # Step 2: Run expensive operations in parallel
             tasks = []
 
             # 1. Perform cold start warmup (major time sink: ~20s)
@@ -686,7 +692,7 @@ async def ensure_lazy_initialization():
             # 3. Initialize any background services
             tasks.append(asyncio.create_task(_perform_lazy_service_init()))
 
-            # Run all tasks concurrently
+            # Run remaining tasks concurrently
             await asyncio.gather(*tasks, return_exceptions=True)
 
             _lazy_initialization_done = True

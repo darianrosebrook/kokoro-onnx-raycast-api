@@ -475,3 +475,4 @@ def complete_tts_operation(operation_id: str, success: bool = True, final_metric
         for key, value in final_metrics.items():
             handler.add_operation_metric(operation_id, key, value)
     handler.complete_operation(operation_id, success)
+
