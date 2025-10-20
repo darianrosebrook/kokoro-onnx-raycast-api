@@ -2734,13 +2734,31 @@ async def create_speech_merged(request: Request, tts_request: TTSRequest, config
                 request=request
             )
 
+            # Audio quality validation for enterprise standards
+            try:
+                from api.audio.audio_quality_metrics import validate_audio_quality_enterprise
+                quality_passed, quality_issues = validate_audio_quality_enterprise(audio_data)
+
+                if not quality_passed:
+                    logger.warning(
+                        f"Non-streaming audio quality issues: {', '.join(quality_issues)}"
+                    )
+                    # Add quality warnings to response headers
+                    quality_warnings = "; ".join(quality_issues)
+                else:
+                    quality_warnings = ""
+            except Exception as quality_err:
+                logger.debug(f"Audio quality validation failed: {quality_err}")
+                quality_warnings = "Quality validation failed"
+
             # Performance monitoring end
             processing_time = time.time() - start_time
             audio_size_mb = len(audio_data) / (1024 * 1024)
 
             logger.info(
                 f"Non-streaming TTS completed: {processing_time:.2f}s, "
-                f"{audio_size_mb:.2f}MB audio generated"
+                f"{audio_size_mb:.2f}MB audio generated, "
+                f"Quality: {'PASS' if quality_passed else 'FAIL'}"
             )
 
             # Determine appropriate MIME type
@@ -2751,16 +2769,23 @@ async def create_speech_merged(request: Request, tts_request: TTSRequest, config
             )
 
             # Return complete audio response
+            response_headers = {
+                "X-Processing-Time": f"{processing_time:.2f}s",
+                "X-Audio-Size": f"{audio_size_mb:.2f}MB",
+                "X-Characters-Processed": str(len(tts_request.text)),
+                "X-TTS-Format": tts_request.format,
+                "X-TTS-Voice": tts_request.voice,
+                "X-Audio-Quality": "PASS" if quality_passed else "FAIL"
+            }
+
+            # Add quality warnings if any
+            if quality_warnings:
+                response_headers["X-Audio-Quality-Issues"] = quality_warnings
+
             return Response(
                 content=audio_data,
                 media_type=media_type,
-                headers={
-                    "X-Processing-Time": f"{processing_time:.2f}s",
-                    "X-Audio-Size": f"{audio_size_mb:.2f}MB",
-                    "X-Characters-Processed": str(len(tts_request.text)),
-                    "X-TTS-Format": tts_request.format,
-                    "X-TTS-Voice": tts_request.voice
-                }
+                headers=response_headers
             )
 
         except Exception as e:

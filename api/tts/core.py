@@ -42,6 +42,11 @@ from api.performance.stats import (
     update_inference_stats,
 )
 from api.performance.request_tracker import server_tracker
+from api.audio.audio_quality_metrics import (
+    analyze_audio_quality,
+    AudioQualityMetrics,
+    AudioQualityStandard
+)
 from api.tts.text_processing import (
     get_phoneme_cache_stats,
     preprocess_text_for_inference,
@@ -946,6 +951,17 @@ async def stream_tts_audio(
                         if max_gap_ms is None or expected_gap_ms > max_gap_ms:
                             max_gap_ms = expected_gap_ms
 
+                    # Audio quality monitoring for enterprise standards
+                    try:
+                        quality_metrics = _monitor_audio_quality(chunk, chunk_state["chunk_count"])
+                        if quality_metrics and not quality_metrics.meets_standard:
+                            logger.warning(
+                                f"[{request_id}] Audio quality issues in chunk {chunk_state['chunk_count']}: "
+                                f"{', '.join(quality_metrics.issues)}"
+                            )
+                    except Exception as quality_err:
+                        logger.debug(f"[{request_id}] Audio quality monitoring failed: {quality_err}")
+
                     yield chunk
                     offset += chunk_size
 
@@ -1143,6 +1159,40 @@ def _validate_segment_mapping(text: str, segments: List[str], request_id: str) -
 
     logger.warning(f"[{request_id}] Segment mapping mismatch: {len(original)} vs {len(seg_joined)}")
     return False
+
+
+# Audio quality monitoring for enterprise standards
+def _monitor_audio_quality(chunk: bytes, chunk_number: int) -> Optional[AudioQualityMetrics]:
+    """
+    Monitor audio quality for each streaming chunk.
+
+    @param chunk: Audio chunk bytes (16-bit PCM)
+    @param chunk_number: Sequential chunk number for tracking
+    @returns Optional[AudioQualityMetrics]: Quality metrics or None if monitoring disabled
+    """
+    try:
+        # Only monitor every Nth chunk to avoid performance impact
+        monitoring_interval = getattr(TTSConfig, 'AUDIO_QUALITY_MONITORING_INTERVAL', 5)
+        if chunk_number % monitoring_interval != 0:
+            return None
+
+        # Analyze audio quality
+        metrics = analyze_audio_quality(chunk, TTSConfig.SAMPLE_RATE, AudioQualityStandard.ENTERPRISE)
+
+        # Log quality issues for enterprise compliance
+        if not metrics.meets_standard:
+            logger.warning(
+                f"Audio quality violation in chunk {chunk_number}: "
+                f"LUFS={metrics.lufs:.1f} (target: -16±1), "
+                f"dBTP={metrics.dbtp:.1f} (ceiling: -1.0), "
+                f"Peak={metrics.peak_db:.1f}dB"
+            )
+
+        return metrics
+
+    except Exception as e:
+        logger.debug(f"Audio quality monitoring failed for chunk {chunk_number}: {e}")
+        return None
 
 
 # Compatibility aliases for existing imports

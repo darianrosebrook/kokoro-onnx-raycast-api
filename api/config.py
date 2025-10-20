@@ -496,6 +496,10 @@ class TTSConfig:
     STREAMING_CONSUMER_WAIT_SECONDS = 1.5  # Streaming buffer management
     STREAM_IDLE_TIMEOUT_SECONDS = 31.1  # Client disconnect detection
 
+    # Audio quality monitoring parameters
+    AUDIO_QUALITY_MONITORING_INTERVAL = 5  # Monitor every Nth chunk to balance quality and performance
+    AUDIO_QUALITY_MONITORING_ENABLED = True  # Enable/disable audio quality monitoring
+
     # Text processing limits for optimal performance
     MAX_TEXT_LENGTH = 4511  # Extended from OpenAI API compatibility limit for optimization testing
     # Apply profile-specific segment length if in development mode
