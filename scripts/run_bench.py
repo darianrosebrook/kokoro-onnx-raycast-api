@@ -636,7 +636,7 @@ Examples:
     ap.add_argument("--url", default="http://localhost:8000/v1/audio/speech", help="TTS endpoint URL")
     ap.add_argument("--voice", default="af_heart", help="Voice id/name")
     ap.add_argument("--lang", default="en-us", help="Language code")
-    ap.add_argument("--speed", type=float, default=1.0, help="Playback speed")
+    ap.add_argument("--speed", type=float, default=1.25, help="Playback speed (min 1.25)")
     ap.add_argument("--preset", choices=["short", "medium", "long"], default="short")
     ap.add_argument("--stream", action="store_true", help="Test streaming mode")
     ap.add_argument("--trials", type=int, default=5)

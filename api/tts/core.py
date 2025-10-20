@@ -41,6 +41,8 @@ from api.performance.stats import (
     update_endpoint_performance_stats,
     update_inference_stats,
 )
+from api.performance.buffer_monitor import get_buffer_monitor
+from api.performance.status_handler import get_status_handler, start_tts_operation, update_tts_progress, complete_tts_operation
 from api.performance.request_tracker import server_tracker
 from api.audio.audio_quality_metrics import (
     analyze_audio_quality,
@@ -670,6 +672,29 @@ async def stream_tts_audio(
     variation_handler = get_variation_handler()
     full_text_hash = variation_handler.get_text_hash(text, voice, speed, lang)
 
+    # Initialize buffer utilization monitoring
+    buffer_monitor = get_buffer_monitor()
+    buffer_monitor.start_monitoring(
+        buffer_capacity_bytes=TTSConfig.STREAMING_BUFFER_SIZE_BYTES,
+        session_id=request_id
+    )
+
+    # Initialize status tracking for long-running operation
+    status_handler = get_status_handler()
+    operation_progress = start_tts_operation(
+        operation_id=request_id,
+        text_length=len(text),
+        is_streaming=True
+    )
+
+    # Update status to processing
+    status_handler.update_operation_status(
+        request_id,
+        operation_progress.status,
+        progress_percent=0.0,
+        message=f"Started streaming TTS for {len(text)} characters"
+    )
+
     if not get_model_status():
         logger.error(f"[{request_id}] Model not ready")
         raise HTTPException(status_code=503, detail="TTS model not ready.")
@@ -919,6 +944,7 @@ async def stream_tts_audio(
                     next_future = asyncio.create_task(_generate_segment_async(current_index + 1))
 
                 while offset < len(segment_bytes):
+                    chunk_start_time = time.perf_counter()  # For buffer monitoring
                     chunk = segment_bytes[offset:offset + chunk_size]
                     current_time = time.monotonic()
                     chunk_state["chunk_count"] += 1
@@ -931,6 +957,15 @@ async def stream_tts_audio(
                         logger.info(f"[{request_id}] First chunk in {ttfa_ms:.2f} ms")
                         server_tracker.log_event(request_id, "FIRST_CHUNK_GENERATED", {"ttfa_ms": ttfa_ms, "chunk_size": len(chunk)})
 
+                        # Update status with TTFA achievement
+                        status_handler.update_operation_status(
+                            request_id,
+                            operation_progress.status,
+                            progress_percent=10.0,  # First chunk represents ~10% progress
+                            message=f"TTFA achieved: {ttfa_ms:.1f}ms, started streaming",
+                            metrics={"ttfa_ms": ttfa_ms, "first_chunk_size": len(chunk)}
+                        )
+
                     # Track audio duration
                     chunk_state["total_audio_duration_ms"] += (
                         len(chunk) / TTSConfig.BYTES_PER_SAMPLE / TTSConfig.SAMPLE_RATE
@@ -942,6 +977,16 @@ async def stream_tts_audio(
                         efficiency = (expected / elapsed) if elapsed > 0 else 0.0
                         logger.debug(f"[{request_id}] Chunk {chunk_state['chunk_count']}: efficiency {efficiency*100:.1f}%")
 
+                        # Update progress every 10 chunks
+                        progress_percent = min(90.0, (chunk_state["chunk_count"] / 50) * 80 + 10)  # Scale to 10-90%
+                        status_handler.update_operation_status(
+                            request_id,
+                            operation_progress.status,
+                            progress_percent=progress_percent,
+                            message=f"Streaming chunk {chunk_state['chunk_count']}, efficiency {efficiency*100:.1f}%",
+                            metrics={"chunks_streamed": chunk_state["chunk_count"], "efficiency": efficiency}
+                        )
+
                     # Track gaps between chunks for gapless audio analysis
                     if chunk_state["chunk_count"] > 1:  # Skip first chunk (no previous gap)
                         chunk_duration_ms = (len(chunk) / TTSConfig.BYTES_PER_SAMPLE / TTSConfig.SAMPLE_RATE) * 1000.0
@@ -950,6 +995,13 @@ async def stream_tts_audio(
                         # Update max_gap_ms if this gap is larger
                         if max_gap_ms is None or expected_gap_ms > max_gap_ms:
                             max_gap_ms = expected_gap_ms
+
+                    # Buffer utilization monitoring
+                    try:
+                        chunk_processing_time = (time.perf_counter() - chunk_start_time) * 1000
+                        buffer_monitor.record_chunk_processed(len(chunk), chunk_processing_time)
+                    except Exception as buffer_err:
+                        logger.debug(f"[{request_id}] Buffer monitoring failed: {buffer_err}")
 
                     # Audio quality monitoring for enterprise standards
                     try:
@@ -1113,13 +1165,51 @@ async def stream_tts_audio(
                 chunk_yield_time = (timing_checkpoints["first_chunk_yield"] - timing_checkpoints["first_segment_end"]) * 1000
                 logger.info(f"[{request_id}]   • Chunk processing & yield: {chunk_yield_time:.1f}ms")
 
+        # Generate buffer utilization report
+        try:
+            buffer_report = buffer_monitor.stop_monitoring()
+            logger.info(f"[{request_id}] 🧮 Buffer efficiency: {buffer_report.buffer_efficiency_score:.1f}%, "
+                       f"underruns: {buffer_report.underrun_count}, overruns: {buffer_report.overrun_count}")
+
+            # Complete the operation successfully
+            final_metrics = {
+                "total_chunks": chunk_state["chunk_count"],
+                "buffer_efficiency": buffer_report.buffer_efficiency_score,
+                "total_audio_duration_ms": chunk_state["total_audio_duration_ms"],
+                "ttfa_ms": ttfa_ms,
+                "rtf": rtf,
+                "underruns": buffer_report.underrun_count,
+                "overruns": buffer_report.overrun_count
+            }
+
+            complete_tts_operation(request_id, success=True, final_metrics=final_metrics)
+
+        except Exception as buffer_err:
+            logger.debug(f"[{request_id}] Buffer monitoring cleanup failed: {buffer_err}")
+            # Still complete the operation even if buffer monitoring fails
+            complete_tts_operation(request_id, success=True)
+
         if processed_count == 0:
             logger.error(f"[{request_id}] No segments processed successfully")
             raise HTTPException(status_code=500, detail="Audio generation failed")
 
     except Exception as e:
         logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)
-        
+
+        # Cleanup buffer monitoring and status on error
+        try:
+            buffer_report = buffer_monitor.stop_monitoring()
+            logger.warning(f"[{request_id}] 🧮 Buffer monitoring stopped due to error - "
+                          f"efficiency: {buffer_report.buffer_efficiency_score:.1f}%")
+        except Exception as buffer_err:
+            logger.debug(f"[{request_id}] Buffer monitoring error cleanup failed: {buffer_err}")
+
+        # Mark operation as failed
+        try:
+            complete_tts_operation(request_id, success=False, final_metrics={"error": str(e)})
+        except Exception as status_err:
+            logger.debug(f"[{request_id}] Status update on error failed: {status_err}")
+
         # Record failed stream for optimization
         try:
             variation_handler.record_stream_health(
@@ -1131,7 +1221,7 @@ async def stream_tts_audio(
             )
         except Exception as health_err:
             logger.debug(f"[{request_id}] Failed to record stream health: {health_err}")
-        
+
         # Session cleanup on error - DISABLED to prevent audio gaps
         # This was causing 8+ second delays during error conditions
         # try:
@@ -1140,7 +1230,7 @@ async def stream_tts_audio(
         #         dual_session_manager.cleanup_sessions()
         # except Exception as cleanup_err:
         #     logger.warning(f"[{request_id}] Error cleanup failed: {cleanup_err}")
-        
+
         raise
 
 

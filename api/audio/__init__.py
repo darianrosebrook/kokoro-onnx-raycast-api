@@ -18,6 +18,12 @@ from .audio_quality_metrics import (
     analyze_audio_quality,
     validate_audio_quality_enterprise
 )
+from .audio_decoder import (
+    RealTimeAudioDecoder,
+    PlaybackSynchronizer,
+    get_audio_decoder,
+    get_playback_synchronizer
+)
 
 __all__ = [
     'AudioQualityAnalyzer',
@@ -25,5 +31,9 @@ __all__ = [
     'AudioQualityStandard',
     'get_audio_quality_analyzer',
     'analyze_audio_quality',
-    'validate_audio_quality_enterprise'
+    'validate_audio_quality_enterprise',
+    'RealTimeAudioDecoder',
+    'PlaybackSynchronizer',
+    'get_audio_decoder',
+    'get_playback_synchronizer'
 ]

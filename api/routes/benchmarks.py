@@ -425,3 +425,145 @@ def _save_audio_quality_results(results: Dict[str, Any]):
 
     except Exception as e:
         logger.error(f"Failed to save audio quality results: {e}")
+
+
+# Status Update Endpoints
+@router.get("/status/operations", summary="List All Operations", tags=["status"])
+async def list_operations(status: Optional[str] = None) -> Dict[str, Any]:
+    """
+    List all tracked operations with optional status filtering.
+
+    **Parameters:**
+    - `status`: Optional filter by operation status (pending, processing, completed, failed)
+
+    **Returns:**
+    List of operations with their current status and progress.
+    """
+    try:
+        from api.performance.status_handler import get_status_handler, OperationStatus
+
+        handler = get_status_handler()
+
+        status_filter = None
+        if status:
+            try:
+                status_filter = OperationStatus(status.lower())
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+
+        operations = handler.list_operations(status_filter)
+
+        return {
+            "status": "success",
+            "total_operations": len(operations),
+            "operations": [
+                {
+                    "operation_id": op.operation_id,
+                    "operation_type": op.operation_type,
+                    "status": op.status.value,
+                    "progress_percent": op.progress_percent,
+                    "start_time": op.start_time,
+                    "duration_seconds": op.duration_seconds,
+                    "completed_items": op.completed_items,
+                    "total_items": op.total_items,
+                    "current_item": op.current_item,
+                    "warnings": op.warnings,
+                    "errors": op.errors,
+                    "estimated_completion_time": op.estimated_completion_time
+                }
+                for op in operations
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to list operations: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list operations: {str(e)}")
+
+
+@router.get("/status/operations/{operation_id}", summary="Get Operation Status", tags=["status"])
+async def get_operation_status(operation_id: str) -> Dict[str, Any]:
+    """
+    Get detailed status of a specific operation.
+
+    **Parameters:**
+    - `operation_id`: Unique operation identifier
+
+    **Returns:**
+    Detailed operation status including progress, metrics, and history.
+    """
+    try:
+        from api.performance.status_handler import get_status_handler
+
+        handler = get_status_handler()
+        operation = handler.get_operation_status(operation_id)
+
+        if not operation:
+            raise HTTPException(status_code=404, detail=f"Operation {operation_id} not found")
+
+        return {
+            "status": "success",
+            "operation": {
+                "operation_id": operation.operation_id,
+                "operation_type": operation.operation_type,
+                "status": operation.status.value,
+                "progress_percent": operation.progress_percent,
+                "start_time": operation.start_time,
+                "last_update_time": operation.last_update_time,
+                "duration_seconds": operation.duration_seconds,
+                "progress": {
+                    "completed_items": operation.completed_items,
+                    "total_items": operation.total_items,
+                    "current_item": operation.current_item
+                },
+                "metrics": operation.metrics,
+                "warnings": operation.warnings,
+                "errors": operation.errors,
+                "estimated_completion_time": operation.estimated_completion_time,
+                "is_complete": operation.is_complete
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get operation status for {operation_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get operation status: {str(e)}")
+
+
+@router.post("/status/operations/{operation_id}/cancel", summary="Cancel Operation", tags=["status"])
+async def cancel_operation(operation_id: str, reason: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Cancel a running operation.
+
+    **Parameters:**
+    - `operation_id`: Unique operation identifier
+    - `reason`: Optional cancellation reason
+
+    **Returns:**
+    Confirmation of operation cancellation.
+    """
+    try:
+        from api.performance.status_handler import get_status_handler
+
+        handler = get_status_handler()
+        operation = handler.get_operation_status(operation_id)
+
+        if not operation:
+            raise HTTPException(status_code=404, detail=f"Operation {operation_id} not found")
+
+        if operation.is_complete:
+            raise HTTPException(status_code=400, detail=f"Operation {operation_id} is already complete")
+
+        handler.cancel_operation(operation_id, reason)
+
+        return {
+            "status": "success",
+            "message": f"Operation {operation_id} cancelled",
+            "reason": reason
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to cancel operation {operation_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel operation: {str(e)}")
