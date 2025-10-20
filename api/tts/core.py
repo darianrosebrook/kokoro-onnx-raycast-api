@@ -1181,11 +1181,12 @@ def _monitor_audio_quality(chunk: bytes, chunk_number: int) -> Optional[AudioQua
 
         # Log quality issues for enterprise compliance
         if not metrics.meets_standard:
+            crest_info = f", Crest={metrics.crest_factor:.1f}dB" if metrics.crest_factor else ""
             logger.warning(
                 f"Audio quality violation in chunk {chunk_number}: "
                 f"LUFS={metrics.lufs:.1f} (target: -16±1), "
                 f"dBTP={metrics.dbtp:.1f} (ceiling: -1.0), "
-                f"Peak={metrics.peak_db:.1f}dB"
+                f"Peak={metrics.peak_db:.1f}dB{crest_info}"
             )
 
         return metrics

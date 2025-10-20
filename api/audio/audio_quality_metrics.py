@@ -46,6 +46,11 @@ class AudioQualityMetrics:
     dbtp_min: Optional[float] = None  # Minimum true peak
     dbtp_range: Optional[float] = None  # Peak-to-peak range
 
+    # Advanced peak measurements
+    crest_factor: Optional[float] = None  # Peak-to-RMS ratio in dB
+    dynamic_range: Optional[float] = None  # Dynamic range in dB
+    peak_to_average_ratio: Optional[float] = None  # Peak-to-average ratio in dB
+
     # Quality assessment
     meets_standard: bool = False
     quality_score: float = 0.0  # 0-100 quality score
@@ -135,13 +140,19 @@ class AudioQualityAnalyzer:
             metrics.dbtp_min = self._calculate_true_peak_min_db(audio_array)
             metrics.dbtp_range = self._calculate_peak_range_db(audio_array)
 
+            # Calculate advanced peak measurements
+            metrics.crest_factor = self._calculate_crest_factor(metrics.peak_db, metrics.rms_db)
+            metrics.dynamic_range = self._calculate_dynamic_range(audio_array)
+            metrics.peak_to_average_ratio = self._calculate_peak_to_average_ratio(metrics.peak_db, metrics.rms_db)
+
             # Validate against standard
             self._validate_quality(metrics, standard)
 
             logger.debug(
                 f"Audio quality analysis complete: LUFS={metrics.lufs:.1f}, "
                 f"dBTP={metrics.dbtp:.1f}, RMS={metrics.rms_db:.1f}dB, "
-                f"Peak={metrics.peak_db:.1f}dB, Score={metrics.quality_score:.0f}"
+                f"Peak={metrics.peak_db:.1f}dB, Crest={metrics.crest_factor:.1f}dB, "
+                f"Score={metrics.quality_score:.0f}"
             )
 
             return metrics
@@ -230,27 +241,50 @@ class AudioQualityAnalyzer:
 
     def _calculate_true_peak_db(self, audio: np.ndarray) -> float:
         """
-        Calculate true peak level in dBTP.
+        Calculate true peak level in dBTP using proper 4x oversampling.
 
-        True peak measurement uses oversampling to detect inter-sample peaks
-        that would be missed by simple sample peak measurement.
+        True peak measurement detects inter-sample peaks that would be missed
+        by simple sample peak measurement. This implementation uses 4x oversampling
+        with cubic interpolation for accurate peak detection.
         """
         try:
-            # For true peak measurement, we should oversample by 4x
-            # and find the maximum absolute value
-            # Simplified implementation - in practice would use proper oversampling
+            if len(audio) == 0:
+                return -np.inf
 
-            max_abs = np.max(np.abs(audio))
+            # Normalize audio to prevent numerical issues
+            audio_norm = audio / np.max(np.abs(audio)) if np.max(np.abs(audio)) > 0 else audio
+
+            # Apply 4x oversampling using cubic interpolation
+            oversampling_factor = 4
+            original_length = len(audio_norm)
+
+            # Create oversampled indices
+            x_original = np.arange(original_length)
+            x_oversampled = np.linspace(0, original_length - 1, original_length * oversampling_factor)
+
+            # Use cubic interpolation for smooth oversampling
+            from scipy.interpolate import interp1d
+            interp_func = interp1d(x_original, audio_norm, kind='cubic',
+                                 bounds_error=False, fill_value=0.0)
+            audio_oversampled = interp_func(x_oversampled)
+
+            # Find the maximum absolute value in oversampled signal
+            max_abs = np.max(np.abs(audio_oversampled))
             if max_abs <= 0:
                 return -np.inf
 
-            # Convert to dBTP
+            # Convert to dBTP (True Peak)
             dbtp = 20 * np.log10(max_abs)
             return float(dbtp)
 
         except Exception as e:
             logger.debug(f"True peak calculation failed: {e}")
-            return -np.inf
+            # Fallback to simple peak measurement
+            try:
+                max_abs = np.max(np.abs(audio))
+                return float(20 * np.log10(max_abs)) if max_abs > 0 else -np.inf
+            except Exception:
+                return -np.inf
 
     def _calculate_true_peak_max_db(self, audio: np.ndarray) -> float:
         """Calculate maximum true peak level."""
@@ -301,6 +335,86 @@ class AudioQualityAnalyzer:
             return float(20 * np.log10(peak))
         except Exception as e:
             return -np.inf
+
+    def _calculate_crest_factor(self, peak_db: float, rms_db: float) -> Optional[float]:
+        """
+        Calculate crest factor (peak-to-RMS ratio) in dB.
+
+        Crest factor indicates the dynamic range of the signal.
+        Higher values indicate more dynamic, peaky signals.
+        """
+        try:
+            if peak_db == -np.inf or rms_db == -np.inf:
+                return None
+
+            # Crest factor = Peak - RMS (both in dB)
+            crest_factor = peak_db - rms_db
+            return float(crest_factor)
+
+        except Exception as e:
+            logger.debug(f"Crest factor calculation failed: {e}")
+            return None
+
+    def _calculate_dynamic_range(self, audio: np.ndarray) -> Optional[float]:
+        """
+        Calculate dynamic range of the audio signal in dB.
+
+        Dynamic range is the ratio between the loudest and quietest parts of the signal.
+        """
+        try:
+            if len(audio) == 0:
+                return None
+
+            # Calculate RMS in sliding windows to find quietest sections
+            window_size = min(len(audio) // 10, 1024)  # Use 10% of signal or 1024 samples
+            if window_size < 16:
+                return None
+
+            rms_values = []
+            step_size = window_size // 4  # 75% overlap
+
+            for start in range(0, len(audio) - window_size + 1, step_size):
+                end = start + window_size
+                window = audio[start:end]
+                rms = np.sqrt(np.mean(window ** 2))
+                if rms > 0:
+                    rms_values.append(rms)
+
+            if not rms_values:
+                return None
+
+            # Find the quietest RMS value
+            min_rms = min(rms_values)
+            max_rms = max(rms_values)
+
+            # Dynamic range = max RMS / min RMS in dB
+            dynamic_range = 20 * np.log10(max_rms / min_rms)
+            return float(dynamic_range)
+
+        except Exception as e:
+            logger.debug(f"Dynamic range calculation failed: {e}")
+            return None
+
+    def _calculate_peak_to_average_ratio(self, peak_db: float, rms_db: float) -> Optional[float]:
+        """
+        Calculate peak-to-average ratio (PAR) in dB.
+
+        PAR is similar to crest factor but specifically measures the ratio
+        between peak and average power levels.
+        """
+        try:
+            if peak_db == -np.inf or rms_db == -np.inf:
+                return None
+
+            # PAR = Peak - RMS (same as crest factor for our purposes)
+            # In some contexts, PAR might be calculated differently,
+            # but for audio quality, crest factor is the standard metric
+            par = peak_db - rms_db
+            return float(par)
+
+        except Exception as e:
+            logger.debug(f"Peak-to-average ratio calculation failed: {e}")
+            return None
 
     def _calculate_lufs_short_term(self, audio: np.ndarray, sample_rate: int) -> Optional[float]:
         """Calculate short-term loudness (3-second windows)."""

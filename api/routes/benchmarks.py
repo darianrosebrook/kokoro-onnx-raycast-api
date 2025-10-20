@@ -14,6 +14,7 @@ import time
 import os
 
 from api.performance.benchmarks.ttfa_benchmark import TTFABenchmark
+from api.performance.benchmarks.audio_quality_benchmark import AudioQualityBenchmark, run_audio_quality_benchmark
 from api.performance.benchmarks.runner import BenchmarkRunner, BenchmarkConfig
 from api.utils.core.logger import get_logger
 
@@ -323,3 +324,104 @@ def _get_optimization_recommendations(stats: Dict[str, Any]) -> List[str]:
         recommendations.append("Run more tests to gather statistical data")
     
     return recommendations
+
+
+@router.post("/audio-quality/run", summary="Run Audio Quality Benchmark", tags=["audio-quality"])
+async def run_audio_quality_benchmark_endpoint(
+    voices: Optional[List[str]] = None,
+    background_tasks: BackgroundTasks = None
+) -> Dict[str, Any]:
+    """
+    Run comprehensive audio quality benchmark.
+
+    Tests audio output against enterprise standards including:
+    - LUFS loudness (target: -16 ±1)
+    - dBTP true peak levels (ceiling: -1.0)
+    - Crest factor and dynamic range
+    - Quality scoring and compliance validation
+
+    **Parameters:**
+    - `voices`: Optional list of voices to test (default: common voices)
+
+    **Returns:**
+    Benchmark results with quality analysis and recommendations.
+    """
+    try:
+        if not voices:
+            voices = ["af_heart", "af_bella", "am_michael", "bf_alice"]
+
+        logger.info(f"Starting audio quality benchmark for voices: {voices}")
+
+        # Run benchmark
+        results = await run_audio_quality_benchmark(voices)
+
+        # Save results in background if requested
+        if background_tasks:
+            background_tasks.add_task(_save_audio_quality_results, results)
+
+        return {
+            "status": "success",
+            "message": "Audio quality benchmark completed",
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Audio quality benchmark failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Benchmark failed: {str(e)}")
+
+
+@router.get("/audio-quality/status", summary="Get Audio Quality Benchmark Status", tags=["audio-quality"])
+async def get_audio_quality_status() -> Dict[str, Any]:
+    """
+    Get current audio quality benchmark status and recent results.
+
+    Returns the most recent benchmark results and system health status.
+    """
+    try:
+        # Check for recent benchmark results
+        import glob
+        import os
+        from pathlib import Path
+
+        results_dir = Path("artifacts/bench")
+        if results_dir.exists():
+            audio_quality_files = list(results_dir.glob("audio_quality_*.json"))
+            if audio_quality_files:
+                latest_file = max(audio_quality_files, key=lambda x: x.stat().st_mtime)
+
+                import json
+                with open(latest_file, 'r') as f:
+                    latest_results = json.load(f)
+
+                return {
+                    "status": "available",
+                    "latest_benchmark": {
+                        "file": str(latest_file),
+                        "timestamp": latest_results.get("timestamp"),
+                        "pass_rate": latest_results.get("analysis", {}).get("summary", {}).get("pass_rate"),
+                        "avg_score": latest_results.get("analysis", {}).get("summary", {}).get("avg_quality_score")
+                    }
+                }
+
+        return {
+            "status": "no_recent_benchmarks",
+            "message": "No recent audio quality benchmarks found"
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get audio quality status: {e}")
+        raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
+
+
+def _save_audio_quality_results(results: Dict[str, Any]):
+    """Save audio quality benchmark results to file."""
+    try:
+        from api.performance.benchmarks.audio_quality_benchmark import AudioQualityBenchmark
+
+        benchmark = AudioQualityBenchmark()
+        output_path = benchmark.save_benchmark_report(results)
+
+        logger.info(f"Audio quality benchmark results saved: {output_path}")
+
+    except Exception as e:
+        logger.error(f"Failed to save audio quality results: {e}")
