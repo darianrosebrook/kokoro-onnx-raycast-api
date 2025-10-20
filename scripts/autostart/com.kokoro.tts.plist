@@ -12,11 +12,11 @@
     
     <!-- Program to execute -->
     <key>Program</key>
-    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/scripts/autostart/kokoro-tts-startup.sh</string>
-    
+    <string>/opt/kokoro-tts/scripts/autostart/kokoro-tts-startup.sh</string>
+
     <!-- Working directory -->
     <key>WorkingDirectory</key>
-    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx</string>
+    <string>/opt/kokoro-tts</string>
     
     <!-- Run at load (when service is loaded) -->
     <key>RunAtLoad</key>
@@ -28,10 +28,10 @@
     
     <!-- Standard output and error logging -->
     <key>StandardOutPath</key>
-    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/logs/launchd.out.log</string>
-    
+    <string>/opt/kokoro-tts/logs/launchd.out.log</string>
+
     <key>StandardErrorPath</key>
-    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/logs/launchd.err.log</string>
+    <string>/opt/kokoro-tts/logs/launchd.err.log</string>
     
     <!-- Environment variables -->
     <key>EnvironmentVariables</key>

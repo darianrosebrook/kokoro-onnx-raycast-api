@@ -29,6 +29,7 @@ This directory contains scripts and configuration files to automatically start t
 
 ### Login Items Method (Recommended for macOS)
 - **When it starts**: When you log in to your user account
+- **Startup time**: ~10 seconds (lazy initialization - model loads on first request)
 - **Permissions**: No special permissions required
 - **Location**: System Preferences > Users & Groups > Login Items
 - **Command**: `./setup-login-item.sh`
@@ -39,15 +40,18 @@ This directory contains scripts and configuration files to automatically start t
 - Easy to manage through System Preferences
 - No security restrictions
 - Can be easily enabled/disabled through GUI
+- Fast startup with lazy model initialization
 
 **How it works:**
 - Adds a script to your macOS Login Items
 - Script runs when you log in
-- Starts Kokoro TTS in the background
+- Starts Kokoro TTS server quickly (model loads lazily on first request)
+- Server responds to health checks immediately but defers expensive operations
 - Logs activity to `logs/login-startup.log`
 
 ### Launchd Service Method
 - **When it starts**: When you log in to your user account
+- **Startup time**: ~10 seconds (lazy initialization)
 - **Permissions**: No sudo required
 - **Location**: `~/Library/LaunchAgents/`
 - **Command**: `./enable-autostart.sh user`
@@ -57,6 +61,7 @@ This directory contains scripts and configuration files to automatically start t
 - Starts with your user session
 - Easier to manage and debug
 - Better security
+- Fast startup with lazy model initialization
 
 ### System-Level Auto-Start
 - **When it starts**: When the system boots (before user login)

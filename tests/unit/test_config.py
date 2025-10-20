@@ -93,9 +93,9 @@ class TestTTSRequest:
         assert request.speed == 1.5
         assert request.format == "pcm"
         
-        # Test speed bounds (actual limits are 0.25-4.0)
+        # Test speed bounds (actual limits are 0.1-4.0)
         with pytest.raises(ValueError):
-            TTSRequest(text="Test", speed=0.1)  # Too slow
+            TTSRequest(text="Test", speed=0.05)  # Too slow
         
         with pytest.raises(ValueError):
             TTSRequest(text="Test", speed=5.0)  # Too fast

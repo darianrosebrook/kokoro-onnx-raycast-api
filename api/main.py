@@ -2532,7 +2532,7 @@ async def create_speech(request: Request, tts_request: TTSRequest, config: TTSCo
     {
         "text": "Text to synthesize (max 2000 characters)",
         "voice": "Voice ID (e.g., 'af_heart', 'bm_fable')",
-        "speed": 1.0,  // 0.25-4.0 range
+        "speed": 1.0,  // 0.1-4.0 range (recommended: 0.5-2.0)
         "lang": "en-us",  // Language code
         "stream": true,  // Enable streaming
         "format": "wav"  // "wav" or "pcm"

@@ -1486,6 +1486,12 @@ export class TTSSpeechProcessor {
           metadata: {
             voice: this.voice,
             speed: this.speed,
+            size: combinedBuffer.length,
+          },
+          playbackOptions: {
+            volume: 1.0,
+            useHardwareAcceleration: true,
+            backgroundPlayback: false,
           },
         },
         this.abortController?.signal || new AbortController().signal

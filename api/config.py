@@ -164,7 +164,7 @@ class TTSRequest(BaseModel):
     - **Compatibility**: Supports all Kokoro model voice options
 
     ### Speed Control
-    - **Range Validation**: Enforces 1.25-4.1x speed range for quality
+    - **Range Validation**: Allows 0.1-4.0x speed range with recommendations for quality
     - **Precision Handling**: Proper float validation and normalization
     - **Performance Impact**: Optimized speed ranges for best results
 
@@ -243,10 +243,10 @@ class TTSRequest(BaseModel):
     )
 
     speed: float = Field(
-        default=1.1,
-        ge=1.25,
-        le=4.1,
-        description="Speech speed multiplier. Range 1.25-4.1x for natural-sounding output.",
+        default=1.0,
+        ge=0.1,
+        le=4.0,
+        description="Speech speed multiplier. Recommended range 0.5-2.0x for natural-sounding output. Full range 0.1-4.0x allowed.",
     )
 
     lang: str = Field(
