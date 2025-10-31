@@ -23,7 +23,7 @@ The `caws_quality_gates_run` MCP tool runs operational quality gates to enforce 
 #### Gate Selection
 - **`gates`** (string) - Comma-separated list of gates to run
   - Valid gates: `naming`, `code_freeze`, `duplication`, `god_objects`, `documentation`
-  - Default: all relevant gates
+  - Default: All gates
   - Example: `"naming,duplication"`
 
 #### Output Format
@@ -118,7 +118,7 @@ Checks documentation quality:
 ### Via MCP Tool (Cursor)
 
 ```typescript
-// Run all relevant gates
+// Run all gates
 caws_quality_gates_run({
   workingDirectory: "/path/to/project"
 })
