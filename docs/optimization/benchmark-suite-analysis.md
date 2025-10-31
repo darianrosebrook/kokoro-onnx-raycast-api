@@ -8,17 +8,17 @@
 
 ## Executive Summary
 
-This document analyzes the current benchmark suite for the Kokoro ONNX TTS system and provides a comprehensive improvement plan to consolidate and enhance benchmarking capabilities.
+This document analyzes the current benchmark suite for the Kokoro ONNX TTS system and provides a extensive improvement plan to consolidate and enhance benchmarking capabilities.
 
 **Current State:**
 - Multiple benchmark implementations across different directories
 - Some outdated benchmarks that don't fit current architecture
 - Incomplete API benchmark modules
-- Main comprehensive benchmark (`scripts/run_bench.py`) is well-structured and functional
+- Main extensive benchmark (`scripts/run_bench.py`) is well-structured and functional
 
 **Goal:**
-- Consolidate benchmarks into a unified, comprehensive suite
-- Ensure all benchmarks align with current architecture
+- Consolidate benchmarks into a unified, extensive suite
+- Ensure all relevant benchmarks align with current architecture
 - Remove outdated/duplicate benchmarks
 - Enhance benchmark capabilities for M-series Mac optimization validation
 
@@ -29,7 +29,7 @@ This document analyzes the current benchmark suite for the Kokoro ONNX TTS syste
 ### ✅ **Well-Structured & Current**
 
 #### 1. `scripts/run_bench.py` ✅ **PRIMARY BENCHMARK**
-**Status:** ✅ Current, well-structured, production-ready
+**Status:** ✅ Current, well-structured, operational
 
 **Capabilities:**
 - TTFA (Time to First Audio) measurement
@@ -39,11 +39,11 @@ This document analyzes the current benchmark suite for the Kokoro ONNX TTS syste
 - Audio quality gates (LUFS/dBTP with optional dependencies)
 - Soak testing (long-running stability tests)
 - Gate validation against `expected_bands.json`
-- Comprehensive artifact generation (JSON, CSV traces, WAV files)
+- extensive artifact generation (JSON, CSV traces, WAV files)
 
 **Strengths:**
 - Async/await architecture
-- Comprehensive metrics collection
+- extensive metrics collection
 - Good artifact organization
 - Cache clearing between trials
 - Memory sampling during execution
@@ -66,12 +66,12 @@ scripts/run_bench.py --preset medium --stream --soak-iterations 100 --concurrenc
 **Status:** ⚠️ Orchestrates other benchmarks but some dependencies incomplete
 
 **Issues:**
-- References `TTFABenchmarkSuite` which may not be fully implemented
-- References `StreamingBenchmarkSuite` which may not be fully implemented
-- References `ProviderBenchmarkSuite` which may not be fully implemented
+- References `TTFABenchmarkSuite` which may not be largely implemented
+- References `StreamingBenchmarkSuite` which may not be largely implemented
+- References `ProviderBenchmarkSuite` which may not be largely implemented
 - Good structure but needs dependency verification
 
-**Recommendation:** **REVIEW & COMPLETE** - Keep structure but ensure all dependencies are implemented.
+**Recommendation:** **REVIEW & implemented** - Keep structure but ensure all relevant dependencies are implemented.
 
 ---
 
@@ -84,7 +84,7 @@ scripts/run_bench.py --preset medium --stream --soak-iterations 100 --concurrenc
 - Missing `run_comprehensive_ttfa_benchmark()` method
 - Missing `run_quick_ttfa_benchmark()` method
 
-**Recommendation:** **COMPLETE IMPLEMENTATION** - This module should be fully implemented to support API endpoints.
+**Recommendation:** **implemented IMPLEMENTATION** - This module should be largely implemented to support API endpoints.
 
 ---
 
@@ -93,11 +93,11 @@ scripts/run_bench.py --preset medium --stream --soak-iterations 100 --concurrenc
 
 **Issues:**
 - Basic streaming metrics collection
-- Missing comprehensive suite runner
+- Missing extensive suite runner
 - Missing detailed analysis features
 - Needs integration with main benchmark architecture
 
-**Recommendation:** **ENHANCE** - Expand capabilities and integrate with comprehensive suite.
+**Recommendation:** **ENHANCE** - Expand capabilities and integrate with extensive suite.
 
 ---
 
@@ -117,7 +117,7 @@ scripts/run_bench.py --preset medium --stream --soak-iterations 100 --concurrenc
 **Status:** ⚠️ Exists but needs verification
 
 **Issues:**
-- Need to verify if fully implemented
+- Need to verify if largely implemented
 - May overlap with `comprehensive_benchmark.py`
 - Needs integration verification
 
@@ -125,45 +125,45 @@ scripts/run_bench.py --preset medium --stream --soak-iterations 100 --concurrenc
 
 ---
 
-### ❌ **Outdated or Duplicate**
+###  **Outdated or Duplicate**
 
-#### 7. `scripts/ttfa_benchmark.py` ❌
-**Status:** ❌ Standalone script, redundant with API modules
+#### 7. `scripts/ttfa_benchmark.py` 
+**Status:**  Standalone script, redundant with API modules
 
 **Issues:**
 - Duplicates functionality of `api/performance/benchmarks/ttfa_benchmark.py`
 - Standalone script format (not integrated with main suite)
-- Less comprehensive than `run_bench.py`
+- Less extensive than `run_bench.py`
 
 **Recommendation:** **DEPRECATE** - Functionality should be incorporated into main benchmark suite.
 
 ---
 
-#### 8. `benchmark_endpoints.py` ❌
-**Status:** ❌ Outdated, compares Raycast vs OpenWebUI endpoints
+#### 8. `benchmark_endpoints.py` 
+**Status:**  Outdated, compares Raycast vs OpenWebUI endpoints
 
 **Issues:**
 - Compares endpoints that may have changed
 - Doesn't fit current architecture focus
-- Simple comparison, not comprehensive
+- Simple comparison, not extensive
 
 **Recommendation:** **DEPRECATE or UPDATE** - Either remove or update to reflect current endpoint architecture.
 
 ---
 
-#### 9. `quick_benchmark.py` ❌
-**Status:** ❌ Very simple, outdated
+#### 9. `quick_benchmark.py` 
+**Status:**  Very simple, outdated
 
 **Issues:**
 - Tests OpenWebUI endpoint format
 - Very basic functionality
-- Not comprehensive
+- Not extensive
 
 **Recommendation:** **DEPRECATE** - Too simple to be useful.
 
 ---
 
-### 🔧 **API Endpoints**
+###  **API Endpoints**
 
 #### 10. `api/routes/benchmarks.py` ⚠️
 **Status:** ⚠️ References incomplete modules
@@ -173,7 +173,7 @@ scripts/run_bench.py --preset medium --stream --soak-iterations 100 --concurrenc
 - Has TODO comments for incomplete functionality
 - Good structure but needs dependency completion
 
-**Recommendation:** **COMPLETE DEPENDENCIES** - Complete the referenced modules to make endpoints functional.
+**Recommendation:** **implemented DEPENDENCIES** - implemented the referenced modules to make endpoints functional.
 
 ---
 
@@ -190,21 +190,21 @@ scripts/run_bench.py --preset medium --stream --soak-iterations 100 --concurrenc
 
 ```
 benchmarks/
-├── core/
-│   ├── benchmark_runner.py      # Core benchmark execution engine
-│   ├── metrics_collector.py     # Metrics collection and analysis
-│   └── artifact_manager.py      # Artifact saving and organization
-├── suites/
-│   ├── ttfa_suite.py            # TTFA comprehensive tests
-│   ├── streaming_suite.py        # Streaming performance tests
-│   ├── provider_suite.py         # Provider comparison tests
-│   ├── memory_suite.py           # Memory and stability tests
-│   └── m_series_suite.py         # M-series Mac specific tests
-├── cli/
-│   └── run_bench.py              # CLI entry point (enhanced)
-└── api/
-    └── routes/
-        └── benchmarks.py         # HTTP API endpoints
+ core/
+    benchmark_runner.py      # Core benchmark execution engine
+    metrics_collector.py     # Metrics collection and analysis
+    artifact_manager.py      # Artifact saving and organization
+ suites/
+    ttfa_suite.py            # TTFA extensive tests
+    streaming_suite.py        # Streaming performance tests
+    provider_suite.py         # Provider comparison tests
+    memory_suite.py           # Memory and stability tests
+    m_series_suite.py         # M-series Mac specific tests
+ cli/
+    run_bench.py              # CLI entry point (enhanced)
+ api/
+     routes/
+         benchmarks.py         # HTTP API endpoints
 ```
 
 ---
@@ -215,9 +215,9 @@ benchmarks/
 
 1. **Verify Current State**
    - [ ] Verify completeness of `api/performance/benchmarks/*` modules
-   - [ ] Check if `TTFABenchmarkSuite` exists and is complete
+   - [ ] Check if `TTFABenchmarkSuite` exists and is implemented
    - [ ] Verify `run_bench.py` compatibility with current architecture
-   - [ ] Test all benchmark scripts to identify broken dependencies
+   - [ ] Test all relevant benchmark scripts to identify broken dependencies
 
 2. **Remove Outdated Benchmarks**
    - [ ] Deprecate `scripts/ttfa_benchmark.py` (move useful parts to main suite)
@@ -236,17 +236,17 @@ benchmarks/
    - [ ] Add provider-specific tests (CoreML vs CPU)
    - [ ] Add dual-session manager tests
    - [ ] Add memory leak detection tests
-   - [ ] Add comprehensive reporting improvements
+   - [ ] Add extensive reporting improvements
 
-2. **Complete API Benchmark Modules**
-   - [ ] Complete `ttfa_benchmark.py` implementation
-   - [ ] Complete `streaming_benchmark.py` suite runner
+2. **implemented API Benchmark Modules**
+   - [ ] implemented `ttfa_benchmark.py` implementation
+   - [ ] implemented `streaming_benchmark.py` suite runner
    - [ ] Implement real provider comparison in `provider_benchmark.py`
-   - [ ] Ensure `comprehensive_benchmark.py` works with all dependencies
+   - [ ] Ensure `comprehensive_benchmark.py` works with all relevant dependencies
 
 3. **Integration**
    - [ ] Ensure API endpoints use same benchmark engine as CLI
-   - [ ] Unified artifact format across all benchmarks
+   - [ ] Unified artifact format across all relevant benchmarks
    - [ ] Consistent metrics collection
 
 ### Phase 3: M-Series Mac Specific Enhancements (Medium-term)
@@ -269,16 +269,16 @@ benchmarks/
    - [ ] Performance regression alerts
    - [ ] Historical trend analysis
 
-### Phase 4: Comprehensive Suite (Long-term)
+### Phase 4: extensive Suite (Long-term)
 
-1. **Advanced Features**
+1. **additional Features**
    - [ ] Automated benchmark scheduling
    - [ ] Performance dashboard integration
    - [ ] CI/CD integration
    - [ ] Comparative analysis across hardware
 
 2. **Documentation**
-   - [ ] Complete benchmark documentation
+   - [ ] implemented benchmark documentation
    - [ ] Usage guides
    - [ ] Interpretation guides
    - [ ] Troubleshooting guides
@@ -296,21 +296,21 @@ benchmarks/
 ### Priority 2: Quick Wins
 
 1. **Enhance `run_bench.py`** - Add M-series Mac specific test scenarios
-2. **Complete provider benchmark** - Replace mock data with real provider comparison
+2. **implemented provider benchmark** - Replace mock data with real provider comparison
 3. **Remove outdated scripts** - Clean up deprecated benchmarks
 
 ### Priority 3: Integration
 
 1. **Unify benchmark engine** - Ensure API and CLI use same core
 2. **Consistent artifacts** - Standardize output format
-3. **Comprehensive reporting** - Enhanced summary reports
+3. **extensive reporting** - Enhanced summary reports
 
 ---
 
 ## Success Criteria
 
 ### Immediate (Week 1)
-- ✅ All outdated benchmarks identified and documented
+- ✅ all relevant outdated benchmarks identified and documented
 - ✅ Current benchmark state verified
 - ✅ `run_bench.py` tested and validated
 
@@ -320,7 +320,7 @@ benchmarks/
 - ✅ Enhanced `run_bench.py` with M-series tests
 
 ### Medium-term (Month 2-3)
-- ✅ Comprehensive benchmark suite operational
+- ✅ extensive benchmark suite operational
 - ✅ M-series Mac validation tests implemented
 - ✅ Regression detection working
 
@@ -340,14 +340,14 @@ benchmarks/
 | Benchmark | Status | Completeness | Current Use | Recommendation |
 |-----------|--------|-------------|-------------|----------------|
 | `run_bench.py` | ✅ | 95% | Primary | Enhance |
-| `comprehensive_benchmark.py` | ⚠️ | 70% | API | Complete |
-| `ttfa_benchmark.py` | ⚠️ | 60% | API | Complete |
+| `comprehensive_benchmark.py` | ⚠️ | 70% | API | implemented |
+| `ttfa_benchmark.py` | ⚠️ | 60% | API | implemented |
 | `streaming_benchmark.py` | ⚠️ | 65% | API | Enhance |
-| `provider_benchmark.py` | ❌ | 20% | API | Replace |
+| `provider_benchmark.py` |  | 20% | API | Replace |
 | `full_spectrum_benchmark.py` | ⚠️ | ?? | Unknown | Review |
-| `ttfa_benchmark.py` (scripts) | ❌ | 80% | Standalone | Deprecate |
-| `benchmark_endpoints.py` | ❌ | 70% | Outdated | Update/Remove |
-| `quick_benchmark.py` | ❌ | 30% | Simple | Remove |
+| `ttfa_benchmark.py` (scripts) |  | 80% | Standalone | Deprecate |
+| `benchmark_endpoints.py` |  | 70% | Outdated | Update/Remove |
+| `quick_benchmark.py` |  | 30% | Simple | Remove |
 
 ---
 

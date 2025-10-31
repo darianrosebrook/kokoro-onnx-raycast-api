@@ -2,7 +2,7 @@
 
 **Date**: 2025-08-17  
 **Author**: @darianrosebrook  
-**Status**: ✅ Complete and Tested
+**Status**: ✅ implemented and Tested
 
 ## Overview
 
@@ -31,7 +31,7 @@ Successfully implemented a persistent audio daemon architecture that eliminates 
 **Solution**:
 - Added `package.json` to `raycast/bin/` directory with proper ES module configuration
 - Fixed daemon spawning to use correct working directory for `node_modules` access
-- Created test script to verify all dependencies work correctly
+- Created test script to verify all relevant dependencies work correctly
 
 ### 2. Persistent Daemon Setup
 
@@ -60,7 +60,7 @@ Successfully implemented a persistent audio daemon architecture that eliminates 
 
 ### Resource Efficiency
 - **Before**: Multiple daemon processes consuming memory
-- **After**: Single daemon process shared across all requests
+- **After**: Single daemon process shared across all relevant requests
 - **Improvement**: Reduced memory usage and process overhead
 
 ### Reliability
@@ -110,22 +110,22 @@ AUDIO_DAEMON_PATH="raycast/bin/audio-daemon.js"
 ```bash
 cd raycast
 node test-persistent-daemon-flow.js
-# Tests the complete flow from Raycast to persistent daemon
+# Tests the implemented flow from Raycast to persistent daemon
 ```
 
 ## Architecture Diagram
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Raycast       │    │   Persistent     │    │   TTS API       │
-│   Extension     │◄──►│   Audio Daemon   │◄──►│   Server        │
-│                 │    │   (Port 8081)    │    │   (Port 8000)   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-        │                       │                       │
-        │ WebSocket             │ HTTP                  │ HTTP
-        │ Connection            │ Health Check          │ TTS Requests
-        │ Audio Chunks          │ Audio Processing      │ Model Inference
-        └───────────────────────┴───────────────────────┘
+        
+   Raycast              Persistent            TTS API       
+   Extension        Audio Daemon      Server        
+                        (Port 8081)           (Port 8000)   
+        
+                                                      
+         WebSocket              HTTP                   HTTP
+         Connection             Health Check           TTS Requests
+         Audio Chunks           Audio Processing       Model Inference
+        
 ```
 
 ## Next Steps

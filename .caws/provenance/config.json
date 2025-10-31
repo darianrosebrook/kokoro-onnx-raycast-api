@@ -1,0 +1,10 @@
+{
+  "cursor_tracking_api": "not_configured",
+  "cursor_checkpoint_api": "not_configured",
+  "cursor_project_id": "not_configured",
+  "notes": [
+    "Configure CURSOR_TRACKING_API for AI code tracking",
+    "Configure CURSOR_CHECKPOINT_API for session recovery data",
+    "Configure CURSOR_PROJECT_ID to link with Cursor IDE"
+  ]
+}

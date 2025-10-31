@@ -39,7 +39,9 @@
   },
   "homepage": "https://github.com/Paths-Design/coding-agent-working-standard#readme",
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "micromatch": "^4.0.8",
+    "ajv": "^8.17.1"
   },
   "engines": {
     "node": ">=16.0.0"

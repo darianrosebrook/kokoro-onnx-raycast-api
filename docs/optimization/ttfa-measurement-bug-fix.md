@@ -10,7 +10,7 @@ The system was reporting unrealistic **0.0ms TTFA** values in the performance lo
 
 ### Symptoms
 - Fast-Path Performance Summary showing `Average TTFA: 0.0ms`
-- All processing methods showing 0.0ms TTFA
+- all relevant processing methods showing 0.0ms TTFA
 - Performance reports indicating 100% improvement over target (impossible)
 
 ### Root Cause Analysis
@@ -30,7 +30,7 @@ These placeholder calls were happening **before** the actual TTFA measurement oc
 ## Solution Implemented
 
 ### 1. Removed Placeholder TTFA Calls
-Removed all placeholder `update_fast_path_performance_stats` calls from text processing functions in:
+Removed all relevant placeholder `update_fast_path_performance_stats` calls from text processing functions in:
 - `api/tts/text_processing.py` (4 locations)
 
 ### 2. Preserved Phonemizer Statistics

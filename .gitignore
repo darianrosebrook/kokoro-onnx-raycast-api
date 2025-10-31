@@ -6,6 +6,9 @@ plans/
 archive/
 summary/
 
+# Documentation Archive (old/temporal docs)
+docs/archive/
+
 # Temporary development files (created during debugging/testing)
 temp/
 *.log

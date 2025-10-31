@@ -160,7 +160,7 @@ Based on current implementation status analysis:
   - Current active provider: CoreMLExecutionProvider (from `/status` endpoint)
   - CPU provider: 10.6ms TTFA p95 (PASS vs 500ms target)
   - CoreML provider: 4422ms TTFA p95 (FAIL vs 500ms target)
-  - **Recommendation:** Switch to CPU provider for all text lengths
+  - **Recommendation:** Switch to CPU provider for all relevant text lengths
   
 - [x] **Session warming:** Implement pre-warmed inference sessions to reduce cold start
   **Evidence:** Enhanced warming implemented in `fast_init.py` with multi-stage approach:
@@ -171,7 +171,7 @@ Based on current implementation status analysis:
   
 - [x] **Memory management overhead investigation:** Test aggressive memory management impact
   **Evidence:** Implemented `KOKORO_DISABLE_MEMORY_MGMT` flag in `coreml.py`:
-  - Memory management wraps every CoreML inference with cleanup operations
+  - Memory management wraps relevant CoreML inference with cleanup operations
   - Initial tests show 0.002s second request (warming works) vs 1.7s subsequent requests
   - Suggests aggressive memory management adding ~1.7s overhead per request
   - **Implementation:** `api/model/providers/coreml.py` lines 223-252, 373-396
@@ -213,29 +213,29 @@ Based on current implementation status analysis:
   **Investigation Plan:**
   - Profile CoreML initialization with Apple Instruments
   - Check for unsupported ONNX operations causing CPU fallbacks
-  - Test different CoreML compute unit configurations (ALL vs CPUAndGPU vs CPUOnly)
+  - Test different CoreML compute unit configurations (all relevant vs CPUAndGPU vs CPUOnly)
   - Investigate CoreML context leaks and memory management overhead
   **Commands:**
   ```bash
   # Profile CoreML initialization
-  KOKORO_COREML_COMPUTE_UNITS=ALL python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
+  KOKORO_COREML_COMPUTE_UNITS=all relevant python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
   KOKORO_COREML_COMPUTE_UNITS=CPUAndGPU python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
   KOKORO_COREML_COMPUTE_UNITS=CPUOnly python scripts/run_bench.py --preset=short --stream --trials=3 --verbose
   ```
 
   ** INVESTIGATION RESULTS (2025-08-17):**
-  - **CoreML ALL**: Complete failure - 503 Service Unavailable, server hangs/crashes
-  - **CoreML CPUAndGPU**: Complete failure - 503 Service Unavailable, server crashes
+  - **CoreML all relevant**: implemented failure - 503 Service Unavailable, server hangs/crashes
+  - **CoreML CPUAndGPU**: implemented failure - 503 Service Unavailable, server crashes
   - **CoreML CPUOnly**: Works but with severe cold start penalty (4178ms first request)
   - **CPU Provider**: Excellent performance - 152ms TTFA p95 (5 trials), sub-20ms steady state
-  - **Root Cause**: CoreML provider has severe initialization issues and hangs on ALL/CPUAndGPU configurations
+  - **Root Cause**: CoreML provider has severe initialization issues and hangs on all relevant/CPUAndGPU configurations
   - **Recommendation**: Use CPU provider for production (152ms TTFA p95 vs 500ms target)
 
 - [ ] **Audio Chunk Timing Optimization:** Investigate chunk generation vs playback timing
   **Status:** P1 - Excellent performance but room for optimization
   **Evidence:** Sub-millisecond chunk generation (0.003-0.005ms median gaps)
   **Investigation Plan:**
-  - Test different chunk sizes (30ms, 50ms, 80ms, 120ms) for optimal buffer growth
+  - Test different chunk sizes (30ms, 50ms, 80ms, 120ms) for recommended buffer growth
   - Investigate pre-buffer sizing (1-3 chunks) for underrun prevention
   - Profile chunk delivery timing and jitter patterns
   - Test sequence-tagged chunk ordering and reordering logic
@@ -248,14 +248,14 @@ Based on current implementation status analysis:
   ```
 
   ** INVESTIGATION RESULTS (2025-08-17):**
-  - **50ms chunks (stable profile)**: 152ms TTFA p95 ✅ (best performance)
+  - **50ms chunks (stable profile)**: 152ms TTFA p95 ✅ (recommended performance)
   - **40ms chunks (benchmark profile)**: 4671.8ms TTFA p95  (worse, more underruns)
   - **100ms chunks (safe profile)**: 3943.4ms TTFA p95  (worse cold start, good steady state)
-  - **Chunk generation timing**: Excellent across all sizes (0.003-0.005ms median gaps)
-  - **Cold start penalty**: Consistent across all chunk sizes (~4 seconds first request)
-  - **Steady state performance**: 4-6ms TTFA for all chunk sizes after warmup
+  - **Chunk generation timing**: Excellent across all relevant sizes (0.003-0.005ms median gaps)
+  - **Cold start penalty**: Consistent across all relevant chunk sizes (~4 seconds first request)
+  - **Steady state performance**: 4-6ms TTFA for all relevant chunk sizes after warmup
   - **Underrun analysis**: 40ms chunks had 307ms max gap, 50ms/100ms chunks stable
-  - **Recommendation**: Keep 50ms chunks (optimal balance of latency and stability)
+  - **Recommendation**: Keep 50ms chunks (recommended balance of latency and stability)
 
 - [ ] **Memory Usage Optimization for Long Text:** Reduce 606.9MB memory usage
   **Status:** P1 - Long text memory exceeds 300MB target
@@ -277,13 +277,13 @@ Based on current implementation status analysis:
   ** INVESTIGATION RESULTS (2025-08-17):**
   - **Memory issue RESOLVED**: Long text now uses only 4.4-5.0MB RSS range ✅
   - **Previous issue**: 606.9MB memory usage (resolved through recent optimizations)
-  - **Memory arena testing**: 2048MB, 3072MB, 4096MB all show similar low memory usage
-  - **Memory efficiency**: Excellent across all configurations (4-5MB vs 300MB target)
+  - **Memory arena testing**: 2048MB, 3072MB, 4096MB all relevant show similar low memory usage
+  - **Memory efficiency**: Excellent across all relevant configurations (4-5MB vs 300MB target)
   - **Root cause**: Likely resolved through session management and cache optimizations
-  - **Recommendation**: Current memory usage is optimal, no further optimization needed
+  - **Recommendation**: Current memory usage is recommended, no further optimization needed
 
 - [ ] **Provider Selection Heuristic Tuning:** Optimize adaptive provider selection
-  **Status:** P1 - Current heuristic may not be optimal
+  **Status:** P1 - Current heuristic may not be recommended
   **Evidence:** Provider selection based on text length thresholds
   **Investigation Plan:**
   - Test provider selection thresholds (200 vs 500 vs 1000 chars)
@@ -297,11 +297,11 @@ Based on current implementation status analysis:
   ```
 
   ** INVESTIGATION RESULTS (2025-08-17):**
-  - **Provider Selection Logic**: Working correctly across all text lengths
+  - **Provider Selection Logic**: Working correctly across all relevant text lengths
   - **Short text (<200 chars)**: 152ms TTFA p95 ✅ (CPU provider)
   - **Medium text (142 chars)**: 7718.9ms TTFA p95  (one slow trial, others good)
   - **Long text (>1000 chars)**: 3497.3ms TTFA p95  (cold start, then 2-3ms)
-  - **Cold Start Pattern**: Consistent ~3-4 second penalty across all text lengths
+  - **Cold Start Pattern**: Consistent ~3-4 second penalty across all relevant text lengths
   - **Steady State Performance**: 2-5ms TTFA after warmup (excellent)
   - **Provider Switching**: No evidence of provider switching overhead
   - **Recommendation**: Provider selection heuristic is working correctly, cold start is the main issue
@@ -324,11 +324,11 @@ Based on current implementation status analysis:
   ** INVESTIGATION RESULTS (2025-08-17):**
   - **Concurrent Streaming (2 requests)**: 9.1ms TTFA p95 ✅ (excellent, no cold start)
   - **High Concurrency (4 requests)**: 3657.1ms TTFA p95  (cold start returns)
-  - **Chunk Generation**: Excellent across all concurrency levels (0.003-0.004ms median gaps)
+  - **Chunk Generation**: Excellent across all relevant concurrency levels (0.003-0.004ms median gaps)
   - **Memory Usage**: Stable across concurrency levels (47-48MB RSS)
-  - **Concurrency Sweet Spot**: 2 concurrent requests optimal
+  - **Concurrency Sweet Spot**: 2 concurrent requests recommended
   - **Streaming Stability**: No underruns detected, consistent chunk delivery
-  - **Recommendation**: System handles moderate concurrency well, avoid high concurrency for optimal performance
+  - **Recommendation**: System handles moderate concurrency well, avoid high concurrency for recommended performance
 
 ## 13) Implementation Status
 
@@ -341,34 +341,34 @@ Based on current implementation status analysis:
 
 ### ** Performance Summary**
 - **CPU Provider achievement:** ✅ **TARGET EXCEEDED** - 10.6ms << 500ms (98% better)
-- **CoreML Provider issues:**  Severe performance degradation across all text lengths
+- **CoreML Provider issues:**  Severe performance degradation across all relevant text lengths
 - **Provider performance gap:** 417x difference (CPU 10.6ms vs CoreML 4422ms)
-- **Model optimization:** ✅ **COMPLETE** - INT8 quantization + graph optimization deployed
+- **Model optimization:** ✅ **implemented** - INT8 quantization + graph optimization deployed
   - INT8 quantization: 71.6% size reduction, 15% speed improvement
   - Graph optimization: 71% additional TTFA improvement, 99.8% cold start improvement
-- **Pipeline optimization:** ✅ **COMPLETE** for CPU provider,  CoreML needs investigation
-  - CPU provider: Consistent sub-15ms performance across all trials
+- **Pipeline optimization:** ✅ **implemented** for CPU provider,  CoreML needs investigation
+  - CPU provider: Consistent sub-15ms performance across all relevant trials
   - CoreML provider: Cold start penalty (4422ms) with warmup recovery (17ms)
 - **Core systems:** ✅ HTTP API, streaming (CPU), monitoring, session management, warming
 - **Production ready:** ✅ For CPU provider use cases,  CoreML needs optimization
 - **Next milestone:** Switch to CPU provider for production deployment
 
 ### ** Critical Provider Performance Discovery**
-- **CPU Provider dramatically outperforms CoreML for all text lengths**: 10.6ms vs 4422ms TTFA p95
+- **CPU Provider dramatically outperforms CoreML for all relevant text lengths**: 10.6ms vs 4422ms TTFA p95
 - **CoreML cold start penalty confirmed**: 4422ms first request vs 17ms subsequent requests
-- **CPU provider consistent performance**: 4.7-10.6ms TTFA across all trials (no cold start penalty)
+- **CPU provider consistent performance**: 4.7-10.6ms TTFA across all relevant trials (no cold start penalty)
 - **Chunk generation timing excellent**: Sub-millisecond median gaps (0.003-0.005ms) for both providers
 - **Evidence**: 
   - CPU: `artifacts/bench/2025-08-17/bench_stream_short_015157.json` (10.6ms TTFA p95)
   - CoreML: `artifacts/bench/2025-08-17/bench_stream_short_015033.json` (4422ms TTFA p95)
 
 ### ** Audio Chunk Timing Analysis**
-**Excellent chunk generation performance across all providers:**
+**Excellent chunk generation performance across all relevant providers:**
 - **Median gap between chunks**: 0.003-0.005ms (sub-millisecond - excellent)
 - **P95 gap**: 3-34ms (varies by provider and request)
 - **Chunk count**: 26 chunks for ~3.9s audio = ~150ms per chunk
 - **Buffer growth**: Chunks generated faster than audio playback, allowing buffer growth
-- **Evidence**: All benchmark results show sub-millisecond median gaps between chunks
+- **Evidence**: all relevant benchmark results show sub-millisecond median gaps between chunks
 
 **Chunk timing by provider:**
 - **CPU Provider**: 0.003-0.004ms median gaps, 2.5-3.3ms p95 gaps (excellent)

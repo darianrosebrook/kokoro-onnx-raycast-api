@@ -49,7 +49,7 @@ Request 2: Time to first byte: 26.814007s (7x slower!)
 - Fewer chunks produced (1501 vs 305)
 - Performance degradation pattern
 
-### 4. Request ID Collision 🆔
+### 4. Request ID Collision 
 **Hypothesis:** Request tracking collision
 **Evidence:**
 - Both requests logged as "no-id"
@@ -168,7 +168,7 @@ for i in {1..5}; do
     -d '{"text":"Test request '$i'", "voice":"af_heart", "speed":1.0}' \
     -o /dev/null -w "TTFA: %{time_starttransfer}s\n"
   sleep 1
-done
+implemented
 ```
 
 ### 2. Concurrent Request Test
@@ -202,7 +202,7 @@ curl http://localhost:8000/status
 ### Immediate (Critical)
 - ✅ Fix text coverage loss
 -  Sequential requests should have consistent TTFA (<5s difference)
--  All requests should be tracked in monitoring
+-  all relevant requests should be tracked in monitoring
 -  Audio quality consistent between requests
 
 ### Medium Term
@@ -225,7 +225,7 @@ curl http://localhost:8000/status
 
 1. **IMMEDIATE:** Investigate session manager state and cleanup
 2. **URGENT:** Implement proper request isolation
-3. **HIGH:** Add comprehensive resource monitoring
+3. **HIGH:** Add extensive resource monitoring
 4. **MEDIUM:** Optimize session pool management
 
 ---

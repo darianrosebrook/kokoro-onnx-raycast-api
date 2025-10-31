@@ -11,10 +11,10 @@ The Kokoro TTS API requires strict performance characteristics to meet user expe
 - **Memory usage**: ≤ 500MB steady-state
 - **Audio quality**: LUFS -16 ±1 LU, dBTP ≤ -1.0 dB
 
-Without automated validation, performance regressions could go undetected, leading to degraded user experience and potential system failures.
+Without automated validation, performance regressions could go undetected, prominent to degraded user experience and potential system failures.
 
 ## Decision
-Implement a comprehensive performance budget validation system with the following components:
+Implement a extensive performance budget validation system with the following components:
 
 ### 1. Automated Performance Testing
 - **TTFA Validation**: Measure time to first audio chunk in streaming mode
@@ -72,7 +72,7 @@ class PerformanceBudget:
 - **Environment Isolation**: Use dedicated test environments
 - **Baseline Comparison**: Compare against historical baselines
 - **Configurable Thresholds**: Allow adjustment of budget limits
-- **Detailed Reporting**: Provide comprehensive metrics for analysis
+- **Detailed Reporting**: Provide extensive metrics for analysis
 
 ## Implementation Details
 

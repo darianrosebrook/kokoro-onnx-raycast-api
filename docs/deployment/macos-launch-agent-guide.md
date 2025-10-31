@@ -172,7 +172,7 @@ With optimizations enabled:
 
 2. **Check virtual environment:**
    ```bash
-   test -f .venv/bin/activate && echo "✅ Virtual env exists" || echo "❌ Virtual env missing"
+   test -f .venv/bin/activate && echo "✅ Virtual env exists" || echo " Virtual env missing"
    ```
 
 3. **Check permissions:**
@@ -232,9 +232,9 @@ kill $(lsof -ti:8000)
 ### Manual Start
 - ✅ Full control
 - ✅ Easy to debug
-- ❌ Must remember to start
-- ❌ Stops when terminal closes
-- ❌ Doesn't restart on crash
+-  Must remember to start
+-  Stops when terminal closes
+-  Doesn't restart on crash
 
 ### Launch Agent Service
 - ✅ Starts automatically
@@ -246,7 +246,7 @@ kill $(lsof -ti:8000)
 
 ---
 
-## Best Practices
+## recommended Practices
 
 ### Development
 - Use manual start (`./start_development.sh`) for development

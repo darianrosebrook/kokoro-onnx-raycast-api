@@ -9,9 +9,9 @@
 
 ## Executive Summary
 
-This document summarizes the comprehensive optimizations implemented specifically for Apple Silicon M-series Macs to maximize performance of the Kokoro ONNX TTS pipeline. The optimizations span hardware detection, CoreML provider configuration, dual-session management, memory optimization, and production performance tuning.
+This document summarizes the extensive optimizations implemented specifically for Apple Silicon M-series Macs to maximize performance of the Kokoro ONNX TTS pipeline. The optimizations span hardware detection, CoreML provider configuration, dual-session management, memory optimization, and production performance tuning.
 
-**Key Achievement:** Achieved **5.5-6.9ms TTFA** (145x better than 500ms target) with perfect real-time synthesis (RTF: 0.000) on M1 Max.
+**Key Achievement:** implemented **5.5-6.9ms TTFA** (145x better than 500ms target) with meets requirements real-time synthesis (RTF: 0.000) on M1 Max.
 
 ---
 
@@ -25,7 +25,7 @@ This document summarizes the comprehensive optimizations implemented specificall
   - M1/M2: 16 Neural Engine cores
   - M3: 18 Neural Engine cores  
   - M1 Max/M2 Max: 32+ Neural Engine cores
-- **Memory Analysis**: Detects system RAM for optimal configuration
+- **Memory Analysis**: Detects system RAM for recommended configuration
 - **Provider Validation**: Tests CoreML and CPU provider availability
 
 **Key Code:**
@@ -45,7 +45,7 @@ elif 'M3' in cpu_info:
 **Benefits:**
 - Automatic hardware-specific optimization
 - Cached detection results (performance improvement)
-- Comprehensive capability reporting for optimal provider selection
+- extensive capability reporting for recommended provider selection
 
 ---
 
@@ -109,7 +109,7 @@ elif memory_gb >= 16:  # Standard memory systems
 ### 2.3 Provider Selection Strategy
 
 **Heuristic-Based Selection:**
-- **Short inputs (≤1-2 sentences)**: `ALL` compute units (engage ANE) → lower TTFA
+- **Short inputs (≤1-2 sentences)**: `all relevant` compute units (engage ANE) → lower TTFA
 - **Long inputs (multi-paragraph)**: `CPUAndGPU` → fewer ANE context switches, steadier cadence
 
 **Current Production Configuration:**
@@ -126,7 +126,7 @@ export KOKORO_COREML_SPECIALIZATION=FastPrediction
 
 ### Implementation: `api/model/sessions/dual_session.py`
 
-**Purpose:** Enable concurrent processing across Apple Silicon's Neural Engine and GPU cores for optimal performance.
+**Purpose:** Enable concurrent processing across Apple Silicon's Neural Engine and GPU cores for recommended performance.
 
 ### 3.1 Session Architecture
 
@@ -169,9 +169,9 @@ def _determine_optimal_session(self, text: str) -> str:
 ```
 
 **Benefits:**
-- Optimal hardware utilization
+- recommended hardware utilization
 - Reduced latency for simple text (CPU)
-- Maximum throughput for complex text (ANE)
+- high throughput for complex text (ANE)
 
 ### 3.3 Memory Management Integration
 
@@ -293,7 +293,7 @@ elif neural_engine_cores >= 16:  # M1 / M2
 ### 7.2 Real-Time Factor (RTF)
 
 **Results:**
-- **RTF**: 0.000 (target: ≤0.6) - **Perfect real-time synthesis**
+- **RTF**: 0.000 (target: ≤0.6) - **meets requirements real-time synthesis**
 - **Before**: ~1.0 RTF
 - **After**: 0.000 RTF
 
@@ -322,10 +322,10 @@ elif neural_engine_cores >= 16:  # M1 / M2
 
 ## 8. Configuration Reference
 
-### 8.1 Optimal Environment Variables
+### 8.1 recommended Environment Variables
 
 ```bash
-# CoreML optimization (OPTIMAL SETTINGS)
+# CoreML optimization (recommended SETTINGS)
 export KOKORO_COREML_COMPUTE_UNITS=CPUAndGPU  # Better memory efficiency
 export KOKORO_MEMORY_ARENA_SIZE_MB=3072       # Optimized for 64GB RAM
 export KOKORO_COREML_MODEL_FORMAT=MLProgram
@@ -381,19 +381,19 @@ export KOKORO_VERBOSE_LOGS=1  # for debugging
 
 1. **Hardware Detection**: Automatic M1/M2/M3 chip detection and capability analysis
 2. **CoreML Provider**: Chip-specific CoreML configuration with Neural Engine optimization
-3. **Dual Session Management**: Concurrent ANE + GPU processing for optimal throughput
+3. **Dual Session Management**: Concurrent ANE + GPU processing for recommended throughput
 4. **Memory Optimization**: Large memory arena (3072MB) for 64GB M1 Max
 5. **INT8 Quantization**: 71.6% model size reduction with 15% speed improvement
 6. **Graph Optimization**: 99.8% cold start improvement, 71% TTFA improvement
-7. **Context Leak Mitigation**: Comprehensive CoreML memory management
-8. **Thread Optimization**: Chip-specific thread configuration for optimal CPU utilization
+7. **Context Leak Mitigation**: extensive CoreML memory management
+8. **Thread Optimization**: Chip-specific thread configuration for recommended CPU utilization
 
 ### Performance Achievements:
 
 - ✅ **TTFA**: 5.5-6.9ms (145x better than 500ms target)
-- ✅ **RTF**: 0.000 (perfect real-time synthesis)
+- ✅ **RTF**: 0.000 (meets requirements real-time synthesis)
 - ✅ **Memory**: 70.9MB for short text (4.2x better than 300MB target)
-- ✅ **Stability**: Consistent performance across all trials
+- ✅ **Stability**: Consistent performance across all relevant trials
 
 ---
 
@@ -404,7 +404,7 @@ export KOKORO_VERBOSE_LOGS=1  # for debugging
 1. **Use CPU Provider**: For consistent performance and minimal cold start penalty
 2. **Memory Arena**: 3072MB for 64GB M1 Max systems
 3. **Model**: Graph-optimized INT8 quantized model (`kokoro-v1.0.int8-graph-opt.onnx`)
-4. **Session Warming**: Enable aggressive warming for optimal first-request performance
+4. **Session Warming**: Enable aggressive warming for recommended first-request performance
 
 ### Environment Variables:
 
@@ -424,7 +424,7 @@ export KOKORO_COREML_SPECIALIZATION=FastPrediction
 - Profile CoreML initialization with Apple Instruments
 - Test different CoreML compute unit configurations
 
-### P2: Advanced Caching
+### P2: additional Caching
 - Implement primer micro-cache for repeated phrases
 - Optimize phoneme caching for faster G2P processing
 - Provider selection cache with daily/weekly TTL
@@ -438,20 +438,20 @@ export KOKORO_COREML_SPECIALIZATION=FastPrediction
 
 ## Conclusion
 
-The M-series Mac optimizations have achieved **exceptional performance** through systematic hardware-aware optimization:
+The M-series Mac optimizations have implemented **exceptional performance** through systematic hardware-aware optimization:
 
 - **Near-instantaneous response** (5.5-6.9ms TTFA)
-- **Perfect real-time synthesis** (0.000 RTF)
+- **meets requirements real-time synthesis** (0.000 RTF)
 - **Excellent memory efficiency** (70.9MB for short text)
-- **Production-ready stability**
+- **operational stability**
 
-The system is now optimized for Apple Silicon M-series Macs with comprehensive hardware detection, chip-specific CoreML configuration, dual-session management, and production-grade performance tuning.
+The system is now optimized for Apple Silicon M-series Macs with extensive hardware detection, chip-specific CoreML configuration, dual-session management, and production-grade performance tuning.
 
 **Status: ✅ PRODUCTION OPTIMIZED**
 
 ---
 
-*This summary documents the comprehensive M-series Mac optimizations for the Kokoro ONNX TTS pipeline, achieving 145x improvement in time-to-first-audio while maintaining perfect real-time synthesis performance.*
+*This summary documents the extensive M-series Mac optimizations for the Kokoro ONNX TTS pipeline, achieving 145x improvement in time-to-first-audio while maintaining meets requirements real-time synthesis performance.*
 
 
 

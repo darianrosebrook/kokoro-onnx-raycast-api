@@ -1,7 +1,7 @@
 # Kokoro TTS Production Deployment Guide
 **Date**: 2025-08-17  
 **Author**: @darianrosebrook  
-**Status**: Production-ready with optimized configuration
+**Status**: operational with optimized configuration
 
 ##  **Production Configuration Summary**
 
@@ -10,16 +10,16 @@
 | Setting | Value | Rationale |
 |---------|-------|-----------|
 | `KOKORO_COREML_COMPUTE_UNITS` | `CPUOnly` | CPU provider outperforms CoreML by 27x (152ms vs 4178ms TTFA) |
-| `KOKORO_DEV_PERFORMANCE_PROFILE` | `stable` | 50ms chunks provide optimal balance of latency and stability |
+| `KOKORO_DEV_PERFORMANCE_PROFILE` | `stable` | 50ms chunks provide recommended balance of latency and stability |
 | `KOKORO_MEMORY_ARENA_SIZE_MB` | `3072` | Provides excellent memory efficiency (4-5MB RSS range) |
 | `KOKORO_DEFER_BACKGROUND_INIT` | `true` | Eliminates background task interference |
 
-### ** Performance Targets (Achieved)**
+### ** Performance Targets (implemented)**
 
-| Metric | Target | Achieved | Status |
+| Metric | Target | implemented | Status |
 |--------|--------|----------|--------|
 | TTFA | 800ms | 152ms | ✅ **70% better!** |
-| RTF | <0.6 | 0.121 | ✅ **Perfect!** |
+| RTF | <0.6 | 0.121 | ✅ **meets requirements!** |
 | Memory (short) | <300MB | 50.3MB | ✅ **Excellent** |
 | Memory (long) | <300MB | 4.4-5.0MB | ✅ **Excellent** |
 | Concurrent (2 req) | <500ms | 9.1ms | ✅ **Excellent** |
@@ -42,7 +42,7 @@ python scripts/check_environment.py
 
 ### **2. Production Configuration**
 
-The production script (`start_production.sh`) is pre-configured with optimal settings:
+The production script (`start_production.sh`) is pre-configured with recommended settings:
 
 ```bash
 # Start production server
@@ -53,10 +53,10 @@ HOST=0.0.0.0 PORT=8000 ./start_production.sh
 ```
 
 **Key Production Features:**
-- ✅ **CPU Provider**: Optimal performance (152ms TTFA p95)
-- ✅ **50ms Chunks**: Best balance of latency and stability
+- ✅ **CPU Provider**: recommended performance (152ms TTFA p95)
+- ✅ **50ms Chunks**: recommended balance of latency and stability
 - ✅ **Memory Optimization**: 4-5MB RSS range
-- ✅ **Concurrency Support**: 2 concurrent requests optimal
+- ✅ **Concurrency Support**: 2 concurrent requests recommended
 - ✅ **Session Warming**: Eliminates cold start penalties
 - ✅ **Cache Management**: Automated cache clearing
 
@@ -80,7 +80,7 @@ curl http://localhost:8000/performance/status
 **Key Metrics to Monitor:**
 - **TTFA**: Should be <200ms after warmup
 - **Memory Usage**: Should be <50MB RSS
-- **Concurrent Requests**: Limit to 2 for optimal performance
+- **Concurrent Requests**: Limit to 2 for recommended performance
 - **Cold Start**: ~4 seconds first request (normal)
 
 **Log Analysis:**
@@ -135,7 +135,7 @@ curl http://localhost:8000/v1/audio/speech \
 
 ### **Concurrency Optimization**
 
-**Optimal**: 2 concurrent requests  
+**recommended**: 2 concurrent requests  
 **Avoid**: >4 concurrent requests (triggers cold start)
 
 ```bash
@@ -178,7 +178,7 @@ echo $KOKORO_MEMORY_ARENA_SIZE_MB
 # Check CoreML configuration
 echo $KOKORO_COREML_COMPUTE_UNITS
 
-# Should be: CPUOnly (not ALL or CPUAndGPU)
+# Should be: CPUOnly (not all relevant or CPUAndGPU)
 ```
 
 #### **4. Slow Concurrent Performance**
@@ -230,22 +230,22 @@ curl http://localhost:8000/performance/status | jq
 - [ ] Cold start mitigation implemented
 - [ ] Concurrency limits enforced
 
-##  **Best Practices**
+##  **recommended Practices**
 
 ### **1. Provider Selection**
 - **Always use CPU provider**: `KOKORO_COREML_COMPUTE_UNITS=CPUOnly`
 - **Avoid CoreML**: Severe initialization issues and hangs
 
 ### **2. Chunk Timing**
-- **Use stable profile**: 50ms chunks optimal
+- **Use stable profile**: 50ms chunks recommended
 - **Avoid benchmark profile**: 40ms chunks cause underruns
 
 ### **3. Concurrency**
-- **Limit to 2 requests**: Optimal performance
+- **Limit to 2 requests**: recommended performance
 - **Monitor for cold start**: Higher concurrency triggers penalties
 
 ### **4. Memory Management**
-- **Current settings optimal**: 4-5MB RSS range
+- **Current settings recommended**: 4-5MB RSS range
 - **No further optimization needed**: Excellent efficiency
 
 ### **5. Monitoring**

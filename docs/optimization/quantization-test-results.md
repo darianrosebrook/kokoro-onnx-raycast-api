@@ -6,14 +6,14 @@
 
 ## Summary
 
-Successfully implemented and tested weights-only INT8 quantization for the Kokoro TTS model. The quantization achieved a **11.3% size reduction** while maintaining compatibility with both CoreML and CPU execution providers.
+Successfully implemented and tested weights-only INT8 quantization for the Kokoro TTS model. The quantization implemented a **11.3% size reduction** while maintaining compatibility with both CoreML and CPU execution providers.
 
 ## Key Achievements
 
 ✅ **Fixed Python 3.13 compatibility issues** - Resolved `InterruptedError` from ONNX shape inference reload path  
 ✅ **Avoided ConvInteger operations** - Used dynamic quantization for Gemm/MatMul only, excluded Conv to maintain provider compatibility  
 ✅ **Implemented safe input generation** - Fixed vocab bounds detection to prevent out-of-bounds Gather errors  
-✅ **Added comprehensive benchmarking** - Pre-benchmark smoke tests and detailed performance comparison  
+✅ **Added extensive benchmarking** - Pre-benchmark smoke tests and detailed performance comparison  
 
 ## Model Size Comparison
 

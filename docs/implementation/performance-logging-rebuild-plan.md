@@ -69,7 +69,7 @@ AUDIO_GENERATION_COMPLETE → REQUEST_COMPLETE
 **Files to Update:**
 
 1. **AudioStreamer** (`raycast/src/utils/tts/streaming/audio-streamer.ts`)
-   - Remove all `console.log` statements
+   - Remove all relevant `console.log` statements
    - Replace with `PerformanceTracker.logEvent()` calls
    - Track: chunk reception, streaming progress, audio completion
 
@@ -80,7 +80,7 @@ AUDIO_GENERATION_COMPLETE → REQUEST_COMPLETE
 
 3. **PerformanceMonitor** (`raycast/src/utils/performance/performance-monitor.ts`)
    - **DEPRECATE** - Replace with new PerformanceTracker
-   - Remove all console.log statements
+   - Remove all relevant console.log statements
    - Keep only for backward compatibility during transition
 
 4. **Server TTS Core** (`api/tts/core.py`)
@@ -111,7 +111,7 @@ tracker.logEvent(requestId, 'STAGE_NAME', { metadata });
 
 **Step 3: Remove Old Logging**
 ```bash
-# Remove all old performance logging
+# Remove all relevant old performance logging
 # - PerformanceMonitor console.log statements
 # - AudioStreamer progress reports
 # - TTSProcessor performance tracking
@@ -214,7 +214,7 @@ const efficiency = audioDuration / (streamingTime / 1000); // 25.2%
 - **Accurate TTFA measurement**: Will show real 1841ms instead of 0ms
 - **Proper streaming efficiency**: Will show 25.2% instead of 100%
 - **Clear performance bottlenecks**: Server response time, chunk processing delays
-- **Consistent error tracking**: All errors properly categorized and reported
+- **Consistent error tracking**: all relevant errors properly categorized and reported
 
 ### **Long-term Benefits:**
 - **Performance trend analysis**: Historical data for optimization
@@ -245,10 +245,10 @@ const efficiency = audioDuration / (streamingTime / 1000); // 25.2%
 - [ ] End-to-end request flow tracking
 
 ### **Phase 2 Success:**
-- [ ] All old logging systems removed
-- [ ] Consistent log format across all components
+- [ ] all relevant old logging systems removed
+- [ ] Consistent log format across all relevant components
 - [ ] No performance degradation
-- [ ] All errors properly tracked
+- [ ] all relevant errors properly tracked
 
 ### **Phase 3 Success:**
 - [ ] Performance dashboard operational

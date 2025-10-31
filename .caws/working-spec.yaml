@@ -1,50 +1,116 @@
-id: PROJ-527
-title: kokoro-onnx-raycast-api
+id: PROJ-001
+title: Kokoro TTS API - ONNX Runtime Optimization
 risk_tier: 2
 mode: feature
 change_budget:
   max_files: 25
   max_loc: 1000
+  max_days: 3
+  max_complexity: 10
 blast_radius:
   modules:
-    - src
-    - tests
+    - api/
+    - tests/
+    - scripts/
   data_migration: false
+  external_apis: false
 operational_rollback_slo: 5m
-threats: []
+threats:
+  - Performance degradation
+  - Memory leaks
+  - Audio quality issues
 scope:
   in:
-    - src/
+    - api/
     - tests/
+    - scripts/
+    - benchmarks/
+    - contracts/
   out:
     - node_modules/
     - dist/
     - build/
+    - .venv/
+    - __pycache__/
+    - logs/
+    - artifacts/
 invariants:
-  - System maintains data consistency
+  - TTFA (Time to First Audio) ≤500ms for streaming requests
+  - API P95 latency ≤1000ms for non-streaming requests
+  - Memory usage ≤500MB steady-state
+  - Audio quality: LUFS -16±1, dBTP ≤-1.0
+  - Service ready time <10 seconds
+  - Real-time factor (RTF) ≤1.0
 acceptance:
   - id: A1
-    given: current state,
-    when: action occurs,
-    then: expected result
+    given: TTS API server is running
+    when: Streaming audio request is made
+    then: TTFA ≤500ms, RTF ≤1.0, audio quality meets targets
+  - id: A2
+    given: TTS API server is running
+    when: Non-streaming audio request is made
+    then: API P95 latency ≤1000ms, audio quality meets targets
+  - id: A3
+    given: TTS API server starts
+    when: Startup sequence completes
+    then: Service ready time <10 seconds
+  - id: A4
+    given: TTS API server is running
+    when: Multiple concurrent requests are processed
+    then: Memory usage ≤500MB, no memory leaks
+  - id: A5
+    given: TTS API server is running
+    when: Audio is generated
+    then: LUFS -16±1, dBTP ≤-1.0
+  - id: A6
+    given: Code changes are made
+    when: Quality gates are run
+    then: Trust score ≥80/100, all tests pass
 non_functional:
   a11y:
-    - keyboard
+    - keyboard navigation (for dashboard/UI components)
   perf:
-    api_p95_ms: 250
+    api_p95_ms: 1000
+    ttfa_ms: 500
+    rtf: 1.0
+    memory_mb: 500
+    startup_time_s: 10
   security:
-    - validation
+    - input validation
+    - secret detection
+    - dependency scanning
+    - SAST analysis
 contracts:
-  - type: ''
-    path: ''
+  - type: openapi
+    path: contracts/kokoro-tts-api.yaml
+    validation: required
 observability:
-  logs: []
-  metrics: []
-  traces: []
+  logs:
+    - api_server.log
+    - audio-daemon.log
+    - benchmark_*.log
+  metrics:
+    - TTFA average and p95
+    - RTF average and p95
+    - Memory usage
+    - API latency
+    - Provider usage (CoreML vs CPU)
+  traces:
+    - Request correlation IDs
+    - Performance timing breakdowns
 migrations: []
-rollback: []
+rollback:
+  - Revert to previous model version
+  - Disable problematic optimizations via environment variables
 ai_assessment:
-  confidence_level: 0.8
-  uncertainty_areas: []
-  complexity_factors: []
-  risk_factors: []
+  confidence_level: 0.95
+  uncertainty_areas:
+    - CoreML provider initialization time variability
+    - First request cold start performance
+  complexity_factors:
+    - ONNX Runtime provider switching
+    - Dual session management (ANE/GPU)
+    - Streaming audio chunk delivery
+  risk_factors:
+    - Hardware-specific optimizations may not work on all systems
+    - Memory fragmentation in long-running processes

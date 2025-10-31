@@ -1,0 +1,36 @@
+[
+  {
+    "id": "prov-1761869225889",
+    "timestamp": "2025-10-31T00:07:05.889Z",
+    "commit": {
+      "hash": "7fd7f951ea76cf3779618f007a30c36a853c9f69",
+      "message": "refactor: consolidate benchmark suite and CAWS compliance",
+      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+    },
+    "working_spec": {
+      "id": "PROJ-001",
+      "title": "Kokoro TTS API - ONNX Runtime Optimization",
+      "risk_tier": 2,
+      "mode": "feature",
+      "waiver_ids": []
+    },
+    "quality_gates": {
+      "status": "unknown",
+      "last_validated": "2025-10-31T00:07:05.890Z"
+    },
+    "agent": {
+      "type": "human",
+      "confidence_level": null
+    },
+    "cursor_tracking": {
+      "available": false,
+      "reason": "Cursor tracking API not configured"
+    },
+    "checkpoints": {
+      "available": false,
+      "reason": "Cursor checkpoint API not configured"
+    },
+    "previous_hash": "",
+    "hash": "7a6ba603304767854ac2fd31efa247ef71d11b1d6463d837e2129cc76d7d9f84"
+  }
+]

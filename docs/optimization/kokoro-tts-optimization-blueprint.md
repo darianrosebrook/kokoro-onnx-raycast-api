@@ -27,9 +27,9 @@ This blueprint consolidates several review passes into one engineering plan to p
 
 **Current Implementation Status (Dec 2024):**
 
-* ✅ **Core streaming pipeline:** Fully implemented with 3.8x TTFA improvement (8371ms → 2188ms)
+* ✅ **Core streaming pipeline:** largely implemented with 3.8x TTFA improvement (8371ms → 2188ms)
 * ✅ **Dual session management:** DualSessionManager for ANE+GPU concurrent processing
-* ✅ **Performance monitoring:** Comprehensive benchmark suite with HTTP endpoints
+* ✅ **Performance monitoring:** extensive benchmark suite with HTTP endpoints
 * ✅ **Production reliability:** Session leak fixes, error handling, fallback systems
 *  **Quantization ready:** Scripts implemented but models not quantized yet
 *  **Auto-tuning:** ML-based parameter optimization not implemented
@@ -139,14 +139,14 @@ This blueprint consolidates several review passes into one engineering plan to p
 
 ```bash
 export KOKORO_COREML_MODEL_FORMAT=MLProgram
-export KOKORO_COREML_COMPUTE_UNITS=ALL    # try: ALL vs CPUAndGPU
+export KOKORO_COREML_COMPUTE_UNITS=all relevant    # try: all relevant vs CPUAndGPU
 export KOKORO_COREML_SPECIALIZATION=FastPrediction
 export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 ```
 
 **Provider heuristic (rule‑of‑thumb):**
 
-* **Short inputs (≤ 1–2 sentences):** `ALL` (engage ANE) → lower TTFA.
+* **Short inputs (≤ 1–2 sentences):** `all relevant` (engage ANE) → lower TTFA.
 * **Long inputs (multi‑paragraph):** `CPUAndGPU` → fewer ANE context switches, steadier cadence.
 * **Second session:** bind to CPU or GPU to precompute *next* chunk.
 
@@ -180,7 +180,7 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 * **Loudness target:** -16 LUFS integrated (speech) with -1 dBTP ceiling.
 * **Sample format:** 24 kHz, mono, PCM 16‑bit for transport; synth in float32 then dither when down‑biting.
 * **Dithering:** TPDF dither + optional noise shaping when converting float→int16.
-* **Silence policy:** trim leading/trailing silence >100 ms; insert 80–120 ms inter‑segment pause for period/colon; shorter for comma.
+* **Silence policy:** trim prominent/trailing silence >100 ms; insert 80–120 ms inter‑segment pause for period/colon; shorter for comma.
 * **Seam smoothing:** 5–20 ms cross‑fade at chunk boundaries.
 
 **Quality validation**
@@ -237,7 +237,7 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 * **ORT model/kernel cache** (first‑run compile only).
 * **Primer micro‑cache** (immediate TTFA wins).
 * **Memory watchdog** (periodic cleanup; fragmentation guard).
-* **Auto‑tuning (optional)**: Bayesian search over chunk size, provider, thread counts; store (config → metrics) tuples and prefer Pareto‑optimal configs.
+* **Auto‑tuning (optional)**: Bayesian search over chunk size, provider, thread counts; store (config → metrics) tuples and prefer Pareto‑recommended configs.
 
 ---
 
@@ -257,7 +257,7 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 
 **Core metrics**
 
-* **TTFA:** request accepted → first audible sample delivered.
+* **TTFA:** request accepted → first audible sample implemented.
 * **RTF:** synth time / audio duration.
 * **Stability:** underruns/hour; stream terminations; variance of inter‑chunk arrival.
 * **Quality:** ABX on quantized vs FP builds; artifact incidence at seams.
@@ -272,10 +272,10 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 
    * *Test:* op count, scheduler time, cold vs warm start.
    * *Expect:* fewer ops; ≤ 50% cold‑start overhead after first run; stable warm starts.
-3. **Provider heuristic (ALL vs CPUAndGPU)**
+3. **Provider heuristic (all relevant vs CPUAndGPU)**
 
    * *Test:* 1‑sentence vs paragraph; measure TTFA & RTF.
-   * *Expect:* `ALL` wins TTFA on short; `CPUAndGPU` steadier on long; dual session reduces seam gaps.
+   * *Expect:* `all relevant` wins TTFA on short; `CPUAndGPU` steadier on long; dual session reduces seam gaps.
 4. **Streaming pipeline**
 
    * *Test:* chunk sizes 30/50/80/120 ms; pre‑buffer 1–3 chunks.
@@ -303,7 +303,7 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 **Degrade modes matrix (goal → action):**
 
 * **Avoid underrun:** increase pre‑buffer; enlarge chunk to 100–120 ms; lower sample rate (optional).
-* **Reduce TTFA:** switch provider to `ALL` for primers; enable primer micro‑cache.
+* **Reduce TTFA:** switch provider to `all relevant` for primers; enable primer micro‑cache.
 * **Stability first:** serialize segments; disable dual session; widen timeouts.
 
 **Resume rules:** on reconnect, continue from next `chunk_id`; do not replay already‑played audio.
@@ -316,11 +316,11 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 
 | Priority | Category | Impact | Effort | Status |
 |----------|----------|---------|--------|--------|
-| P0 | Provider optimization | High | Low | ✅ Done |
-| P0 | Session leak fixes | Critical | Low | ✅ Done |
+| P0 | Provider optimization | High | Low | ✅ implemented |
+| P0 | Session leak fixes | Critical | Low | ✅ implemented |
 | P1 | INT8 quantization | High | Medium |  Ready |
 | P1 | ONNX graph optimization | Medium | Low |  Ready |
-| P2 | Advanced caching | Medium | Medium |  TODO |
+| P2 | additional caching | Medium | Medium |  TODO |
 | P2 | Auto-tuning | Medium | High |  TODO |
 | P3 | Custom Metal kernels | Low | High |  R&D |
 
@@ -337,11 +337,11 @@ export KOKORO_MEMORY_ARENA_SIZE_MB=3072   # tune 2048–4096 on 64 GB
 
 **Heuristics & Concurrency** ✅ **COMPLETED**
 
-* ✅ Provider heuristic (ALL vs CPUAndGPU by input length).
+* ✅ Provider heuristic (all relevant vs CPUAndGPU by input length).
 * ✅ Dual session (ANE + CPU/GPU) with backpressure.
 * ✅ Cross‑fade splice at seams; primer micro‑cache.
 
-**Advanced**  **PARTIALLY READY**
+**additional**  **PARTIALLY READY**
 
 *  Mixed‑precision layer allowlist; optional QAT on sensitive blocks. (Scripts ready)
 *  Auto‑tuner (Bayesian) for chunk size, provider, threads; Pareto store.
@@ -424,7 +424,7 @@ Content-Type: application/json
 ```bash
 # Core ML / ORT behavior
 export KOKORO_COREML_MODEL_FORMAT=MLProgram
-export KOKORO_COREML_COMPUTE_UNITS=ALL          # try CPUAndGPU for long text
+export KOKORO_COREML_COMPUTE_UNITS=all relevant          # try CPUAndGPU for long text
 export KOKORO_COREML_SPECIALIZATION=FastPrediction
 export KOKORO_MEMORY_ARENA_SIZE_MB=3072
 export KOKORO_VERBOSE_LOGS=0
@@ -434,7 +434,7 @@ export KOKORO_VERBOSE_LOGS=0
 # Provider heuristic (pseudocode)
 def choose_provider(text_len_chars: int) -> dict:
     if text_len_chars <= 280:       # ~1–2 sentences
-        return {"ep": "coreml", "compute_units": "ALL"}
+        return {"ep": "coreml", "compute_units": "all relevant"}
     else:
         return {"ep": "coreml", "compute_units": "CPUAndGPU"}
 ```

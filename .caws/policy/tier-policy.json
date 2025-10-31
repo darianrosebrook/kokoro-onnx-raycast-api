@@ -1,0 +1,9 @@
+{
+  "tier_2": {
+    "min_coverage": 0.8,
+    "min_mutation": 0.5,
+    "requires_contracts": true
+  }
+}
+
+

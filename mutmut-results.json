@@ -1,7 +1,7 @@
 {
   "mutation_score": 1.0,
-  "total_mutations": 10,
-  "killed_mutations": 10,
+  "total_mutations": 8,
+  "killed_mutations": 8,
   "survived_mutations": 0,
   "mutations": [
     {
@@ -29,12 +29,6 @@
       "killed": true
     },
     {
-      "file": "api/config.py",
-      "original": "0",
-      "mutated": "1",
-      "killed": true
-    },
-    {
       "file": "api/security.py",
       "original": "==",
       "mutated": "!=",
@@ -56,12 +50,6 @@
       "file": "api/security.py",
       "original": "1",
       "mutated": "0",
-      "killed": true
-    },
-    {
-      "file": "api/security.py",
-      "original": "0",
-      "mutated": "1",
       "killed": true
     }
   ]

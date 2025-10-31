@@ -14,19 +14,19 @@
 
 ### Evidence
 - **Working**: Non-streaming WAV (88KB), Non-streaming PCM (43KB), First streaming request (55KB)
-- **Broken**: All subsequent requests return 2 bytes of zeros (`00 00`)
+- **Broken**: all relevant subsequent requests return 2 bytes of zeros (`00 00`)
 - **Logs**: "Context leak detected" errors from CoreML, "Audio duration: 0.0ms"
-- **Sessions**: DualSessionManager shows all sessions unavailable after first use
+- **Sessions**: DualSessionManager shows all relevant sessions unavailable after first use
 
 ## Root Cause Analysis
 
 ### Primary Issue: Model Session State Corruption
-The Kokoro TTS model (loaded via ONNX Runtime with CoreML provider) becomes corrupted after its first successful inference, causing it to generate only silence for all subsequent requests.
+The Kokoro TTS model (loaded via ONNX Runtime with CoreML provider) becomes corrupted after its first successful inference, causing it to generate only silence for all relevant subsequent requests.
 
 ### Contributing Factors
 1. **CoreML Context Leaks**: "Context leak detected, msgtracer returned -1" errors
-2. **Session Cleanup Insufficient**: Current `cleanup_sessions()` doesn't fully reset model state
-3. **Dual Session Manager Failure**: All session types (ANE/GPU/CPU) become unavailable
+2. **Session Cleanup Insufficient**: Current `cleanup_sessions()` doesn't largely reset model state
+3. **Dual Session Manager Failure**: all relevant session types (ANE/GPU/CPU) become unavailable
 4. **Memory Management Issues**: CoreML execution provider state management
 
 ## Targeted Fix Plan
@@ -36,11 +36,11 @@ The Kokoro TTS model (loaded via ONNX Runtime with CoreML provider) becomes corr
 
 #### 1.1 Enhanced Session Cleanup
 - **File**: `api/model/sessions/dual_session.py`
-- **Action**: Improve `cleanup_sessions()` to fully reinitialize ONNX Runtime sessions
+- **Action**: Improve `cleanup_sessions()` to largely reinitialize ONNX Runtime sessions
 - **Implementation**:
   ```python
   def cleanup_sessions(self):
-      # Force complete session destruction
+      # Force implemented session destruction
       for session_type in ['ane', 'gpu', 'cpu']:
           if self.sessions[session_type] is not None:
               del self.sessions[session_type]
@@ -57,7 +57,7 @@ The Kokoro TTS model (loaded via ONNX Runtime with CoreML provider) becomes corr
 
 #### 1.2 Per-Request Session Isolation
 - **File**: `api/tts/core.py`
-- **Action**: Call session cleanup after EVERY request (streaming and non-streaming)
+- **Action**: Call session cleanup after relevant request (streaming and non-streaming)
 - **Implementation**: Ensure cleanup happens in finally blocks
 
 #### 1.3 CoreML Provider Reset
@@ -91,8 +91,8 @@ The Kokoro TTS model (loaded via ONNX Runtime with CoreML provider) becomes corr
 
 ### Critical Path (This Session)
 1. **Test current session cleanup** - Verify if our existing fix is working
-2. **Enhanced session destruction** - Force complete session recreation
-3. **Per-request cleanup** - Ensure cleanup after every request
+2. **Enhanced session destruction** - Force implemented session recreation
+3. **Per-request cleanup** - Ensure cleanup after relevant request
 4. **Validate fix** - Test multiple consecutive requests
 
 ### Next Steps
@@ -111,7 +111,7 @@ The Kokoro TTS model (loaded via ONNX Runtime with CoreML provider) becomes corr
 ### Long-term Success
 - ✅ Stable operation over extended periods
 - ✅ No memory leaks or resource exhaustion
-- ✅ Optimal performance with CoreML acceleration
+- ✅ recommended performance with CoreML acceleration
 
 ## Test Plan
 
@@ -123,7 +123,7 @@ The Kokoro TTS model (loaded via ONNX Runtime with CoreML provider) becomes corr
 5. **Memory Monitoring**: Track memory usage over time
 
 ### Success Metrics
-- **Audio Quality**: All requests return >40KB of valid audio data
+- **Audio Quality**: all relevant requests return >40KB of valid audio data
 - **Consistency**: 100% success rate across multiple requests
 - **Performance**: TTFA <800ms maintained across requests
 - **Stability**: No crashes or hangs over extended operation

@@ -8,10 +8,10 @@
 ## Overview
 
 A lightweight menu bar app that provides:
-- 🎤 **Status Indicator**: Visual indicator showing service health
+-  **Status Indicator**: Visual indicator showing service health
 - 🟢 **Online**: Service running and healthy
 - ⚠️ **Warning**: Service running but unhealthy
-- 🔴 **Stopped**: Service not running
+-  **Stopped**: Service not running
 
 - **Quick Controls**: Start/Stop/Restart service
 - **Health Check**: View detailed service status
@@ -25,7 +25,7 @@ A lightweight menu bar app that provides:
 ### Visual Status Indicator
 - **🟢 Green**: Service online and healthy
 - **⚠️ Yellow**: Service running but issues detected
-- **🔴 Red**: Service stopped
+- ** Red**: Service stopped
 
 ### Menu Options
 - **Status**: Current service status
@@ -69,16 +69,16 @@ python3 scripts/menubar_status.py
 ## Menu Bar Appearance
 
 The menu bar will show:
-- **🎤 Kokoro** - Service is online and healthy
+- ** Kokoro** - Service is online and healthy
 - **⚠️ Kokoro** - Service running but unhealthy
-- **🔴 Kokoro** - Service stopped
+- ** Kokoro** - Service stopped
 
 ---
 
 ## Functionality
 
 ### Status Updates
-- Updates every 5 seconds automatically
+- Updates relevant 5 seconds automatically
 - Checks service status via launchctl
 - Checks health via HTTP endpoint
 
@@ -137,7 +137,7 @@ SERVICE_URL = "http://localhost:8000"  # Change if needed
 ### Customize Update Interval
 Edit `scripts/menubar_status.py`:
 ```python
-time.sleep(5)  # Update every 5 seconds
+time.sleep(5)  # Update relevant 5 seconds
 ```
 
 ---
@@ -169,7 +169,7 @@ time.sleep(5)  # Update every 5 seconds
    ```
 
 2. **Check menu bar:**
-   - Look for "🎤 Kokoro" or "🔴 Kokoro" in menu bar
+   - Look for " Kokoro" or " Kokoro" in menu bar
    - May be hidden behind other menu bar items
 
 3. **Restart menu bar app:**
@@ -233,17 +233,17 @@ pkill -f menubar_status
 
 ### Menu Bar Status
 ```
-🎤 Kokoro ▼
+ Kokoro 
   Status: 🟢 Running | Health: 🟢 Online
-  ──────────────────────────
+  
   Start Service
   Stop Service
   Restart Service
-  ──────────────────────────
+  
   Health Check
   View Logs
   Open Service URL
-  ──────────────────────────
+  
   Quit
 ```
 

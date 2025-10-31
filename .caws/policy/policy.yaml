@@ -1,0 +1,71 @@
+# CAWS Policy Configuration
+# Risk Tier 2: User-facing features, internal APIs
+
+tiers:
+  tier_2:
+    name: "User-facing features, internal APIs"
+    description: |
+      Appropriate for:
+      - User-facing features with moderate impact
+      - Internal APIs with controlled access
+      - Performance-critical services
+      - Services with quality requirements
+    
+    quality_gates:
+      coverage:
+        branch: 80
+        line: 75
+        required: true
+      
+      mutation:
+        score: 50
+        required: true
+      
+      contracts:
+        required: true
+        types:
+          - openapi
+      
+      performance:
+        required: true
+        budgets:
+          - ttfa_ms: 500
+          - api_p95_ms: 1000
+          - memory_mb: 500
+          - startup_time_s: 10
+      
+      security:
+        required: true
+        scans:
+          - secret_detection
+          - sast
+          - dependency_scanning
+      
+      integration:
+        required: true
+        containerized: true
+      
+      static_analysis:
+        required: true
+        tools:
+          - linting
+          - type_checking
+          - formatting
+    
+    change_budget:
+      max_files: 25
+      max_loc: 1000
+      max_days: 3
+      max_complexity: 10
+    
+    trust_score:
+      target: 80
+      calculation:
+        coverage_weight: 0.25
+        mutation_weight: 0.25
+        contracts_weight: 0.20
+        a11y_weight: 0.10
+        performance_weight: 0.10
+        flake_rate_weight: 0.10
+
+
