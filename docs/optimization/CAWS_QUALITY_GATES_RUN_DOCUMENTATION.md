@@ -256,7 +256,7 @@ CAWS Quality Gates - Enterprise Code Quality Enforcement
 
 | Code | Meaning |
 |------|---------|
-| `0` | all relevant gates passed (or warnings only in non-CI mode) |
+| `0` | Quality gates passed (or warnings only in non-CI mode) |
 | `1` | One or more gates failed (or any violations in CI mode) |
 | `2` | Execution error (tool failure, not gate failure) |
 
