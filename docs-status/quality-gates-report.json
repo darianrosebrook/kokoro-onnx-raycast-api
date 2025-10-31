@@ -1,8 +1,530 @@
 {
-  "timestamp": "2025-10-31T00:17:58.182Z",
+  "timestamp": "2025-10-31T00:19:05.619Z",
   "context": "commit",
-  "files_scoped": 48,
+  "files_scoped": 0,
   "warnings": [
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '**Enterprise-grade quality gates for preventing functional duplication, architectural drift, and code quality regression.** These gates work cohesively to maintain code quality across development, CI/CD, and production environments.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 3,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '# Automatic - runs before every commit'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 83,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '# Run all quality gates (development mode)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 116,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '# Run all gates in CI mode (strict enforcement)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 119,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'caws quality-gates --run-all'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 161,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '├── quality-gates-report.json    # Complete results (machine-readable)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 301,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'jq '.violations | length' quality-report.json  # Total violations'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 340,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '# Run gates in parallel (not yet implemented)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 432,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '# Enable verbose logging (if implemented)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 441,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '### Operational Excellence'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 504,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- ✅ **Comprehensive monitoring** (artifacts, metrics, trend analysis)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 514,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- ✅ **Enterprise-grade reliability** (consistent contexts, no emoji output)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 516,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- ✅ **Audit compliance ready** (structured logs, violation tracking, exception management)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 522,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- ✅ **Scalable architecture** (concurrent processing ready, file scoping, performance monitoring)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 523,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '**🎯 Mission Accomplished**: Enterprise-grade quality gates that prevent functional duplication while enabling controlled, monitored development workflows across all environments.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 525,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '**🎯 Mission Accomplished**: Enterprise-grade quality gates that prevent functional duplication while enabling controlled, monitored development workflows across all environments.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 525,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '⚠' in '- ⚠️ **1,500+ LOC**: Warning (allows but flags for decomposition)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 35,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '🔖' in '🔖 ACTIVE WAIVERS (1):'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 59,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '⚠' in '| Problematic filename duplicates             | ~20      | ≤20       | ⚠️ MODERATE | MEDIUM   |'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 104,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '🛠' in '## 🛠️ Usage'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 111,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '📊' in '## 📊 Monitoring & Artifacts'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 293,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '🔧' in '## 🔧 Troubleshooting'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 389,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '⚠' in '**⚠️ Bypasses should only be used for critical hotfixes during crisis response.**'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 476,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '📚' in '## 📚 Related Documentation'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 478,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '🎯' in '**🎯 Mission Accomplished**: Enterprise-grade quality gates that prevent functional duplication while enabling controlled, monitored development workflows across all environments.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/README.md",
+      "line": 525,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **`.caws/quality-exceptions.json`** - Shared exception framework store (all gates)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/templates/README.md",
+      "line": 12,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'The `duplication.qualitygatesrc.yaml` and `godObject.qualitygatesrc.yaml` files provide comprehensive configuration for their respective quality gates:'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.caws/quality-gates/templates/README.md",
+      "line": 30,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Purpose**: Logs all hook executions for debugging'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/README.md",
+      "line": 85,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- Input validation on all hook data'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/README.md",
+      "line": 265,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Comprehensive logging**: Debug-friendly output'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/README.md",
+      "line": 296,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- `02-quality-gates.mdc` - Comprehensive testing standards and verification requirements'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 11,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- `03-infrastructure-standards.mdc` - Infrastructure, deployment, and operational standards'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 12,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: '- `06-typescript-conventions.mdc` - TypeScript/JS conventions and best practices'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 17,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- `19-language-agnostic-standards.mdc` - Universal engineering standards across all programming languages'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 25,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: '- `20-sophisticated-todo-detection.mdc` - Advanced TODO detection patterns and hidden implementation analysis'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 26,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '## Comprehensive Coverage Areas'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 53,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Testing Standards**: Complete testing pyramid (unit/integration/E2E) with coverage thresholds and quality gates'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 58,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Infrastructure**: Database, API, security, monitoring, deployment, and operational standards'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 59,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: '### Advanced Quality Controls'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 62,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Language-Agnostic Standards**: Universal patterns across all programming languages with complexity metrics'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 66,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Documentation Standards**: Language-specific docstring formats and comprehensive API documentation'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 80,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Testing**: Rules guide comprehensive testing requirements with coverage thresholds'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 134,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: '- Industry best practices'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 145,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Emoji usage detected: '🔴' in '| 🔴 **T1** | 90%+     | 70%+     | Auth, billing, migrations   |'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/.cursor/rules/README.md",
+      "line": 49,
+      "rule": "EMOJI_USAGE",
+      "suggested_fix": "Remove emoji or use approved emojis only (⚠️, ✅, 🚫)"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '1.\tComponent Blueprinting: When creating a new UI component (say a complex carousel or a form widget), start with a Blueprint Spec. This is like a mini brief that defines the component’s purpose, props (inputs/outputs), states (empty, loading, error, etc.), accessibility considerations (roles, keyboard interactions), and design tokens (colors, spacing) to use. Use AI to generate the scaffolding only: for example, ask it to stub out the component structure, basic state management logic, and maybe a Storybook story or a simple usage example. You will define the nuanced parts like motion curves or fine-tuning the interaction – those require a designer’s eye. Provide acceptance criteria such as “component renders without errors, supports keyboard navigation for all interactive elements, and matches design tokens for light and dark theme.” The AI can handle boilerplate setup, freeing you to focus on higher-level design decisions. After it generates, you flesh out or adjust the creative aspects (transitions, custom behaviors) and then review its code via a PR as usual. By treating the AI as a “bootstrap” tool, you speed up the tedious setup but keep the creative control.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/arbitrarily-long-text.txt",
+      "line": 3,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: '3.\tContent & Microcopy: AI is surprisingly good at generating variations of copy when given a clear style guideline. Begin by supplying your voice and tone guidelines (e.g., “Our brand voice is friendly, concise, and uses sentence case. No jargon.”) plus context for the content (what it’s for and the user’s task). Define the success metric: e.g., “The goal is to get the user to complete a form; success = more form completions. We need a call-to-action phrase.” Ask for multiple options with constraints: “Give me 5 headline options, each ≤ 60 characters, written at a Grade 7 reading level, that encourage a user to try the new feature.” By requesting multiple variants, you treat the AI like a copy intern brainstorming ideas – you can then pick or refine the best. Use your judgment to ensure the options align with brand and are free of any unintended innuendo or cultural issues. If you have the ability, do an A/B test with 2–3 favorites in a beta and see which performs best (track click rates or completion rates). Over time, you’ll also build a library of vetted AI-generated copy that can be reused or adapted, which further guides the AI in future prompts (your own “best-of” dataset).'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/arbitrarily-long-text.txt",
+      "line": 5,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '3.\tContent & Microcopy: AI is surprisingly good at generating variations of copy when given a clear style guideline. Begin by supplying your voice and tone guidelines (e.g., “Our brand voice is friendly, concise, and uses sentence case. No jargon.”) plus context for the content (what it’s for and the user’s task). Define the success metric: e.g., “The goal is to get the user to complete a form; success = more form completions. We need a call-to-action phrase.” Ask for multiple options with constraints: “Give me 5 headline options, each ≤ 60 characters, written at a Grade 7 reading level, that encourage a user to try the new feature.” By requesting multiple variants, you treat the AI like a copy intern brainstorming ideas – you can then pick or refine the best. Use your judgment to ensure the options align with brand and are free of any unintended innuendo or cultural issues. If you have the ability, do an A/B test with 2–3 favorites in a beta and see which performs best (track click rates or completion rates). Over time, you’ll also build a library of vetted AI-generated copy that can be reused or adapted, which further guides the AI in future prompts (your own “best-of” dataset).'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/arbitrarily-long-text.txt",
+      "line": 5,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '│   ├── ttfa_suite.py              # TTFA comprehensive tests'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/README.md",
+      "line": 17,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '# Run comprehensive benchmark suite'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/README.md",
+      "line": 31,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'python scripts/run_bench_enhanced.py --suite comprehensive'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/README.md",
+      "line": 32,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '# Original comprehensive benchmark (still available)'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/README.md",
+      "line": 39,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- Comprehensive TTFA measurement'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/README.md",
+      "line": 80,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '1. **Unified Core**: All benchmarks use the same core execution engine'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/README.md",
+      "line": 103,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '2. **Consistent Metrics**: Standardized metric collection across all suites'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/README.md",
+      "line": 104,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Reason:** Too simple, superseded by comprehensive benchmark suite'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/archive/README.md",
+      "line": 21,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'All functionality from these archived benchmarks has been incorporated into:'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/archive/README.md",
+      "line": 27,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- `scripts/run_bench.py` - Main comprehensive benchmark'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/benchmarks/archive/README.md",
+      "line": 28,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'A comprehensive dashboard for monitoring and testing Kokoro TTS performance with real-time audio streaming visualization.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/dashboard/README.md",
+      "line": 3,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
     {
       "gate": "documentation",
       "type": "documentation_warning",
@@ -1131,7 +1653,7 @@
     {
       "gate": "documentation",
       "type": "documentation_warning",
-      "message": "Unfounded achievement claim detected: '- Default: all relevant gates'",
+      "message": "Unfounded achievement claim detected: '- Default: All gates'",
       "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/docs/optimization/CAWS_QUALITY_GATES_RUN_DOCUMENTATION.md",
       "line": 26,
       "rule": "UNFOUNDED_ACHIEVEMENT",
@@ -1140,7 +1662,7 @@
     {
       "gate": "documentation",
       "type": "documentation_warning",
-      "message": "Unfounded achievement claim detected: '// Run all relevant gates'",
+      "message": "Unfounded achievement claim detected: '// Run all gates'",
       "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/docs/optimization/CAWS_QUALITY_GATES_RUN_DOCUMENTATION.md",
       "line": 121,
       "rule": "UNFOUNDED_ACHIEVEMENT",
@@ -1152,15 +1674,6 @@
       "message": "Unfounded achievement claim detected: '# Run all relevant gates'",
       "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/docs/optimization/CAWS_QUALITY_GATES_RUN_DOCUMENTATION.md",
       "line": 149,
-      "rule": "UNFOUNDED_ACHIEVEMENT",
-      "suggested_fix": "Verify claim with evidence or use more accurate language"
-    },
-    {
-      "gate": "documentation",
-      "type": "documentation_warning",
-      "message": "Unfounded achievement claim detected: '| `0` | all relevant gates passed (or warnings only in non-CI mode) |'",
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/docs/optimization/CAWS_QUALITY_GATES_RUN_DOCUMENTATION.md",
-      "line": 259,
       "rule": "UNFOUNDED_ACHIEVEMENT",
       "suggested_fix": "Verify claim with evidence or use more accurate language"
     },
@@ -3458,38 +3971,302 @@
       "line": 33,
       "rule": "UNFOUNDED_ACHIEVEMENT",
       "suggested_fix": "Verify claim with evidence or use more accurate language"
-    }
-  ],
-  "violations": [
-    {
-      "gate": "code_freeze",
-      "type": "new_file_during_freeze",
-      "message": "New source files staged during code freeze: scripts/clean_docs.py",
-      "suggestion": "Avoid introducing new modules during freeze. Use exceptions for critical hotfixes only.",
-      "severity": "block"
     },
     {
-      "gate": "code_freeze",
-      "type": "large_addition_during_freeze",
-      "message": "Large addition detected: +16073 lines staged (budget 500)",
-      "suggestion": "Split the change into smaller, reviewable patches during freeze.",
-      "severity": "block"
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- All new features must include tests'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/DEVELOPMENT.md",
+      "line": 85,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '2. Ensure all tests pass locally'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/DEVELOPMENT.md",
+      "line": 122,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'A production-ready Text-to-Speech extension for Raycast that leverages the Kokoro ONNX model through a sophisticated client-server architecture optimized for real-time audio streaming and macOS integration.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 3,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'A production-ready Text-to-Speech extension for Raycast that leverages the Kokoro ONNX model through a sophisticated client-server architecture optimized for real-time audio streaming and macOS integration.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 3,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '**Solution**: A dedicated FastAPI server handles all TTS processing, allowing the Raycast extension to focus on UI/UX while the server optimizes for performance.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 146,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '//  Traditional: Wait for complete audio before playback'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 152,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'await fetch('/synthesize') → wait 5-10 seconds → play entire audio'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 153,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Memory efficiency**: No need to buffer entire audio files'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 165,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Error resilience**: One failed segment doesn't break entire synthesis'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 189,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Streaming compatibility**: Segments can stream as they complete'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 190,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **System compatibility**: Works with all macOS audio configurations'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 197,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Reliability**: afplay handles all audio format complexities'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 209,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Compatibility**: Works across all macOS versions'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 211,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- **Debugging**: Comprehensive logging for issue diagnosis'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 267,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: '- **Neural speech synthesis** using state-of-the-art models'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 274,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: '###  **Advanced Playback Controls**'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 282,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: '## Advanced Configuration'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 338,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '*This extension represents a production-ready implementation of streaming TTS with modern web technologies, hardware acceleration, and user-centric design principles.*'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 439,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '*This extension represents a production-ready implementation of streaming TTS with modern web technologies, hardware acceleration, and user-centric design principles.*'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/raycast/README.md",
+      "line": 439,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'The quick brown fox jumps over the lazy dog. This pangram contains every letter of the alphabet at least once.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 18,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: 'Machine learning models require careful optimization to achieve the best performance. Quantization techniques can reduce model size while maintaining quality. This is especially important for deployment on resource-constrained devices. The trade-off between speed and accuracy must be carefully balanced.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 30,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: 'The field of natural language processing has advanced rapidly in recent years. Modern models can understand context, generate coherent text, and even create human-like speech. These capabilities have applications in accessibility, entertainment, and productivity tools.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 32,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'I scream, you scream, we all scream for ice cream!'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 58,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'The softmax function normalizes output probabilities across all possible classes.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 70,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'The weather today is absolutely beautiful, isn't it? Perfect for a walk in the park.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 77,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'Thank you so much for your help with this. I couldn't have done it without you.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 79,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: 'How do I enable the advanced features in the settings menu?'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 89,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_error",
+      "message": "Superiority claim detected: 'What are the best practices for optimizing model inference?'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 94,
+      "rule": "SUPERIORITY_CLAIM",
+      "suggested_fix": "Remove marketing language and focus on technical capabilities"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'The model achieved 95.3% accuracy on the test dataset.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/scripts/calibration_corpus.txt",
+      "line": 98,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: 'This directory contains temporary files created during development and testing. All contents are ignored by Git.'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/temp/README.md",
+      "line": 3,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
+    },
+    {
+      "gate": "documentation",
+      "type": "documentation_warning",
+      "message": "Unfounded achievement claim detected: '- All files in this directory are ignored by Git'",
+      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/temp/README.md",
+      "line": 40,
+      "rule": "UNFOUNDED_ACHIEVEMENT",
+      "suggested_fix": "Verify claim with evidence or use more accurate language"
     }
   ],
+  "violations": [],
   "waivers": {
     "active": 0,
     "applied": 0,
     "details": []
   },
   "performance": {
-    "total_execution_time_ms": 20420,
+    "total_execution_time_ms": 23838,
     "gate_timings": {
-      "duplication": 146,
-      "naming": 483,
-      "code_freeze": 498,
-      "god_objects": 553,
-      "documentation": 19816,
-      "hidden-todo": 19834
+      "duplication": 117,
+      "naming": 379,
+      "code_freeze": 304,
+      "god_objects": 383,
+      "hidden-todo": 384,
+      "documentation": 23405
     }
   }
 }
