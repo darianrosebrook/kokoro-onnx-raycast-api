@@ -134,5 +134,209 @@
     },
     "previous_hash": "481bd65f5d86e366712125f4e4c26151e7cb5a8ec78d67660ef40f214bee9710",
     "hash": "ed04dd5d4dba90e7780e9a171a968b14e15158504ad50c4807606a4273fe50f1"
+  },
+  {
+    "id": "prov-1761870040703",
+    "timestamp": "2025-10-31T00:20:40.703Z",
+    "commit": {
+      "hash": "ee749f290d9c01b4e94580ce7e9d8fd188c3b024",
+      "message": "chore: update CAWS provenance and quality gates artifacts",
+      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+    },
+    "working_spec": {
+      "id": "PROJ-001",
+      "title": "Kokoro TTS API - ONNX Runtime Optimization",
+      "risk_tier": 2,
+      "mode": "feature",
+      "waiver_ids": []
+    },
+    "quality_gates": {
+      "status": "unknown",
+      "last_validated": "2025-10-31T00:20:40.704Z"
+    },
+    "agent": {
+      "type": "human",
+      "confidence_level": null
+    },
+    "cursor_tracking": {
+      "available": false,
+      "reason": "Cursor tracking API not configured"
+    },
+    "checkpoints": {
+      "available": false,
+      "reason": "Cursor checkpoint API not configured"
+    },
+    "previous_hash": "ed04dd5d4dba90e7780e9a171a968b14e15158504ad50c4807606a4273fe50f1",
+    "hash": "2d5cbffa81dffe028134d068a86c309bddee5b06a0efa12970e49f3a49bfe451"
+  },
+  {
+    "id": "prov-1761870123526",
+    "timestamp": "2025-10-31T00:22:03.526Z",
+    "commit": {
+      "hash": "3b98c6c4c162d068de614b97973e60e2685a221b",
+      "message": "refactor: consolidate benchmark suite and CAWS compliance",
+      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+    },
+    "working_spec": {
+      "id": "PROJ-001",
+      "title": "Kokoro TTS API - ONNX Runtime Optimization",
+      "risk_tier": 2,
+      "mode": "feature",
+      "waiver_ids": []
+    },
+    "quality_gates": {
+      "status": "unknown",
+      "last_validated": "2025-10-31T00:22:03.527Z"
+    },
+    "agent": {
+      "type": "human",
+      "confidence_level": null
+    },
+    "cursor_tracking": {
+      "available": false,
+      "reason": "Cursor tracking API not configured"
+    },
+    "checkpoints": {
+      "available": false,
+      "reason": "Cursor checkpoint API not configured"
+    },
+    "previous_hash": "2d5cbffa81dffe028134d068a86c309bddee5b06a0efa12970e49f3a49bfe451",
+    "hash": "0e7b789ce16d76198bd3e16fff006fe21728589d52b435d0a234d3be52683723"
+  },
+  {
+    "id": "prov-1761870123587",
+    "timestamp": "2025-10-31T00:22:03.587Z",
+    "commit": {
+      "hash": "912eb78910262015d8f296dcabe935d9e8548d53",
+      "message": "docs: archive temporal docs and clean up quality gate violations",
+      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+    },
+    "working_spec": {
+      "id": "PROJ-001",
+      "title": "Kokoro TTS API - ONNX Runtime Optimization",
+      "risk_tier": 2,
+      "mode": "feature",
+      "waiver_ids": []
+    },
+    "quality_gates": {
+      "status": "unknown",
+      "last_validated": "2025-10-31T00:22:03.589Z"
+    },
+    "agent": {
+      "type": "human",
+      "confidence_level": null
+    },
+    "cursor_tracking": {
+      "available": false,
+      "reason": "Cursor tracking API not configured"
+    },
+    "checkpoints": {
+      "available": false,
+      "reason": "Cursor checkpoint API not configured"
+    },
+    "previous_hash": "0e7b789ce16d76198bd3e16fff006fe21728589d52b435d0a234d3be52683723",
+    "hash": "8b336c3460e1b8d9333a516a7d1166875c627d6cd7f98d9dba694e7ed2d31ef9"
+  },
+  {
+    "id": "prov-1761870123626",
+    "timestamp": "2025-10-31T00:22:03.626Z",
+    "commit": {
+      "hash": "1b60d483e4fcfb81b1fb9c3cc817f269cf56a236",
+      "message": "docs: fix remaining quality gate violation in CAWS documentation",
+      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+    },
+    "working_spec": {
+      "id": "PROJ-001",
+      "title": "Kokoro TTS API - ONNX Runtime Optimization",
+      "risk_tier": 2,
+      "mode": "feature",
+      "waiver_ids": []
+    },
+    "quality_gates": {
+      "status": "unknown",
+      "last_validated": "2025-10-31T00:22:03.627Z"
+    },
+    "agent": {
+      "type": "human",
+      "confidence_level": null
+    },
+    "cursor_tracking": {
+      "available": false,
+      "reason": "Cursor tracking API not configured"
+    },
+    "checkpoints": {
+      "available": false,
+      "reason": "Cursor checkpoint API not configured"
+    },
+    "previous_hash": "8b336c3460e1b8d9333a516a7d1166875c627d6cd7f98d9dba694e7ed2d31ef9",
+    "hash": "fa32a1aacd94e28ec877d441033fcf4413c5533fbf7f171ca1d77d448fbee7a8"
+  },
+  {
+    "id": "prov-1761870123635",
+    "timestamp": "2025-10-31T00:22:03.635Z",
+    "commit": {
+      "hash": "c6796fe67f6f4ccc4b0e7b22d87fb21f328f3b65",
+      "message": "docs: fix remaining 'all relevant' references in CAWS docs",
+      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+    },
+    "working_spec": {
+      "id": "PROJ-001",
+      "title": "Kokoro TTS API - ONNX Runtime Optimization",
+      "risk_tier": 2,
+      "mode": "feature",
+      "waiver_ids": []
+    },
+    "quality_gates": {
+      "status": "unknown",
+      "last_validated": "2025-10-31T00:22:03.636Z"
+    },
+    "agent": {
+      "type": "human",
+      "confidence_level": null
+    },
+    "cursor_tracking": {
+      "available": false,
+      "reason": "Cursor tracking API not configured"
+    },
+    "checkpoints": {
+      "available": false,
+      "reason": "Cursor checkpoint API not configured"
+    },
+    "previous_hash": "fa32a1aacd94e28ec877d441033fcf4413c5533fbf7f171ca1d77d448fbee7a8",
+    "hash": "d135ed6fc11eaa9633090a5ffd90314a5af3fd62bef27dfec8ad22f647ed3dba"
+  },
+  {
+    "id": "prov-1761870123672",
+    "timestamp": "2025-10-31T00:22:03.672Z",
+    "commit": {
+      "hash": "4d69eff289d3180fbd4240012ef1468c6f3e4865",
+      "message": "chore: update CAWS provenance and quality gates artifacts",
+      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+    },
+    "working_spec": {
+      "id": "PROJ-001",
+      "title": "Kokoro TTS API - ONNX Runtime Optimization",
+      "risk_tier": 2,
+      "mode": "feature",
+      "waiver_ids": []
+    },
+    "quality_gates": {
+      "status": "unknown",
+      "last_validated": "2025-10-31T00:22:03.674Z"
+    },
+    "agent": {
+      "type": "human",
+      "confidence_level": null
+    },
+    "cursor_tracking": {
+      "available": false,
+      "reason": "Cursor tracking API not configured"
+    },
+    "checkpoints": {
+      "available": false,
+      "reason": "Cursor checkpoint API not configured"
+    },
+    "previous_hash": "d135ed6fc11eaa9633090a5ffd90314a5af3fd62bef27dfec8ad22f647ed3dba",
+    "hash": "5d79edc878a182bf01283867b00eec55e4c4445524198456245b29d8bae2ae0a"
   }
 ]
