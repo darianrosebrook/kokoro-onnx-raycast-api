@@ -13,7 +13,7 @@ from pydantic import BaseModel
 import time
 import os
 
-from api.performance.benchmarks.ttfa_benchmark import TTFABenchmark
+from api.performance.benchmarks.ttfa_benchmark import TTFABenchmark, TTFABenchmarkSuite
 from api.utils.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -219,6 +219,7 @@ async def _execute_ttfa_benchmark():
     _benchmark_status["current_test"] = "TTFA Benchmark Suite"
     _benchmark_status["progress"] = 0.1
     
+    from api.performance.benchmarks.ttfa_benchmark import TTFABenchmarkSuite
     suite = TTFABenchmarkSuite()
     results = await suite.run_full_suite()
     

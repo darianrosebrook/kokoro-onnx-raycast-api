@@ -1,0 +1,47 @@
+duplicationGate:
+  ciBaseRef: origin/HEAD
+  considerTestFiles: false
+  testPatterns:
+    - '**/*_test.*'
+    - '**/*.test.*'
+    - '**/*.spec.*'
+  shingleSize: 7
+  minTokensPerRegion: 60
+  thresholds:
+    jaccardWarn: 0.70
+    jaccardBlock: 0.82
+    clusterSizeWarn: 2
+    clusterSizeBlock: 3
+  nameDuplication:
+    enable: true
+    allowNames:
+      - new
+      - default
+      - clone
+      - from
+      - into
+      - try_from
+      - config
+      - with_config
+      - update
+      - validate
+      - build
+      - as_str
+      - len
+      - is_empty
+    regressionBaselines:
+      duplicateStructs: 692
+      duplicateFunctions: 250
+      duplicateTraits: 100
+  languages:
+    rust: ['**/*.rs']
+    ts: ['**/*.{ts,tsx,mts,cts}']
+    js: ['**/*.{js,jsx,mjs,cjs}']
+    go: ['**/*.go']
+    java: ['**/*.java']
+    kotlin: ['**/*.kt']
+  exclude:
+    - '**/node_modules/**'
+    - '**/dist/**'
+    - '**/build/**'
+    - '**/target/**'

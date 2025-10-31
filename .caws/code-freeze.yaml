@@ -1,0 +1,11 @@
+# Code Freeze Configuration
+# Disabled for active development - adjust as needed for production
+
+enabled: false
+
+# If re-enabling, consider these settings:
+# blocked_commit_types: ['feat', 'perf']
+# allowed_commit_types: ['fix', 'refactor', 'chore', 'docs', 'test', 'revert']
+# max_total_insertions: 500
+# max_per_file_insertions: 300
+

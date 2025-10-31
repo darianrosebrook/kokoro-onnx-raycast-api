@@ -719,80 +719,26 @@ async def initialize_model():
         os.environ['TMPDIR'] = local_cache_dir
         logger.debug(f"Set TMPDIR to local cache: {local_cache_dir}")
 
-        update_startup_progress(10, "Cleaning up cache files...")
+        # OPTIMIZATION: Defer cache cleanup to background for faster startup
+        # Only check if cleanup is needed, don't block on it
+        skip_startup_cache_cleanup = os.environ.get('KOKORO_SKIP_STARTUP_CACHE_CLEANUP', 'false').lower() == 'true'
+        if not skip_startup_cache_cleanup:
         try:
             cache_info = get_cache_info()
             if cache_info.get('needs_cleanup', False):
-                cleanup_result = cleanup_cache(aggressive=False)
-                logger.info(f"Cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
+                    logger.debug(f"Cache cleanup needed ({cache_info.get('total_size_mb', 0):.1f}MB), will run in background")
+                    # Schedule background cleanup
+                    asyncio.create_task(_background_cache_cleanup())
             else:
                 logger.debug(f"Cache size OK: {cache_info.get('total_size_mb', 0):.1f}MB")
         except Exception as e:
-            logger.warning(f" Cache cleanup failed: {e}")
+                logger.debug(f"Cache check failed: {e}")
 
-        # Clean up any existing CoreML temp files that might cause permission issues
-        try:
-            import shutil
-            import glob
-            coreml_temp_dirs = [
-                ".cache/coreml_temp",
-                "/var/folders/by/jwzv5d892jgcbjj02895c5280000gn/T/onnxruntime-*",
-                "/private/var/folders/by/jwzv5d892jgcbjj02895c5280000gn/T/onnxruntime-*"
-            ]
-
-            for temp_pattern in coreml_temp_dirs:
-                if "*" in temp_pattern:
-                    # Handle glob patterns
-                    for temp_dir in glob.glob(temp_pattern):
-                        if os.path.exists(temp_dir):
-                            try:
-                                shutil.rmtree(temp_dir)
-                                logger.info(
-                                    f" Cleaned up CoreML temp directory: {temp_dir}")
-                            except Exception as e:
-                                logger.debug(
-                                    f" Could not clean up {temp_dir}: {e}")
-                else:
-                    # Handle direct paths
-                    if os.path.exists(temp_pattern):
-                        try:
-                            # For the local coreml_temp directory, clean files but keep the directory
-                            if temp_pattern == ".cache/coreml_temp":
-                                # Clean up old files but preserve directory structure
-                                import glob as file_glob
-                                current_time = time.time()
-                                cleaned_files = 0
-                                
-                                for file_path in file_glob.glob(os.path.join(temp_pattern, "*")):
-                                    try:
-                                        # Remove files older than 1 hour or all files if startup
-                                        if os.path.isfile(file_path):
-                                            file_age = current_time - os.path.getmtime(file_path)
-                                            if file_age > 3600 or True:  # Always clean during startup
-                                                os.remove(file_path)
-                                                cleaned_files += 1
-                                        elif os.path.isdir(file_path):
-                                            # Remove subdirectories that might be left from failed operations
-                                            shutil.rmtree(file_path)
-                                            cleaned_files += 1
-                                    except Exception:
-                                        pass  # Ignore errors for individual files
-                                
-                                logger.info(f" Cleaned up {cleaned_files} files in CoreML temp directory: {temp_pattern}")
-                                
-                                # Ensure directory still exists and has proper permissions
-                                os.makedirs(temp_pattern, exist_ok=True)
-                                os.chmod(temp_pattern, 0o755)
-                            else:
-                                # For other directories, remove completely (system temp dirs)
-                                shutil.rmtree(temp_pattern)
-                                logger.info(
-                                    f" Cleaned up CoreML temp directory: {temp_pattern}")
-                        except Exception as e:
-                            logger.debug(
-                                f" Could not clean up {temp_pattern}: {e}")
-        except Exception as e:
-            logger.debug(f" CoreML temp cleanup failed: {e}")
+        # OPTIMIZATION: Defer CoreML temp cleanup to background for faster startup
+        skip_startup_coreml_cleanup = os.environ.get('KOKORO_SKIP_STARTUP_COREML_CLEANUP', 'false').lower() == 'true'
+        if not skip_startup_coreml_cleanup:
+            # Schedule background cleanup
+            asyncio.create_task(_background_coreml_cleanup())
 
         # Ensure CoreML temp directory exists with proper setup after cleanup
         try:
@@ -816,7 +762,7 @@ async def initialize_model():
         except Exception as e:
             logger.warning(f" Could not setup CoreML temp directory: {e}")
 
-        update_startup_progress(30, "Initializing model with hardware acceleration...")
+        update_startup_progress(20, "Initializing model with hardware acceleration...")
         logger.info(" Starting model initialization with hardware acceleration...")
 
         start_time = time.time()
@@ -829,13 +775,13 @@ async def initialize_model():
                 logger.error(f"Synchronous model initialization failed: {e}", exc_info=True)
 
         try:
-            update_startup_progress(50, "Loading model and optimizing for hardware...", "initializing")
+            update_startup_progress(40, "Loading model and optimizing for hardware...", "initializing")
             
             # Use a thread for the synchronous model initialization
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, track_model_init)
 
-            update_startup_progress(90, "Finalizing model setup...")
+            update_startup_progress(80, "Finalizing model setup...")
             
             # Final progress update
             if get_model_status():
@@ -870,6 +816,84 @@ def get_cold_start_warmup_stats() -> Dict[str, Any]:
         "warmup_time_ms": _cold_start_warmup_time_ms,
         "error": _cold_start_warmup_error
     }
+
+async def _background_cache_cleanup():
+    """Background cache cleanup task - runs after model is ready"""
+    try:
+        # Wait for model to be ready before cleanup
+        await asyncio.sleep(2)
+        update_startup_progress(10, "Cleaning up cache files (background)...")
+        cache_info = get_cache_info()
+        if cache_info.get('needs_cleanup', False):
+            cleanup_result = cleanup_cache(aggressive=False)
+            logger.info(f"Background cache cleanup completed: freed {cleanup_result.get('total_freed_mb', 0):.1f}MB")
+        else:
+            logger.debug(f"Background cache check: size OK ({cache_info.get('total_size_mb', 0):.1f}MB)")
+    except Exception as e:
+        logger.debug(f"Background cache cleanup failed: {e}")
+
+async def _background_coreml_cleanup():
+    """Background CoreML temp cleanup task - runs after model is ready"""
+    try:
+        # Wait for model to be ready before cleanup
+        await asyncio.sleep(3)
+        import shutil
+        import glob
+        coreml_temp_dirs = [
+            ".cache/coreml_temp",
+            "/var/folders/by/jwzv5d892jgcbjj02895c5280000gn/T/onnxruntime-*",
+            "/private/var/folders/by/jwzv5d892jgcbjj02895c5280000gn/T/onnxruntime-*"
+        ]
+
+        for temp_pattern in coreml_temp_dirs:
+            if "*" in temp_pattern:
+                # Handle glob patterns
+                for temp_dir in glob.glob(temp_pattern):
+                    if os.path.exists(temp_dir):
+                        try:
+                            shutil.rmtree(temp_dir)
+                            logger.debug(f"Background: Cleaned up CoreML temp directory: {temp_dir}")
+                        except Exception as e:
+                            logger.debug(f"Background: Could not clean up {temp_dir}: {e}")
+            else:
+                # Handle direct paths
+                if os.path.exists(temp_pattern):
+                    try:
+                        # For the local coreml_temp directory, clean files but keep the directory
+                        if temp_pattern == ".cache/coreml_temp":
+                            import glob as file_glob
+                            current_time = time.time()
+                            cleaned_files = 0
+                            
+                            for file_path in file_glob.glob(os.path.join(temp_pattern, "*")):
+                                try:
+                                    # Remove files older than 1 hour
+                                    if os.path.isfile(file_path):
+                                        file_age = current_time - os.path.getmtime(file_path)
+                                        if file_age > 3600:
+                                            os.remove(file_path)
+                                            cleaned_files += 1
+                                    elif os.path.isdir(file_path):
+                                        # Remove subdirectories that might be left from failed operations
+                                        shutil.rmtree(file_path)
+                                        cleaned_files += 1
+                                except Exception:
+                                    pass  # Ignore errors for individual files
+                            
+                            if cleaned_files > 0:
+                                logger.debug(f"Background: Cleaned up {cleaned_files} files in CoreML temp directory: {temp_pattern}")
+                            
+                            # Ensure directory still exists and has proper permissions
+                            os.makedirs(temp_pattern, exist_ok=True)
+                            os.chmod(temp_pattern, 0o755)
+                        else:
+                            # For other directories, remove completely (system temp dirs)
+                            shutil.rmtree(temp_pattern)
+                            logger.debug(f"Background: Cleaned up CoreML temp directory: {temp_pattern}")
+                    except Exception as e:
+                        logger.debug(f"Background: Could not clean up {temp_pattern}: {e}")
+    except Exception as e:
+        logger.debug(f"Background CoreML temp cleanup failed: {e}")
 
 async def perform_cold_start_warmup():
     """
@@ -1000,9 +1024,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not start benchmark scheduler: {e}")
 
-    # Step 4: Start warm-up processes
+    # Step 4: Start warm-up processes (OPTIMIZATION: Only if explicitly enabled)
+    enable_cold_start_warmup = os.environ.get('KOKORO_ENABLE_COLD_START_WARMUP', 'false').lower() == 'true'
+    if enable_cold_start_warmup:
     logger.info(" Step 4/4: Starting warm-up processes...")
     asyncio.create_task(delayed_cold_start_warmup())
+    else:
+        logger.info(" Step 4/4: Cold start warmup skipped (fast_init already handles warming)")
     
     logger.info("✅ Application startup sequence completed successfully")
 

@@ -214,6 +214,57 @@ def _initialize_heavy_components_async(capabilities: Dict[str, Any]) -> None:
     t.start()
 
 
+def _defer_extended_warming(model):
+    """Defer extended warming to background thread"""
+    def _run():
+        try:
+            import time
+            logger.info("Starting background extended warming...")
+            warming_start = time.perf_counter()
+            
+            # Extended warming: Additional inferences for better optimization
+            warming_texts = [
+                "Hello world",  # Short - typical quick request
+                "This is a test sentence to warm up the model."  # Medium - more graph paths
+            ]
+            
+            for i, text in enumerate(warming_texts):
+                try:
+                    model.create(text, "af_heart", 1.0, "en-us")
+                    logger.debug(f"Background warming {i+1}/{len(warming_texts)}: '{text[:20]}...'")
+                except Exception as warmup_err:
+                    logger.debug(f"Background warming {i+1}/{len(warming_texts)} failed: {warmup_err}")
+            
+            # Adaptive provider cache warming (critical for streaming)
+            try:
+                from api.tts.core import _get_cached_model
+                logger.debug("Pre-warming adaptive provider cache...")
+                
+                # Pre-warm CPU model (for short text < 200 chars via adaptive provider)
+                try:
+                    cpu_model = _get_cached_model("CPUExecutionProvider")
+                    cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
+                    logger.debug("✅ Background: CPU model cache ready")
+                except Exception as e:
+                    logger.debug(f"Background CPU model cache warmup failed: {e}")
+                
+                # Pre-warm CoreML model (for medium/long text > 200 chars via adaptive provider)
+                try:
+                    coreml_model = _get_cached_model("CoreMLExecutionProvider")
+                    coreml_model.create("This is a longer test to warm up CoreML", "af_heart", 1.0, "en-us")
+                    logger.debug("✅ Background: CoreML model cache ready")
+                except Exception as e:
+                    logger.debug(f"Background CoreML model cache warmup failed: {e}")
+                
+                logger.info(f"✅ Background extended warming completed in {(time.perf_counter() - warming_start) * 1000:.1f}ms")
+            except Exception as adaptive_err:
+                logger.debug(f"Background adaptive provider cache warmup failed: {adaptive_err}")
+        except Exception as e:
+            logger.debug(f"Background extended warming failed: {e}")
+    
+    t = threading.Thread(target=_run, name="kokoro-extended-warming", daemon=True)
+    t.start()
+
 def _benchmark_and_hotswap_async(capabilities: Dict[str, Any]) -> None:
     """
     Run provider benchmarking in the background and hot-swap if a better provider is found.
@@ -315,12 +366,28 @@ def initialize_model_fast():
     if not is_model_loaded():
         raise RuntimeError("Fast initialization failed for all providers")
 
-    # Enhanced session warming to eliminate cold start penalty
+    # OPTIMIZATION: Minimal session warming - just 1 inference to verify readiness
+    # Extended warming happens in background (see _defer_extended_warming)
+    minimal_warming_only = os.environ.get('KOKORO_MINIMAL_WARMUP', 'true').lower() == 'true'
+    
     try:
-        with step_timer("enhanced_session_warming"):
+        with step_timer("minimal_session_warming"):
             model = get_model()
             if model:
-                # Perform multiple warming inferences to pre-compile execution paths
+                if minimal_warming_only:
+                    # Minimal warmup: 1 inference to verify readiness
+                    try:
+                        start_warmup = time.perf_counter()
+                        model.create("Hi", "af_heart", 1.0, "en-us")
+                        warmup_time = (time.perf_counter() - start_warmup) * 1000
+                        logger.info(f"✅ Minimal warmup completed in {warmup_time:.1f}ms - service ready")
+                        
+                        # Defer extended warming to background
+                        _defer_extended_warming(model)
+                    except Exception as warmup_err:
+                        logger.warning(f"Minimal warmup failed: {warmup_err}")
+                else:
+                    # Full warming (original behavior)
                 warming_texts = [
                     "Hi",  # Very short - forces fast path compilation  
                     "Hello world",  # Short - typical quick request
@@ -338,34 +405,8 @@ def initialize_model_fast():
 
                 logger.info("✅ Enhanced session warming completed - cold start eliminated")
                 
-                # CRITICAL: Pre-warm ALL model caches used by adaptive provider
-                # This prevents 2+ second cache misses when streaming switches providers
-                try:
-                    from api.tts.core import _get_cached_model
-                    logger.info(" Pre-warming model cache for adaptive provider scenarios...")
-                    adaptive_start = time.perf_counter()
-                    
-                    # Get the current active provider (already initialized)
-                    current_provider = "CoreMLExecutionProvider" if "CoreML" in str(model.__class__) else "CPUExecutionProvider"
-                    logger.debug(f"Current provider: {current_provider}")
-                    
-                    # ALWAYS pre-warm CPU model (for short text < 200 chars via adaptive provider)
-                    logger.info(" Pre-warming CPU model for short text...")
-                    cpu_model = _get_cached_model("CPUExecutionProvider")
-                    cpu_model.create("Hi there", "af_heart", 1.0, "en-us")
-                    logger.debug("✅ CPU model cache ready")
-                    
-                    # ALWAYS pre-warm CoreML model (for medium/long text > 200 chars via adaptive provider)
-                    logger.info(" Pre-warming CoreML model for medium/long text...")
-                    coreml_model = _get_cached_model("CoreMLExecutionProvider")
-                    coreml_model.create("This is a longer test to warm up CoreML", "af_heart", 1.0, "en-us")
-                    logger.debug("✅ CoreML model cache ready")
-                    
-                    adaptive_time = (time.perf_counter() - adaptive_start) * 1000
-                    logger.info(f"✅ Adaptive provider cache pre-warming completed in {adaptive_time:.1f}ms")
-                    
-                except Exception as adaptive_err:
-                    logger.debug(f"Adaptive provider cache pre-warming failed: {adaptive_err}")
+                # NOTE: Adaptive provider cache warming moved to _defer_extended_warming()
+                # This avoids blocking startup while still ensuring cache is warm
     except Exception as e:
         logger.debug(f"Enhanced session warming failed: {e}")
 

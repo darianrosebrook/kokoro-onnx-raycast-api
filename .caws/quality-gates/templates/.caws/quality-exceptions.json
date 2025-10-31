@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "description": "Controlled exceptions for quality gates",
+  "gates": {
+    "naming": { "description": "Naming convention violations",
+      "enforcement_levels": { "commit": "warning", "push": "block", "ci": "fail" } },
+    "god_objects": { "description": "File size thresholds",
+      "enforcement_levels": { "commit": "warning", "push": "block", "ci": "fail" } },
+    "duplication": { "description": "Functional duplication",
+      "enforcement_levels": { "commit": "warning", "push": "block", "ci": "fail" } },
+    "documentation": { "description": "Doc quality",
+      "enforcement_levels": { "commit": "warning", "push": "warning", "ci": "block" } },
+    "code_freeze": { "description": "Freeze policy",
+      "enforcement_levels": { "commit": "warning", "push": "block", "ci": "fail" } }
+  },
+  "exceptions": [],
+  "global_overrides": {
+    "code_freeze": {
+      "enabled": true
+    }
+  }
+}

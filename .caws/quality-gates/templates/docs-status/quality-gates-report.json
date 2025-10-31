@@ -1,0 +1,59 @@
+{
+  "timestamp": "2025-10-28T10:00:00Z",
+  "commit": "def456ghi789",
+  "context": "commit",
+  "summary": {
+    "total_gates": 5,
+    "passing": 4,
+    "failing": 1,
+    "warnings": 2
+  },
+  "gates": {
+    "naming": {
+      "status": "pass",
+      "violations": 0,
+      "warnings": 1,
+      "details": "One file with naming exception approved"
+    },
+    "god_objects": {
+      "status": "pass",
+      "violations": 0,
+      "warnings": 0,
+      "details": "All files within size limits"
+    },
+    "duplication": {
+      "status": "pass",
+      "violations": 0,
+      "warnings": 1,
+      "details": "Minor duplication detected but within tolerance"
+    },
+    "documentation": {
+      "status": "warn",
+      "violations": 0,
+      "warnings": 1,
+      "details": "Missing docstrings in 2 functions"
+    },
+    "code_freeze": {
+      "status": "fail",
+      "violations": 3,
+      "warnings": 0,
+      "details": "3 commits violate freeze policy"
+    }
+  },
+  "file_scope": {
+    "total_files": 245,
+    "included_files": 189,
+    "excluded_files": 56,
+    "extensions": {
+      ".ts": 89,
+      ".js": 67,
+      ".rs": 23,
+      ".md": 10
+    }
+  },
+  "recommendations": [
+    "Address code freeze violations before merge",
+    "Add missing docstrings to improve documentation score",
+    "Consider consolidating minor duplications"
+  ]
+}

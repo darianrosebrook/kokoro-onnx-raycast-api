@@ -1,0 +1,58 @@
+# Code Freeze Gate Policy
+blocked_commit_types: [feat, perf]
+allowed_commit_types: [fix, refactor, chore, docs, test, revert]
+
+new_feature_keywords:
+  - feature
+  - add
+  - create
+  - implement
+  - introduce
+  - enhance
+  - extend
+  - expand
+  - upgrade
+  - improve
+  - build
+  - develop
+  - launch
+
+allowed_keywords:
+  - fix
+  - bug
+  - refactor
+  - cleanup
+  - remove
+  - delete
+  - extract
+  - merge
+  - consolidate
+  - decompose
+  - quality gate
+  - crisis
+  - emergency
+  - audit
+  - test
+  - lint
+  - format
+  - doc
+  - readme
+  - comment
+
+allowed_new_file_patterns:
+  - '**/*.md'
+  - '**/*.mdx'
+  - '**/__tests__/**'
+  - '**/*.spec.*'
+  - '**/*.test.*'
+  - '**/tests/**'
+  - '**/fixtures/**'
+  - '**/migrations/**'
+  - '**/.changeset/**'
+
+watch_extensions:
+  [.rs, .ts, .tsx, .js, .jsx, .mjs, .cjs, .go, .java, .kt, .swift, .py, .cpp, .c, .h]
+
+max_total_insertions: 500
+max_per_file_insertions: 300
+default_context: commit

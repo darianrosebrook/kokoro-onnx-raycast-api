@@ -1,0 +1,47 @@
+{
+  "name": "@caws/quality-gates",
+  "version": "1.0.0",
+  "description": "CAWS Quality Gates - Automated code quality enforcement for CAWS projects",
+  "main": "run-quality-gates.mjs",
+  "type": "module",
+  "bin": {
+    "caws-quality-gates": "./run-quality-gates.mjs"
+  },
+  "files": [
+    "*.mjs",
+    "templates/",
+    "docs-status/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node test-debug.mjs",
+    "lint": "echo 'Linting not configured for quality gates'",
+    "typecheck": "echo 'Type checking not required for quality gates (ES modules)'",
+    "validate": "node run-quality-gates.mjs --help",
+    "build": "echo 'Quality gates do not require building'"
+  },
+  "keywords": [
+    "caws",
+    "quality-gates",
+    "code-quality",
+    "automation",
+    "ci-cd"
+  ],
+  "author": "@darianrosebrook",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Paths-Design/coding-agent-working-standard.git",
+    "directory": "packages/quality-gates"
+  },
+  "bugs": {
+    "url": "https://github.com/Paths-Design/coding-agent-working-standard/issues"
+  },
+  "homepage": "https://github.com/Paths-Design/coding-agent-working-standard#readme",
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

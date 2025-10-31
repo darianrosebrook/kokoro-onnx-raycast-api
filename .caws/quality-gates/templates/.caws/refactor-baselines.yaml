@@ -1,0 +1,9 @@
+refs:
+  baseline: origin/main
+initial:
+  god_objects:
+    severe: 11
+    critical: null
+    warning: null
+  duplicate_structs: 658
+  duplicate_filenames: 69

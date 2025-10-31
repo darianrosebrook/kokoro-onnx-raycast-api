@@ -667,7 +667,7 @@ Examples:
 
     base_payload = {
         "voice": args.voice,
-        "speed": args.speed,
+        "speed": max(args.speed, 1.25),  # Ensure speed meets minimum requirement (>=1.25)
         "lang": args.lang,
         # align with OpenAI-compatible schema
         # add format if your server expects {"format":"wav"}

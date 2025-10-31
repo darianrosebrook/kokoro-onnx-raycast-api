@@ -1,0 +1,162 @@
+# CAWS Quality Gates Configuration
+# This file configures thresholds, known god objects, and remediation budgets
+
+# Base reference for comparison (used in push/PR contexts)
+ciBaseRef: 'origin/HEAD'
+
+# God object thresholds (in SLOC - Source Lines of Code)
+thresholds:
+  severe: 3000 # Immediate block - files this large are architectural debt
+  critical: 2000 # Block in CI or with stricter enforcement
+  warning: 1750 # Warn developers - approaching god object territory
+  target: 1500 # Long-term target for maintainable files
+
+# Known god objects in the codebase (glob patterns)
+# CAWS will discover these dynamically in any project
+knownGodObjects:
+  # Common patterns for different project types:
+  # Rust projects:
+  - '**/src/main.rs' # Main entry points
+  - '**/src/lib.rs' # Library roots
+  - '**/src/server.rs' # Server implementations
+  - '**/src/database.rs' # Database modules
+  - '**/src/api.rs' # API modules
+
+  # TypeScript/JavaScript projects:
+  - '**/src/index.ts' # Main entry points
+  - '**/src/app.ts' # Application modules
+  - '**/src/server.ts' # Server implementations
+  - '**/src/database.ts' # Database modules
+  - '**/src/api.ts' # API modules
+
+  # Python projects:
+  - '**/main.py' # Main entry points
+  - '**/app.py' # Application modules
+  - '**/server.py' # Server implementations
+  - '**/database.py' # Database modules
+  - '**/api.py' # API modules
+
+  # Add your project-specific god objects here:
+  # - "src/my-large-module.rs"
+  # - "packages/my-package/src/index.ts"
+
+# Remediation budgets: allow N SLOC delta on known god objects while refactoring
+# This prevents blocking active refactoring work while still preventing explosive growth
+knownGodObjectBudgets:
+  # Project-agnostic budgets for common patterns:
+
+  # Main entry points - no growth allowed (critical architectural files)
+  '**/src/main.rs': 0
+  '**/src/index.ts': 0
+  '**/main.py': 0
+
+  # Server implementations - small headroom for protocol updates
+  '**/src/server.rs': 25
+  '**/src/server.ts': 25
+  '**/server.py': 25
+
+  # Database modules - small headroom for schema changes
+  '**/src/database.rs': 25
+  '**/src/database.ts': 25
+  '**/database.py': 25
+
+  # API modules - small headroom for endpoint additions
+  '**/src/api.rs': 25
+  '**/src/api.ts': 25
+  '**/api.py': 25
+
+  # Library roots - moderate headroom for feature additions
+  '**/src/lib.rs': 50
+  '**/src/app.ts': 50
+  '**/app.py': 50
+
+  # Add your project-specific budgets here:
+  # "src/my-large-module.rs": 0
+  # "packages/my-package/src/index.ts": 25
+
+# File patterns to exclude from god object checking
+godObjectExcludeGlobs:
+  - '**/target/**' # Rust build artifacts
+  - '**/node_modules/**' # Node.js dependencies
+  - '**/dist/**' # Build outputs
+  - '**/build/**' # Build outputs
+  - '**/*.generated.*' # Generated files
+
+# File type presets for different languages
+presets:
+  rust: ['**/*.{rs,toml}', 'Cargo.toml', 'Cargo.lock']
+  web: ['**/*.{ts,tsx,js,jsx,mjs,cjs,cts,mts}', '**/*.{json,yml,yaml}']
+  docs: ['**/*.{md,mdx}']
+  styles: ['**/*.{css,scss,less}']
+  infra:
+    [
+      'Dockerfile*',
+      'docker/**',
+      '**/*.{sh,bash,zsh,fish}',
+      'Makefile',
+      '.editorconfig',
+      '.gitattributes',
+      '.gitignore',
+      '.nvmrc',
+      '.tool-versions',
+      '**/*.{nix,tf,tfvars}',
+      '**/*.{yml,yaml}',
+      '**/*.{xml,plist}',
+      '**/*.{proto,sql}',
+    ]
+
+# Which presets to use for file discovery
+usePresets: ['rust', 'web', 'docs', 'styles', 'infra']
+
+# Additional file patterns to include
+includeGlobs: []
+
+# Additional file patterns to exclude
+excludeGlobs: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/target/**', '**/.git/**']
+
+# Linguist attribute filtering controls
+linguist:
+  excludeGenerated: true # Exclude files marked as generated
+  excludeVendored: true # Exclude files marked as vendored
+  excludeDocumentation: false # Include docs for link checks/spellcheck
+
+# Monorepo configuration
+monorepo:
+  detectPackages: false
+  packageMarkers: ['package.json', 'Cargo.toml']
+
+# Per-gate exclusions (gate id -> array of globs)
+gateExclusions: {}
+# Documentation:
+#
+# How god object detection works:
+# 1. Files are checked against SLOC thresholds (severe/critical/warning)
+# 2. Regression detection: compares staged content vs base ref
+# 3. Only blocks when:
+#    - File crosses a threshold (e.g., 1999 → 2001 SLOC)
+#    - Known god object exceeds its remediation budget
+# 4. SLOC counting ignores blank lines and comments (Rust-aware)
+#
+# Examples:
+# - File at 1720 SLOC base, staged to 2010 → BLOCKS (crossed critical threshold)
+# - Known god object with budget 25, delta +31 → BLOCKS (exceeded budget)
+# - Known god object with budget 25, delta +12 → ALLOWS (within budget)
+# - Comment-only change → ALLOWS (SLOC doesn't increase)
+#
+# Benefits:
+# - Fair: doesn't punish authors for pre-existing bloat
+# - Git-correct: reads staged content from index, not working tree
+# - Regression-aware: only blocks when your changes make things worse
+# - Configurable: thresholds and budgets can be adjusted per project
+# - Project-agnostic: works with any project structure
+#
+# Discovering god objects in your project:
+# 1. Run: node packages/quality-gates/check-god-objects.js ci
+# 2. Look for files that exceed warning threshold (1750 SLOC)
+# 3. Add them to knownGodObjects with appropriate budgets
+# 4. Consider refactoring files that exceed critical threshold (2000 SLOC)
+#
+# Project-specific configuration:
+# - Update knownGodObjects with your project's large files
+# - Set appropriate budgets based on refactoring plans
+# - Adjust thresholds if your project has different size expectations
