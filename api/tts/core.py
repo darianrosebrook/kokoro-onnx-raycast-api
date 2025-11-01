@@ -152,6 +152,30 @@ def _get_cached_model(provider: str) -> Kokoro:
         return _model_cache[provider]
 
 
+def get_or_create_cached_model(provider: str) -> Kokoro:
+    """
+    Public API to get or create a cached Kokoro model for a provider.
+    
+    This function provides thread-safe access to the shared model cache,
+    ensuring singleton instances per provider to avoid duplicate model loading.
+    
+    @param provider: Provider name (e.g., "CPUExecutionProvider", "CoreMLExecutionProvider")
+    @returns: Cached Kokoro model instance
+    """
+    return _get_cached_model(provider)
+
+
+def is_model_cached(provider: str) -> bool:
+    """
+    Check if a model is already cached for the given provider.
+    
+    @param provider: Provider name to check
+    @returns: True if model is cached, False otherwise
+    """
+    with _model_cache_lock:
+        return provider in _model_cache
+
+
 def _set_model_cache_last_refresh(ts: float) -> None:
     global _model_cache_last_refresh
     _model_cache_last_refresh = ts
@@ -611,6 +635,17 @@ async def stream_tts_audio(
     """
     request_id = request.headers.get("x-request-id", "no-id")
     
+    # CRITICAL: Reset session state at start of each request to prevent state leakage
+    # This ensures consecutive requests don't interfere with each other
+    try:
+        from api.model.sessions.dual_session import get_dual_session_manager
+        dual_session_manager = get_dual_session_manager()
+        if dual_session_manager:
+            dual_session_manager.reset_session_state()
+            logger.debug(f"[{request_id}] Session state reset for new request")
+    except Exception as e:
+        logger.debug(f"[{request_id}] Could not reset session state: {e}")
+    
     # Start server-side performance tracking
     server_tracker.start_request(request_id, text, voice, speed)
     server_tracker.log_event(request_id, "PROCESSING_START", {
@@ -719,18 +754,41 @@ async def stream_tts_audio(
 
                 if cached_primer is not None and cached_primer.size > 0:
                     try:
+                        # CRITICAL FIX: The cache key already verified the match (we got a hit)
+                        # But we need to ensure 'rest' is valid before skipping 'early' generation
+                        # If 'rest' is empty or whitespace, the cached primer was the entire segment
                         scaled = np.int16(np.asarray(cached_primer, dtype=np.float32) * 32767)
                         primer_bytes = scaled.tobytes()
-                        yield primer_bytes[:max(1024, len(primer_bytes) // 4)]
-                        if len(primer_bytes) > 2048:
-                            yield primer_bytes[max(1024, len(primer_bytes) // 4):max(2048, len(primer_bytes) // 2)]
-                        logger.info(f"[{request_id}] Primer emitted from cache ({len(primer_bytes)} bytes)")
+                        
+                        # Yield the FULL primer
+                        yield primer_bytes
+                        logger.info(f"[{request_id}] Primer emitted from cache ({len(primer_bytes)} bytes, early='{early[:50]}...')")
+                        
+                        # CRITICAL FIX: Verify 'rest' is valid before using it
+                        # If 'rest' is empty or whitespace, the cached primer covered the entire first segment
+                        if rest and len(rest.strip()) > 0:
+                            # Generate the rest of the first segment plus remaining segments
+                            segments_override = [rest] + segments[1:]
+                            logger.debug(f"[{request_id}] Generating rest segment after cached primer: '{rest[:50]}...'")
+                        else:
+                            # If rest is empty, the primer was the entire first segment
+                            # Skip the first segment entirely and continue with remaining segments
+                            logger.warning(f"[{request_id}] Primer cache 'rest' is empty - cached primer covered entire first segment")
+                            segments_override = segments[1:] if len(segments) > 1 else []
+                        # Don't add 0 to fast_indices since we're skipping the early segment
                     except Exception as e:
-                        logger.debug(f"[{request_id}] Primer emit failed: {e}")
+                        logger.debug(f"[{request_id}] Primer emit failed: {e}, falling back to generation")
+                        # Fallback: if primer emit fails, generate normally
+                        segments_override = [early, rest] + segments[1:]
+                        fast_indices.add(0)
+                        primer_hint_key = primer_key
                 else:
                     segments_override = [early, rest] + segments[1:]
                     fast_indices.add(0)
                     primer_hint_key = primer_key
+            else:
+                # No split possible - use original segments
+                segments_override = None
 
         # WAV header (if requested)
         if format.lower() == "wav":
@@ -793,8 +851,19 @@ async def stream_tts_audio(
 
         while current_index < n:
             try:
-                (idx, audio_np, provider), gen_time, use_fast = await current_future
-                logger.debug(f"[{request_id}] Segment {current_index} generated in {gen_time:.3f}s via {provider}")
+                # CRITICAL FIX: Check if current_future is done before awaiting
+                # If it's already done (from prefetching), we can get the result immediately
+                if current_future is None:
+                    break
+                
+                if current_future.done():
+                    # Segment is already ready - get result immediately (no await delay)
+                    (idx, audio_np, provider), gen_time, use_fast = current_future.result()
+                    logger.debug(f"[{request_id}] Segment {current_index} generated in {gen_time:.3f}s via {provider} (prefetched)")
+                else:
+                    # Segment still generating - await it
+                    (idx, audio_np, provider), gen_time, use_fast = await current_future
+                    logger.debug(f"[{request_id}] Segment {current_index} generated in {gen_time:.3f}s via {provider}")
 
                 if audio_np is None:
                     logger.error(f"[{request_id}] Segment {current_index} produced no audio, skipping")
@@ -829,6 +898,12 @@ async def stream_tts_audio(
 
                 while offset < len(segment_bytes):
                     chunk = segment_bytes[offset:offset + chunk_size]
+                    
+                    # FIX: Skip empty chunks to prevent buffer issues
+                    if len(chunk) == 0:
+                        logger.warning(f"[{request_id}] Empty chunk detected at offset {offset}, skipping")
+                        break
+                    
                     current_time = time.monotonic()
                     chunk_state["chunk_count"] += 1
 
@@ -855,9 +930,24 @@ async def stream_tts_audio(
                 # Clean up segment memory
                 del audio_np, scaled, segment_bytes
 
-                # Move to next
+                # Move to next segment
                 current_index += 1
-                current_future = next_future if next_future is not None else None
+                
+                # CRITICAL FIX: Check if next segment is already ready to eliminate gap
+                # If next_future is done, switch to it immediately; otherwise await it
+                if next_future is not None:
+                    if next_future.done():
+                        # Next segment is ready - switch to it immediately (no await needed)
+                        logger.debug(f"[{request_id}] Next segment ready - switching immediately (no gap)")
+                        current_future = next_future
+                    else:
+                        # Next segment still generating - await it (will wait if needed)
+                        logger.debug(f"[{request_id}] Next segment still generating - will await")
+                        current_future = next_future
+                else:
+                    current_future = None
+                
+                # Start prefetching the segment after next
                 next_future = asyncio.create_task(_generate_segment_async(current_index + 1)) if (current_index + 1) < n else None
 
                 # Track audio size variation only at the very end

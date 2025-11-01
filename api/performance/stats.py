@@ -582,15 +582,26 @@ def update_endpoint_performance_stats(endpoint: str, processing_time: float, suc
             
             if time_since_last_cleanup >= cooldown_period:
                 logger.error("Severe performance degradation detected - triggering emergency session cleanup")
+                # CRITICAL FIX: Run cleanup in background thread to avoid blocking current request
+                # This prevents emergency cleanup from blocking subsequent requests
                 try:
-                    from api.model.sessions.dual_session import get_dual_session_manager
-                    dual_session_manager = get_dual_session_manager()
-                    if dual_session_manager:
-                        dual_session_manager.cleanup_sessions()
-                        update_endpoint_performance_stats._last_emergency_cleanup = current_time
-                        logger.info("Emergency session cleanup completed")
+                    import threading
+                    def run_cleanup_async():
+                        try:
+                            from api.model.sessions.dual_session import get_dual_session_manager
+                            dual_session_manager = get_dual_session_manager()
+                            if dual_session_manager:
+                                dual_session_manager.cleanup_sessions()
+                                update_endpoint_performance_stats._last_emergency_cleanup = time.time()
+                                logger.info("Emergency session cleanup completed")
+                        except Exception as cleanup_error:
+                            logger.error(f"Emergency cleanup failed: {cleanup_error}")
+                    
+                    cleanup_thread = threading.Thread(target=run_cleanup_async, daemon=True)
+                    cleanup_thread.start()
+                    update_endpoint_performance_stats._last_emergency_cleanup = current_time
                 except Exception as cleanup_error:
-                    logger.error(f"Emergency cleanup failed: {cleanup_error}")
+                    logger.error(f"Emergency cleanup thread start failed: {cleanup_error}")
             else:
                 remaining_cooldown = cooldown_period - time_since_last_cleanup
                 logger.warning(f"Emergency cleanup on cooldown - {remaining_cooldown:.0f}s remaining")
