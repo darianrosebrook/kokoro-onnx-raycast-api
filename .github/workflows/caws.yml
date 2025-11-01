@@ -235,7 +235,7 @@ jobs:
           python3 scripts/simple_gates.py trust --tier ${{ needs.setup.outputs.risk }} --profile ${{ needs.setup.outputs.profile }}
       
       - name: Upload Provenance
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v5
         with:
           name: provenance
           path: .agent/provenance.json
