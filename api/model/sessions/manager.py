@@ -94,6 +94,9 @@ def set_model(model: Kokoro, provider: str) -> None:
     """
     Set the global model instance and provider.
     
+    Also adds the model to the shared cache to avoid duplicate model loading
+    during background operations (e.g., extended warming).
+    
     @param model: The Kokoro model instance
     @param provider: The provider name used for this model
     """
@@ -103,6 +106,24 @@ def set_model(model: Kokoro, provider: str) -> None:
         kokoro_model = model
         _active_provider = provider
         model_loaded = True
+    
+    # OPTIMIZATION: Add model to shared cache to avoid duplicate loading
+    # This ensures background operations (e.g., extended warming) can reuse the model
+    try:
+        from api.tts.core import _model_cache, _model_cache_lock
+        
+        with _model_cache_lock:
+            if provider not in _model_cache:
+                _model_cache[provider] = model
+                logger.debug(f"✅ Added model to shared cache for provider: {provider}")
+            else:
+                logger.debug(f"ℹ Model already in cache for provider: {provider}, skipping")
+    except ImportError:
+        # Fallback if cache not available
+        logger.debug("Could not add model to shared cache (cache module not available)")
+    except Exception as e:
+        # Don't fail if cache update fails
+        logger.debug(f"Could not add model to shared cache: {e}")
     
     logger.info(f"Model set with provider: {provider}")
 

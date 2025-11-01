@@ -146,7 +146,9 @@ class CacheCleanupManager:
         except Exception as e:
             errors.append(f"Error during age cleanup: {e}")
         
-        logger.info(f" Age cleanup: removed {removed_files} files, {removed_dirs} dirs, freed {freed_space/1024/1024:.1f}MB")
+        # Only log if we actually cleaned something
+        if removed_files > 0 or removed_dirs > 0:
+            logger.info(f" Age cleanup: removed {removed_files} files, {removed_dirs} dirs, freed {freed_space/1024/1024:.1f}MB")
         
         return {
             'removed_files': removed_files,
@@ -190,7 +192,9 @@ class CacheCleanupManager:
         except Exception as e:
             errors.append(f"Error during temp dir cleanup: {e}")
         
-        logger.info(f" Temp dir cleanup: removed {removed_dirs} dirs, freed {freed_space/1024/1024:.1f}MB")
+        # Only log if we actually cleaned something
+        if removed_dirs > 0:
+            logger.info(f" Temp dir cleanup: removed {removed_dirs} dirs, freed {freed_space/1024/1024:.1f}MB")
         
         return {
             'removed_dirs': removed_dirs,
@@ -246,7 +250,9 @@ class CacheCleanupManager:
                 logger.warning(f" Error removing file {file_path}: {e}")
                 continue
         
-        logger.info(f" Size cleanup: removed {removed_files} files, freed {freed_space/1024/1024:.1f}MB")
+        # Only log if we actually cleaned something
+        if removed_files > 0:
+            logger.info(f" Size cleanup: removed {removed_files} files, freed {freed_space/1024/1024:.1f}MB")
         
         return {
             'removed_files': removed_files,
@@ -288,7 +294,9 @@ class CacheCleanupManager:
                 errors.append(f"Error processing pattern {pattern}: {e}")
                 continue
         
-        logger.info(f" Pattern cleanup: removed {removed_files} files, freed {freed_space/1024/1024:.1f}MB")
+        # Only log if we actually cleaned something
+        if removed_files > 0:
+            logger.info(f" Pattern cleanup: removed {removed_files} files, freed {freed_space/1024/1024:.1f}MB")
         
         return {
             'removed_files': removed_files,
@@ -303,8 +311,6 @@ class CacheCleanupManager:
         
         @returns Combined cleanup statistics
         """
-        logger.info(" Starting comprehensive cache cleanup...")
-        
         initial_stats = self.get_cache_stats()
         
         # Run all cleanup methods
@@ -325,7 +331,12 @@ class CacheCleanupManager:
             pattern_result.get('freed_space_mb', 0)
         )
         
-        logger.info(f" Cache cleanup completed: freed {total_freed:.1f}MB")
+        # Only log if we actually cleaned something
+        if total_freed > 0:
+            logger.info(f"✅ Cache cleanup completed: freed {total_freed:.1f}MB")
+        else:
+            # Use debug level when nothing was cleaned
+            logger.debug(f"Cache cleanup check: no cleanup needed ({initial_stats.get('total_size_mb', 0):.1f}MB)")
         
         return {
             'initial_size_mb': initial_stats.get('total_size_mb', 0),
