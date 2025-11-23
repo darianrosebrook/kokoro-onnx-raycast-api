@@ -1067,6 +1067,23 @@ class AudioProcessor extends EventEmitter {
         consecutiveEmptyBuffers = 0;
         isWaitingForMoreData = false;
 
+        // CRITICAL FIX: Check if process finished while ending stream
+        if (this.isEndingStream) {
+          const processFinished = !this.audioProcess || 
+                                  this.audioProcess.killed || 
+                                  this.audioProcess.exitCode !== null;
+          
+          if (processFinished) {
+            // Process finished while ending stream - complete even if buffer has data
+            // (buffer might have data that was buffered but not yet consumed)
+            console.log(
+              `[${this.instanceId}]  End stream requested, process finished, buffer has ${this.ringBuffer.size} bytes remaining - completing naturally`
+            );
+            this._completePlaybackSession();
+            return;
+          }
+        }
+
         const chunk = this.ringBuffer.read(chunkSize);
         lastChunkReceived = Date.now();
         totalChunksProcessed++;
@@ -1107,8 +1124,33 @@ class AudioProcessor extends EventEmitter {
         // Continue processing
         setTimeout(processChunk, nextDelay);
       } else {
-        // Buffer empty - this is normal between segments
+        // Buffer empty or low - this is normal between segments
         consecutiveEmptyBuffers++;
+
+        // CRITICAL FIX: If we're ending stream and buffer is empty/low AND process finished, complete
+        if (this.isEndingStream) {
+          const processFinished = !this.audioProcess || 
+                                  this.audioProcess.killed || 
+                                  this.audioProcess.exitCode !== null;
+          
+          // If buffer is empty or very low (< 1% utilization) and process finished, complete
+          const bufferLow = this.ringBuffer.size === 0 || this.ringBuffer.utilization < 0.01;
+          
+          if (bufferLow && processFinished) {
+            console.log(
+              `[${this.instanceId}]  End stream requested, buffer empty/low (${this.ringBuffer.size} bytes, ${(this.ringBuffer.utilization * 100).toFixed(1)}%), and process finished - completing naturally`
+            );
+            this._completePlaybackSession();
+            return;
+          } else if (bufferLow && !processFinished) {
+            // Buffer empty/low but process still running - log and continue waiting
+            if (consecutiveEmptyBuffers % 10 === 0) {
+              console.log(
+                `[${this.instanceId}]  End stream requested, buffer empty/low (${this.ringBuffer.size} bytes), but audio process still running - waiting for process to finish`
+              );
+            }
+          }
+        }
 
         if (!isWaitingForMoreData) {
           console.log(
@@ -1920,6 +1962,17 @@ class AudioDaemon extends EventEmitter {
         });
         this.audioProcessor.isEndingStream = true;
         
+        // CRITICAL FIX: Close stdin to signal no more data is coming
+        // This allows the audio process to finish playing what it has and exit naturally
+        if (this.audioProcessor.audioProcess && 
+            this.audioProcessor.audioProcess.stdin && 
+            !this.audioProcessor.audioProcess.stdin.destroyed &&
+            !this.audioProcessor.audioProcess.killed &&
+            this.audioProcessor.audioProcess.exitCode === null) {
+          console.log(`[${this.instanceId}] Closing stdin to signal end of stream`);
+          this.audioProcessor.audioProcess.stdin.end();
+        }
+        
         // CRITICAL FIX: Check buffer AND process state immediately
         const bufferEmpty = this.audioProcessor.ringBuffer.size === 0;
         const processFinished = !this.audioProcessor.audioProcess || 
@@ -1939,11 +1992,11 @@ class AudioDaemon extends EventEmitter {
           );
           // Process exit handler will call _completePlaybackSession()
         } else {
-          // Buffer not empty - wait for buffer to empty
+          // Buffer not empty - wait for buffer to empty and process to finish
           console.log(
-            `[${this.instanceId}] Buffer has ${this.audioProcessor.ringBuffer.size} bytes - will complete when empty`
+            `[${this.instanceId}] Buffer has ${this.audioProcessor.ringBuffer.size} bytes - will complete when empty and process finishes`
           );
-          // Process loop will check and complete when buffer empties
+          // Process loop will check and complete when buffer empties or process finishes
         }
         break;
 
