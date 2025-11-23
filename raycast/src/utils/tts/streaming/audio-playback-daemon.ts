@@ -1213,8 +1213,16 @@ export class AudioPlaybackDaemon extends EventEmitter {
           ? (this.stats.bytesReceived / 48000) * 1000
           : 0;
         
-        // Calculate max wait time: expected duration + 2s safety margin, capped at 11s
-        const maxWaitTime = Math.min(expectedDurationMs + 2000, 11000);
+        // Calculate max wait time: expected duration + buffer (2s) + small margin (1s)
+        // This should fire when audio SHOULD be done, but before client timeout
+        // Client timeout is: Math.max(expectedDurationMs + 5000, 15000), capped at 120000
+        const clientTimeout = Math.min(
+          Math.max(expectedDurationMs + 5000, 15000),
+          120000
+        );
+        // Wait for expected duration + 3s buffer, but ensure we're at least 3s before client timeout
+        const calculatedWaitTime = expectedDurationMs + 3000;
+        const maxWaitTime = Math.min(calculatedWaitTime, clientTimeout - 3000);
         
         if (elapsed > maxWaitTime) {
           console.log("Completion fallback: periodic check - waited longer than expected, completing anyway", {
