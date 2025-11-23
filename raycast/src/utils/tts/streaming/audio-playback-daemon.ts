@@ -1544,6 +1544,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       
       // CRITICAL FIX: Time-based fallback - if we've been waiting longer than expected duration + buffer,
       // complete anyway even if daemon is still reporting "playing" state
+      // This must fire BEFORE the client timeout (which is typically expectedDuration + 5s, min 15s, max 120s)
       if (this._waitingForCompletion && this._waitStartTime > 0) {
         const elapsed = Date.now() - this._waitStartTime;
         const expectedDurationMs = this.stats.bytesReceived > 0 
@@ -1552,10 +1553,12 @@ export class AudioPlaybackDaemon extends EventEmitter {
         const bufferDurationMs = bufferUtilization > 0 && expectedDurationMs > 0
           ? (bufferUtilization * expectedDurationMs)  // Estimate buffer duration from utilization
           : 0;
-        const maxWaitTime = Math.max(
-          expectedDurationMs + bufferDurationMs + 2000,  // Expected + buffer + 2s safety margin
-          Math.min(expectedDurationMs * 1.5 + 3000, 12000)  // Cap at 12s to beat client timeout
-        );
+        
+        // Calculate max wait time, ensuring it's always less than client timeout
+        // Client timeout is: Math.max(expectedDurationMs + 5000, 15000), capped at 120000
+        // So we cap at 11s to ensure we beat the client timeout (which is at least 15s)
+        const calculatedWaitTime = expectedDurationMs + bufferDurationMs + 2000;  // Expected + buffer + 2s safety margin
+        const maxWaitTime = Math.min(calculatedWaitTime, 11000);  // Cap at 11s to beat client timeout
         
         if (elapsed > maxWaitTime) {
           console.log("Completion fallback: time-based - waited longer than expected, completing anyway", {
@@ -1567,6 +1570,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
             expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
             bufferDuration: bufferDurationMs > 0 ? `${(bufferDurationMs / 1000).toFixed(1)}s` : "0s",
             maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
+            calculatedWaitTime: `${(calculatedWaitTime / 1000).toFixed(1)}s`,
           });
           this._waitingForCompletion = false;
           this._waitStartTime = 0;
