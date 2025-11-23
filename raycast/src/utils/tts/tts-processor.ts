@@ -536,7 +536,7 @@ export class TTSSpeechProcessor {
         });
 
         const streamingContext: StreamingContext = {
-          requestId: `segment-${segment.index}-${Date.now()}`,
+          requestId: requestId, // Use the same requestId as the main request for performance tracking
           segments: this.textParagraphs.map((s) => s.text),
           currentSegmentIndex: segment.index,
           totalSegments: this.textParagraphs.length,
