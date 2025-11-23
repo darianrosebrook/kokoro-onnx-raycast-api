@@ -2007,31 +2007,50 @@ class AudioDaemon extends EventEmitter {
         
         // CRITICAL FIX: Set up timeout-based completion check
         // If process doesn't exit naturally within expected duration + buffer, complete anyway
-        const expectedDuration = this.audioProcessor.audioDurationMs || 0;
+        // Use audioDurationMs if available, otherwise fall back to stats.expectedDuration
+        const expectedDuration = this.audioProcessor.audioDurationMs || 
+                                 this.audioProcessor.stats.expectedDuration || 
+                                 0;
         const bufferDuration = this.audioProcessor.ringBuffer.size > 0
           ? (this.audioProcessor.ringBuffer.size / this.audioProcessor.format.bytesPerSecond) * 1000
           : 0;
+        
+        // Use a more aggressive timeout: expected duration + buffer + 1s safety margin
+        // This ensures we complete before the client timeout (which is typically 2x duration + 10s)
         const completionTimeout = Math.max(
-          expectedDuration + bufferDuration + 2000, // Expected duration + buffer + 2s safety margin
-          5000 // Minimum 5 seconds
+          expectedDuration + bufferDuration + 1000, // Expected duration + buffer + 1s safety margin
+          Math.min(expectedDuration * 1.5 + 2000, 12000) // Cap at 12s to ensure we beat client timeout
         );
         
-        console.log(`[${this.instanceId}] Setting completion timeout: ${completionTimeout.toFixed(0)}ms (expected: ${expectedDuration.toFixed(0)}ms, buffer: ${bufferDuration.toFixed(0)}ms)`);
+        console.log(`[${this.instanceId}] Setting completion timeout: ${completionTimeout.toFixed(0)}ms (expected: ${expectedDuration.toFixed(0)}ms, buffer: ${bufferDuration.toFixed(0)}ms, audioDurationMs: ${this.audioProcessor.audioDurationMs?.toFixed(0) || 'N/A'}, statsExpected: ${this.audioProcessor.stats.expectedDuration?.toFixed(0) || 'N/A'})`);
         
         // Clear any existing timeout
         if (this.audioProcessor._endStreamTimeout) {
           clearTimeout(this.audioProcessor._endStreamTimeout);
+          console.log(`[${this.instanceId}] Cleared existing end stream timeout`);
         }
         
         // Set timeout to force completion if process doesn't exit naturally
         this.audioProcessor._endStreamTimeout = setTimeout(() => {
+          console.log(`[${this.instanceId}] Completion timeout callback fired`, {
+            isEndingStream: this.audioProcessor.isEndingStream,
+            completionEmitted: this.audioProcessor._completionEmitted,
+            bufferSize: this.audioProcessor.ringBuffer.size,
+            processExitCode: this.audioProcessor.audioProcess?.exitCode,
+          });
           if (this.audioProcessor.isEndingStream && !this.audioProcessor._completionEmitted) {
             console.log(
-              `[${this.instanceId}] Completion timeout reached - forcing completion (process may still be running)`
+              `[${this.instanceId}] Completion timeout reached (${completionTimeout.toFixed(0)}ms) - forcing completion (process may still be running)`
             );
             this.audioProcessor._completePlaybackSession();
+          } else {
+            console.log(
+              `[${this.instanceId}] Completion timeout reached but conditions not met - isEndingStream: ${this.audioProcessor.isEndingStream}, completionEmitted: ${this.audioProcessor._completionEmitted}`
+            );
           }
         }, completionTimeout);
+        
+        console.log(`[${this.instanceId}] Completion timeout scheduled for ${completionTimeout.toFixed(0)}ms from now`);
         
         // CRITICAL FIX: Check buffer AND process state immediately
         const bufferEmpty = this.audioProcessor.ringBuffer.size === 0;
