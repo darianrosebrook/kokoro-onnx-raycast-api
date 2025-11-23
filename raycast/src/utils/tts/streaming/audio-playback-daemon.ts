@@ -191,6 +191,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
   private isPaused: boolean = false;
   private currentAudioFormat: AudioFormat;
   private sequenceNumber: number = 0;
+  private _statusUpdateCount: number = 0;
+  private _waitingForCompletion: boolean = false;
 
   constructor(config: Partial<TTSProcessorConfig> = {}) {
     super();
@@ -1100,10 +1102,24 @@ export class AudioPlaybackDaemon extends EventEmitter {
     };
 
     await this.sendMessage(endMessage);
+    console.log("End stream message sent to daemon, waiting for completion", {
+      component: this.name,
+      method: "endStream",
+      totalChunks: this.stats.chunksReceived,
+      totalBytes: this.stats.bytesReceived,
+    });
 
     // Wait for the audio to finish playing naturally
     // The daemon will send a "completed" event when audio finishes
+    const waitStartTime = Date.now();
     await this.waitForAudioCompletion();
+    const waitDuration = Date.now() - waitStartTime;
+
+    console.log("Audio completion wait finished", {
+      component: this.name,
+      method: "endStream",
+      waitDuration: `${waitDuration}ms`,
+    });
 
     // Update stats
     this.stats.streamingDuration = Date.now() - (this.stats.streamingDuration || Date.now());
@@ -1114,6 +1130,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       method: "endStream",
       streamingDuration: this.stats.streamingDuration,
       efficiency: this.stats.efficiency,
+      waitDuration: `${waitDuration}ms`,
     });
   }
 
@@ -1122,36 +1139,84 @@ export class AudioPlaybackDaemon extends EventEmitter {
    */
   private async waitForAudioCompletion(): Promise<void> {
     return new Promise((resolve, reject) => {
+      console.log("Waiting for audio completion", {
+        component: this.name,
+        method: "waitForAudioCompletion",
+        isPlaying: this.isPlaying,
+        isConnected: this.daemonProcess?.isConnected,
+      });
+
+      // Mark that we're waiting for completion (used by status update handler)
+      this._waitingForCompletion = true;
+
       const timeout = setTimeout(() => {
         console.warn("Audio completion timeout - forcing stop", {
           component: this.name,
           method: "waitForAudioCompletion",
+          elapsed: "120s",
         });
+        this._waitingForCompletion = false;
         // Force stop if timeout occurs
         this.forceStop();
         resolve();
       }, 120000); // 120 second timeout (2 minutes) - extended for long TTS generation
 
+      // Add periodic progress logging
+      const progressInterval = setInterval(() => {
+        console.log("Still waiting for audio completion", {
+          component: this.name,
+          method: "waitForAudioCompletion",
+          isPlaying: this.isPlaying,
+          isConnected: this.daemonProcess?.isConnected,
+          totalBytes: this.stats.bytesReceived,
+          expectedDuration: this.stats.bytesReceived > 0 
+            ? `${(this.stats.bytesReceived / 48000).toFixed(1)}s` 
+            : "unknown",
+        });
+      }, 10000); // Log every 10 seconds
+
       const onCompleted = () => {
         clearTimeout(timeout);
+        clearInterval(progressInterval);
+        this._waitingForCompletion = false;
         this.removeListener("completed", onCompleted);
         this.removeListener("error", onError);
+        console.log("Audio completion event received", {
+          component: this.name,
+          method: "waitForAudioCompletion",
+        });
         resolve();
       };
 
       const onError = (error: Error) => {
         clearTimeout(timeout);
+        clearInterval(progressInterval);
         this.removeListener("completed", onCompleted);
         this.removeListener("error", onError);
+        console.warn("Audio completion error", {
+          component: this.name,
+          method: "waitForAudioCompletion",
+          error: error.message,
+        });
         reject(error);
       };
 
+      // CRITICAL FIX: Set up listeners FIRST to avoid race condition
+      // If completion happens between check and listener setup, we'll catch it
       this.once("completed", onCompleted);
       this.once("error", onError);
 
-      // Check if already completed
+      // Check if already completed AFTER setting up listeners
+      // This ensures we don't miss a completion that happens during setup
+      // Note: We check isPlaying OR connection status - if not playing but connected,
+      // we should still wait for the daemon to signal completion
       if (!this.isPlaying && !this.daemonProcess?.isConnected) {
+        console.log("Already completed (not playing and not connected)", {
+          component: this.name,
+          method: "waitForAudioCompletion",
+        });
         clearTimeout(timeout);
+        clearInterval(progressInterval);
         resolve();
       }
     });
@@ -1402,18 +1467,58 @@ export class AudioPlaybackDaemon extends EventEmitter {
   /**
    * Handle status update messages from the daemon
    */
-  private handleStatusUpdate(_message: DaemonMessage): void {
-    // console.warn("Handling status update message", {
-    //   component: this.name,
-    //   method: "handleStatusUpdate",
-    //   status: message.data,
-    // });
-    // For now, we'll just log the status
-    // console.log("Received status update from daemon", {
-    //   component: this.name,
-    //   method: "handleStatusUpdate",
-    //   status: message.data,
-    // });
+  private handleStatusUpdate(message: DaemonMessage): void {
+    // Extract state from status message
+    const statusData = message.data as { state?: string; bufferUtilization?: number } | undefined;
+    const state = statusData?.state;
+    const bufferUtilization = statusData?.bufferUtilization ?? 0;
+
+    // CRITICAL FIX: Update isPlaying based on daemon status
+    // This helps detect completion when the daemon reports "idle" state
+    if (state === "idle" || state === "completed") {
+      if (this.isPlaying) {
+        console.log("Daemon reported idle/completed state - updating isPlaying", {
+          component: this.name,
+          method: "handleStatusUpdate",
+          previousState: this.isPlaying,
+          newState: false,
+          bufferUtilization,
+        });
+        this.isPlaying = false;
+
+        // CRITICAL FIX: If we're waiting for completion and daemon reports idle with empty buffer,
+        // treat this as completion (fallback for when completion event doesn't arrive)
+        if (this._waitingForCompletion && bufferUtilization === 0) {
+          console.log("Completion fallback: daemon idle + empty buffer while waiting - emitting completion", {
+            component: this.name,
+            method: "handleStatusUpdate",
+            state,
+            bufferUtilization,
+          });
+          // Emit completion event as fallback
+          this.emit("completed");
+        }
+      }
+    } else if (state === "playing") {
+      this.isPlaying = true;
+    }
+
+    // Log status updates periodically for debugging
+    // (reduce verbosity by only logging every 10th status update)
+    if (!this._statusUpdateCount) {
+      this._statusUpdateCount = 0;
+    }
+    this._statusUpdateCount++;
+    if (this._statusUpdateCount % 10 === 0) {
+      console.log("Status update received", {
+        component: this.name,
+        method: "handleStatusUpdate",
+        state,
+        bufferUtilization,
+        isPlaying: this.isPlaying,
+        waitingForCompletion: this._waitingForCompletion,
+      });
+    }
   }
 
   /**
@@ -1437,13 +1542,24 @@ export class AudioPlaybackDaemon extends EventEmitter {
       component: this.name,
       method: "handleCompleted",
       timestamp: message.timestamp,
+      waitingForCompletion: this._waitingForCompletion,
     });
 
     this.isPlaying = false;
     this.isPaused = false;
+    this._waitingForCompletion = false;
 
     // Emit completed event for the client
+    console.log("Emitting 'completed' event to listeners", {
+      component: this.name,
+      method: "handleCompleted",
+      listenerCount: this.listenerCount("completed"),
+    });
     this.emit("completed");
+    console.log("'completed' event emitted", {
+      component: this.name,
+      method: "handleCompleted",
+    });
   }
 
   /**

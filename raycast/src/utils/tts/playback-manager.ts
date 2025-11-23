@@ -254,6 +254,9 @@ export class PlaybackManager implements IPlaybackManager {
   async startStreamingPlayback(_signal: AbortSignal): Promise<{
     writeChunk: (chunk: Uint8Array) => Promise<void>;
     endStream: () => Promise<void>;
+    on: (event: string, listener: (...args: any[]) => void) => void;
+    once: (event: string, listener: (...args: any[]) => void) => void;
+    off: (event: string, listener: (...args: any[]) => void) => void;
   }> {
     console.log("[PLAYBACK-MANAGER] startStreamingPlayback() called");
     if (!this.initialized) {
@@ -277,6 +280,16 @@ export class PlaybackManager implements IPlaybackManager {
       },
       endStream: async () => {
         await this.audioDaemon.endStream();
+      },
+      // Expose event emitter methods to allow waiting for completion
+      on: (event: string, listener: (...args: any[]) => void) => {
+        this.audioDaemon.on(event, listener);
+      },
+      once: (event: string, listener: (...args: any[]) => void) => {
+        this.audioDaemon.once(event, listener);
+      },
+      off: (event: string, listener: (...args: any[]) => void) => {
+        this.audioDaemon.off(event, listener);
       },
       onProcessEnd: (normalTermination: boolean) => {
         console.log("Streaming playback ended", {

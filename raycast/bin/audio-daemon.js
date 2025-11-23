@@ -301,6 +301,7 @@ class AudioProcessor extends EventEmitter {
     };
     this.lastHeartbeat = Date.now();
     this.isEndingStream = false; // New flag for ending stream
+    this._completionEmitted = false; // Prevent double completion emission
 
     // Duration-based process management
     this.totalAudioBytes = 0; // Total bytes of audio to be played
@@ -375,6 +376,7 @@ class AudioProcessor extends EventEmitter {
     this.stats.playbackEndTime = 0;
     this.stats.actualDuration = 0;
     this.stats.expectedDuration = 0;
+    this._completionEmitted = false; // Reset completion flag for new session
     this.stats.firstChunkTime = 0;
     this.stats.lastChunkTime = 0;
     this.stats.totalChunksReceived = 0;
@@ -525,7 +527,18 @@ class AudioProcessor extends EventEmitter {
           this.isStopped = false;
           this.isStopping = false;
           this.restartAttempts = 0;
-          this.emit("completed");
+          
+          // CRITICAL FIX: If we're ending stream, use _completePlaybackSession() to ensure
+          // proper completion handling and avoid double emission
+          if (this.isEndingStream) {
+            console.log(
+              `[${this.instanceId}] Process exited while ending stream - completing playback session`
+            );
+            this._completePlaybackSession();
+          } else {
+            // Normal completion - emit directly
+            this.emit("completed");
+          }
         } else {
           console.log("Audio process exited with error, restarting...");
           this.restartAudioProcess();
@@ -1003,12 +1016,29 @@ class AudioProcessor extends EventEmitter {
       }
 
       // NEW: Check if we should end stream (only when explicitly requested)
+      // CRITICAL: Also check if audio process has finished playing
       if (this.isEndingStream && this.ringBuffer.size === 0) {
-        console.log(
-          `[${this.instanceId}]  End stream requested and buffer empty - completing naturally`
-        );
-        this._completePlaybackSession();
-        return;
+        // Check if audio process is still running
+        const processStillRunning =
+          this.audioProcess &&
+          !this.audioProcess.killed &&
+          this.audioProcess.exitCode === null;
+
+        if (!processStillRunning) {
+          // Process has finished - complete immediately
+          console.log(
+            `[${this.instanceId}]  End stream requested, buffer empty, and process finished - completing naturally`
+          );
+          this._completePlaybackSession();
+          return;
+        } else {
+          // Buffer is empty but process is still running - wait for it to finish
+          // The process exit handler will call _completePlaybackSession() when it exits
+          console.log(
+            `[${this.instanceId}]  End stream requested and buffer empty, but audio process still running - waiting for process to finish`
+          );
+          // Continue the loop to check again
+        }
       }
 
       // NEW: Check if audio process is still alive
@@ -1113,6 +1143,22 @@ class AudioProcessor extends EventEmitter {
    * Helper method to complete playback session with proper timing calculation
    */
   _completePlaybackSession() {
+    console.log(`[${this.instanceId}] _completePlaybackSession() called`, {
+      _completionEmitted: this._completionEmitted,
+      isEndingStream: this.isEndingStream,
+      bufferSize: this.ringBuffer.size,
+      processExitCode: this.audioProcess?.exitCode,
+      processKilled: this.audioProcess?.killed,
+    });
+
+    // CRITICAL FIX: Prevent double completion - check if already completed
+    if (this._completionEmitted) {
+      console.log(
+        `[${this.instanceId}]  Completion already emitted - skipping duplicate completion`
+      );
+      return;
+    }
+
     if (this.stats.playbackStartTime > 0 && this.stats.playbackEndTime === 0) {
       this.stats.playbackEndTime = performance.now();
       this.stats.actualDuration = this.stats.playbackEndTime - this.stats.playbackStartTime;
@@ -1128,13 +1174,22 @@ class AudioProcessor extends EventEmitter {
       });
     }
 
+    // Mark as completed to prevent double emission
+    this._completionEmitted = true;
+
     // Emit completed event
+    console.log(`[${this.instanceId}] Emitting 'completed' event`, {
+      listenerCount: this.listenerCount("completed"),
+      timestamp: Date.now(),
+    });
     this.emit("completed");
+    console.log(`[${this.instanceId}] 'completed' event emitted successfully`);
 
     // Reset flags
     this.isEndingStream = false;
     this.ringBuffer.clear();
     this._audioLoopActive = false;
+    // Note: _completionEmitted is reset in start() for new sessions
   }
 
   // Memory usage logging
@@ -1672,8 +1727,11 @@ class AudioDaemon extends EventEmitter {
 
     // CRITICAL FIX: Forward AudioProcessor "completed" event to WebSocket clients
     this.audioProcessor.on("completed", () => {
-      console.log(`[${this.instanceId}] Audio processing completed - broadcasting to clients`);
-      this.broadcast({
+      console.log(`[${this.instanceId}] Audio processing completed - broadcasting to clients`, {
+        clientCount: this.clients?.size || 0,
+        timestamp: Date.now(),
+      });
+      const completedMessage = {
         type: "completed",
         timestamp: Date.now(),
         data: {
@@ -1682,7 +1740,10 @@ class AudioDaemon extends EventEmitter {
           audioPosition: this.audioProcessor.stats.audioPosition,
           performance: this.audioProcessor.getStatus(),
         },
-      });
+      };
+      console.log(`[${this.instanceId}] Broadcasting completed message:`, JSON.stringify(completedMessage).substring(0, 200));
+      this.broadcast(completedMessage);
+      console.log(`[${this.instanceId}] Completed message broadcasted to ${this.clients?.size || 0} clients`);
     });
 
     // Start heartbeat
@@ -1851,8 +1912,39 @@ class AudioDaemon extends EventEmitter {
       case "end_stream":
         // Instead of immediately stopping, mark that we're ending the stream
         // and let the audio finish playing naturally
-        console.log(`[${this.instanceId}] End stream requested - letting audio finish naturally`);
+        console.log(`[${this.instanceId}] End stream requested - letting audio finish naturally`, {
+          bufferSize: this.audioProcessor.ringBuffer.size,
+          processExitCode: this.audioProcessor.audioProcess?.exitCode,
+          processKilled: this.audioProcessor.audioProcess?.killed,
+          isPlaying: this.audioProcessor.isPlaying,
+        });
         this.audioProcessor.isEndingStream = true;
+        
+        // CRITICAL FIX: Check buffer AND process state immediately
+        const bufferEmpty = this.audioProcessor.ringBuffer.size === 0;
+        const processFinished = !this.audioProcessor.audioProcess || 
+                                this.audioProcessor.audioProcess.killed || 
+                                this.audioProcessor.audioProcess.exitCode !== null;
+        
+        if (bufferEmpty && processFinished) {
+          // Buffer empty AND process finished - complete immediately
+          console.log(
+            `[${this.instanceId}] Buffer empty and process finished when end_stream received - completing immediately`
+          );
+          this.audioProcessor._completePlaybackSession();
+        } else if (bufferEmpty && !processFinished) {
+          // Buffer empty but process still running - wait for process exit
+          console.log(
+            `[${this.instanceId}] Buffer empty but process still running when end_stream received - will complete when process exits`
+          );
+          // Process exit handler will call _completePlaybackSession()
+        } else {
+          // Buffer not empty - wait for buffer to empty
+          console.log(
+            `[${this.instanceId}] Buffer has ${this.audioProcessor.ringBuffer.size} bytes - will complete when empty`
+          );
+          // Process loop will check and complete when buffer empties
+        }
         break;
 
       case "configure":

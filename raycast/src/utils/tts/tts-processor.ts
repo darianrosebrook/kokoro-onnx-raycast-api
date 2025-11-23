@@ -445,6 +445,9 @@ export class TTSSpeechProcessor {
     let streamingPlayback: {
       writeChunk: (chunk: Uint8Array) => Promise<void>;
       endStream: () => Promise<void>;
+      on: (event: string, listener: (...args: any[]) => void) => void;
+      once: (event: string, listener: (...args: any[]) => void) => void;
+      off: (event: string, listener: (...args: any[]) => void) => void;
     } | null = null;
 
     let streamingStarted = false;
@@ -630,22 +633,27 @@ export class TTSSpeechProcessor {
       // Mark streaming as terminated only after ALL segments are complete
       streamingTerminated = true;
 
-      // CRITICAL FIX: Wait for daemon to signal completion before closing connection
-      // The daemon will send a "completed" event when all audio is finished playing
-      console.log(`[${this.instanceId}] Waiting for daemon to signal audio completion...`);
+      // CRITICAL FIX: End the stream and wait for completion
+      // endStream() sends the end_stream message to the daemon and waits for audio completion
+      // This ensures the daemon properly flushes buffers and signals completion
+      console.log(`[${this.instanceId}] Ending stream and waiting for audio completion...`);
 
       if (streamingPlayback && streamingStarted && !streamingFailed) {
         console.log(
-          `[${this.instanceId}] Streaming playback active - waiting for daemon completion signal`
+          `[${this.instanceId}] Streaming playback active - calling endStream() to signal completion`
         );
 
-        // Wait for the daemon to signal completion
         try {
-          await this.waitForDaemonCompletion(streamingPlayback);
-          console.log(`[${this.instanceId}] Daemon signaled completion - audio playback finished`);
+          // endStream() will:
+          // 1. Send end_stream message to daemon
+          // 2. Wait for audio completion via waitForAudioCompletion()
+          // 3. Emit "completed" event when done
+          await streamingPlayback.endStream();
+          console.log(`[${this.instanceId}] Stream ended and audio playback completed`);
         } catch (completionError) {
-          console.warn(`[${this.instanceId}] Error waiting for completion:`, completionError);
+          console.warn(`[${this.instanceId}] Error ending stream:`, completionError);
           // Don't fail the entire process - just log the warning
+          // The daemon may have already completed or encountered a recoverable error
         }
       } else if (streamingTerminated) {
         console.log(
@@ -807,55 +815,6 @@ export class TTSSpeechProcessor {
    */
   get paused(): boolean {
     return this.playbackManager.isPaused();
-  }
-
-  /**
-   * Wait for the daemon to signal that all audio playback is complete
-   * This prevents premature WebSocket closure and ensures all audio is played
-   */
-  private async waitForDaemonCompletion(streamingPlayback: unknown): Promise<void> {
-    return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        console.warn(`[${this.instanceId}] Daemon completion timeout - forcing resolution`);
-        resolve(); // Don't reject - just resolve to continue
-      }, 300000); // 5 minute timeout for very long TTS sessions
-
-      // CRITICAL FIX: Add keep-alive mechanism to prevent Raycast extension timeout
-      const keepAliveInterval = setInterval(() => {
-        console.log(`[${this.instanceId}] Keep-alive ping - preventing Raycast extension timeout`);
-        // This prevents Raycast from timing out the extension during long TTS sessions
-      }, 30000); // Send keep-alive every 30 seconds
-
-      // Listen for the daemon's completed event
-      const onCompleted = () => {
-        clearTimeout(timeout);
-        clearInterval(keepAliveInterval);
-        console.log(`[${this.instanceId}] Daemon completed event received`);
-        resolve();
-      };
-
-      const onError = (error: Error) => {
-        clearTimeout(timeout);
-        clearInterval(keepAliveInterval);
-        console.warn(`[${this.instanceId}] Daemon completion error:`, error);
-        resolve(); // Don't reject - just resolve to continue
-      };
-
-      // Add listeners to the streaming playback
-      if (
-        streamingPlayback &&
-        typeof streamingPlayback === "object" &&
-        streamingPlayback !== null
-      ) {
-        const playback = streamingPlayback as EventEmitter;
-        playback.once("completed", onCompleted);
-        playback.once("error", onError);
-      } else {
-        console.warn(`[${this.instanceId}] Streaming playback not available for completion events`);
-        clearInterval(keepAliveInterval);
-        resolve(); // Resolve immediately if no streaming playback
-      }
-    });
   }
 
   /**
