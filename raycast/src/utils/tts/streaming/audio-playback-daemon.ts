@@ -193,6 +193,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
   private sequenceNumber: number = 0;
   private _statusUpdateCount: number = 0;
   private _waitingForCompletion: boolean = false;
+  private _waitStartTime: number = 0; // Track when we started waiting for completion
 
   constructor(config: Partial<TTSProcessorConfig> = {}) {
     super();
@@ -1142,8 +1143,9 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
       // Mark that we're waiting for completion (used by status update handler)
       this._waitingForCompletion = true;
+      this._waitStartTime = Date.now();
 
-      const waitStartTime = Date.now();
+      const waitStartTime = this._waitStartTime;
 
       // Calculate expected audio duration + buffer
       // For 24kHz mono 16-bit PCM: bytesPerSecond = 24000 * 2 = 48000
@@ -1173,6 +1175,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
           expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
         });
         this._waitingForCompletion = false;
+        this._waitStartTime = 0;
         // Force stop if timeout occurs
         this.forceStop();
         resolve();
@@ -1198,6 +1201,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
         clearTimeout(timeout);
         clearInterval(progressInterval);
         this._waitingForCompletion = false;
+        this._waitStartTime = 0;
         this.removeListener("completed", onCompleted);
         this.removeListener("error", onError);
         console.log("Audio completion event received", {
@@ -1519,6 +1523,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
           });
           // Emit completion event as fallback
           this._waitingForCompletion = false;
+          this._waitStartTime = 0;
           this.emit("completed");
         }
       } else if (this._waitingForCompletion && (bufferUtilization === 0 || bufferUtilization < 0.01)) {
@@ -1531,10 +1536,43 @@ export class AudioPlaybackDaemon extends EventEmitter {
           waitingForCompletion: this._waitingForCompletion,
         });
         this._waitingForCompletion = false;
+        this._waitStartTime = 0;
         this.emit("completed");
       }
     } else if (state === "playing") {
       this.isPlaying = true;
+      
+      // CRITICAL FIX: Time-based fallback - if we've been waiting longer than expected duration + buffer,
+      // complete anyway even if daemon is still reporting "playing" state
+      if (this._waitingForCompletion && this._waitStartTime > 0) {
+        const elapsed = Date.now() - this._waitStartTime;
+        const expectedDurationMs = this.stats.bytesReceived > 0 
+          ? (this.stats.bytesReceived / 48000) * 1000  // bytes / bytesPerSecond * 1000
+          : 0;
+        const bufferDurationMs = bufferUtilization > 0 && expectedDurationMs > 0
+          ? (bufferUtilization * expectedDurationMs)  // Estimate buffer duration from utilization
+          : 0;
+        const maxWaitTime = Math.max(
+          expectedDurationMs + bufferDurationMs + 2000,  // Expected + buffer + 2s safety margin
+          Math.min(expectedDurationMs * 1.5 + 3000, 12000)  // Cap at 12s to beat client timeout
+        );
+        
+        if (elapsed > maxWaitTime) {
+          console.log("Completion fallback: time-based - waited longer than expected, completing anyway", {
+            component: this.name,
+            method: "handleStatusUpdate",
+            state,
+            bufferUtilization,
+            elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+            expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+            bufferDuration: bufferDurationMs > 0 ? `${(bufferDurationMs / 1000).toFixed(1)}s` : "0s",
+            maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
+          });
+          this._waitingForCompletion = false;
+          this._waitStartTime = 0;
+          this.emit("completed");
+        }
+      }
     }
 
     // Log status updates periodically for debugging (when not waiting)
@@ -1583,6 +1621,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
     this.isPlaying = false;
     this.isPaused = false;
     this._waitingForCompletion = false;
+    this._waitStartTime = 0;
 
     // Emit completed event for the client
     console.log("Emitting 'completed' event to listeners", {
