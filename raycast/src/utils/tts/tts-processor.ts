@@ -550,15 +550,7 @@ export class TTSSpeechProcessor {
           totalChunksReceived++;
           const elapsedTime = performance.now() - startTime;
 
-          // Log every 10th chunk to reduce verbosity
-          if (totalChunksReceived % 10 === 0 || totalChunksReceived <= 3) {
-            console.log(`[${this.instanceId}] Received audio chunk:`, {
-              chunkNumber: totalChunksReceived,
-              segmentIndex: segment.index,
-              chunkSize: chunk.data.length,
-              elapsedTime: elapsedTime.toFixed(2) + "ms",
-            });
-          }
+          // Verbose chunk logging removed - only log errors and completion events
 
           if (
             this.useStreaming &&
@@ -569,11 +561,7 @@ export class TTSSpeechProcessor {
           ) {
             try {
               await streamingPlayback.writeChunk(chunk.data);
-              if (totalChunksReceived % 10 === 0 || totalChunksReceived <= 3) {
-                console.log(
-                  `[${this.instanceId}] Streamed chunk ${totalChunksReceived} (${chunk.data.length} bytes) in ${elapsedTime}ms`
-                );
-              }
+              // Verbose chunk logging removed - only log errors and completion events
             } catch (streamError) {
               console.error(`[${this.instanceId}] Failed to stream chunk:`, streamError);
 

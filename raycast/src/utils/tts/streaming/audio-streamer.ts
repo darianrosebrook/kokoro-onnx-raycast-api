@@ -430,16 +430,19 @@ export class AudioStreamer implements IAudioStreamer {
           firstChunk = false;
         }
 
-        // Log chunk received with performance tracker
-        this.performanceTracker.logEvent(context.requestId, "AUDIO_CHUNK_RECEIVED", {
-          chunkIndex,
-          chunkSize: value.length,
-          totalBytesReceived,
-          elapsedTimeMs,
-        });
+        // Log chunk received with performance tracker (reduced frequency for less verbosity)
+        // Only log every 10th chunk to reduce console noise
+        if (chunkIndex % 10 === 0 || chunkIndex === 1) {
+          this.performanceTracker.logEvent(context.requestId, "AUDIO_CHUNK_RECEIVED", {
+            chunkIndex,
+            chunkSize: value.length,
+            totalBytesReceived,
+            elapsedTimeMs,
+          });
+        }
 
-        // Log progress every 5th chunk
-        if (chunkIndex % 5 === 0) {
+        // Log progress every 10th chunk (reduced from every 5th)
+        if (chunkIndex % 10 === 0) {
           const avgChunkSize = totalBytesReceived / chunkIndex;
           const avgChunkTime = elapsedTimeMs / chunkIndex;
 

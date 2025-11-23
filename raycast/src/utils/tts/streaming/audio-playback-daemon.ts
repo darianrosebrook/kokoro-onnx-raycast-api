@@ -1039,12 +1039,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
       throw new Error("Daemon not connected");
     }
 
-    console.warn("Writing audio chunk to daemon", {
-      component: this.name,
-      method: "writeChunk",
-      chunkSize: chunk.length,
-      sequence: this.sequenceNumber,
-    });
+    // Verbose logging removed - only log errors and completion events
 
     // Update stats
     this.stats.chunksReceived++;
@@ -1064,12 +1059,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
     await this.sendMessage(audioMessage);
 
-    console.warn("Audio chunk sent to daemon", {
-      component: this.name,
-      method: "writeChunk",
-      chunkSize: chunk.length,
-      sequence: this.sequenceNumber - 1,
-    });
+    // Verbose logging removed - only log errors and completion events
   }
 
   /**
@@ -1397,16 +1387,9 @@ export class AudioPlaybackDaemon extends EventEmitter {
       throw new Error("WebSocket connection could not be established");
     }
 
-    console.warn("Sending message to daemon", {
-      component: this.name,
-      method: "sendMessage",
-      messageType: message.type,
-      timestamp: message.timestamp,
-    });
-
+    // Verbose logging removed - only log errors and completion events
     // Serialize the message to JSON
     const messageJson = JSON.stringify(message);
-    console.warn("Sending message to daemon:", message.type);
 
     this.ws.send(messageJson);
   }
@@ -1459,12 +1442,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
    * Handle audio chunk messages from the daemon
    */
   private handleAudioChunk(message: AudioChunkMessage): void {
-    console.warn("Handling audio chunk message", {
-      component: this.name,
-      method: "handleAudioChunk",
-      chunkSize: message.data.chunk.length,
-      sequence: message.data.sequence,
-    });
+    // Verbose logging removed - only log errors and completion events
 
     let chunkData = message.data.chunk;
     if (typeof chunkData === "string") {
