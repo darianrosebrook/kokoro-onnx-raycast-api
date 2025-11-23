@@ -302,6 +302,7 @@ class AudioProcessor extends EventEmitter {
     this.lastHeartbeat = Date.now();
     this.isEndingStream = false; // New flag for ending stream
     this._completionEmitted = false; // Prevent double completion emission
+    this._endStreamTimeout = null; // Timeout for forcing completion when end_stream is received
 
     // Duration-based process management
     this.totalAudioBytes = 0; // Total bytes of audio to be played
@@ -361,6 +362,10 @@ class AudioProcessor extends EventEmitter {
     if (this.restartTimeout) {
       clearTimeout(this.restartTimeout);
       this.restartTimeout = null;
+    }
+    if (this._endStreamTimeout) {
+      clearTimeout(this._endStreamTimeout);
+      this._endStreamTimeout = null;
     }
 
     // Cleanup afplay mode
@@ -1113,6 +1118,26 @@ class AudioProcessor extends EventEmitter {
         this.stats.bytesProcessed += chunk.length;
         this.stats.audioPosition += chunk.length;
 
+        // CRITICAL FIX: Periodically check if process finished while ending stream
+        // This handles cases where stdin.end() was called but process hasn't exited yet
+        if (this.isEndingStream && totalChunksProcessed % 10 === 0) {
+          const processFinished = !this.audioProcess || 
+                                  this.audioProcess.killed || 
+                                  this.audioProcess.exitCode !== null;
+          
+          if (processFinished) {
+            // Process finished - check if we should complete
+            const bufferLow = this.ringBuffer.size === 0 || this.ringBuffer.utilization < 0.01;
+            if (bufferLow) {
+              console.log(
+                `[${this.instanceId}]  Process finished while ending stream, buffer low (${this.ringBuffer.size} bytes) - completing naturally`
+              );
+              this._completePlaybackSession();
+              return;
+            }
+          }
+        }
+
         // NEW: Adaptive delay based on buffer state
         let nextDelay = 10; // Default 10ms
         if (utilization > 0.8) {
@@ -1226,6 +1251,12 @@ class AudioProcessor extends EventEmitter {
     });
     this.emit("completed");
     console.log(`[${this.instanceId}] 'completed' event emitted successfully`);
+
+    // Clear completion timeout if it exists
+    if (this._endStreamTimeout) {
+      clearTimeout(this._endStreamTimeout);
+      this._endStreamTimeout = null;
+    }
 
     // Reset flags
     this.isEndingStream = false;
@@ -1959,6 +1990,7 @@ class AudioDaemon extends EventEmitter {
           processExitCode: this.audioProcessor.audioProcess?.exitCode,
           processKilled: this.audioProcessor.audioProcess?.killed,
           isPlaying: this.audioProcessor.isPlaying,
+          expectedDuration: this.audioProcessor.audioDurationMs,
         });
         this.audioProcessor.isEndingStream = true;
         
@@ -1973,6 +2005,34 @@ class AudioDaemon extends EventEmitter {
           this.audioProcessor.audioProcess.stdin.end();
         }
         
+        // CRITICAL FIX: Set up timeout-based completion check
+        // If process doesn't exit naturally within expected duration + buffer, complete anyway
+        const expectedDuration = this.audioProcessor.audioDurationMs || 0;
+        const bufferDuration = this.audioProcessor.ringBuffer.size > 0
+          ? (this.audioProcessor.ringBuffer.size / this.audioProcessor.format.bytesPerSecond) * 1000
+          : 0;
+        const completionTimeout = Math.max(
+          expectedDuration + bufferDuration + 2000, // Expected duration + buffer + 2s safety margin
+          5000 // Minimum 5 seconds
+        );
+        
+        console.log(`[${this.instanceId}] Setting completion timeout: ${completionTimeout.toFixed(0)}ms (expected: ${expectedDuration.toFixed(0)}ms, buffer: ${bufferDuration.toFixed(0)}ms)`);
+        
+        // Clear any existing timeout
+        if (this.audioProcessor._endStreamTimeout) {
+          clearTimeout(this.audioProcessor._endStreamTimeout);
+        }
+        
+        // Set timeout to force completion if process doesn't exit naturally
+        this.audioProcessor._endStreamTimeout = setTimeout(() => {
+          if (this.audioProcessor.isEndingStream && !this.audioProcessor._completionEmitted) {
+            console.log(
+              `[${this.instanceId}] Completion timeout reached - forcing completion (process may still be running)`
+            );
+            this.audioProcessor._completePlaybackSession();
+          }
+        }, completionTimeout);
+        
         // CRITICAL FIX: Check buffer AND process state immediately
         const bufferEmpty = this.audioProcessor.ringBuffer.size === 0;
         const processFinished = !this.audioProcessor.audioProcess || 
@@ -1984,17 +2044,21 @@ class AudioDaemon extends EventEmitter {
           console.log(
             `[${this.instanceId}] Buffer empty and process finished when end_stream received - completing immediately`
           );
+          if (this.audioProcessor._endStreamTimeout) {
+            clearTimeout(this.audioProcessor._endStreamTimeout);
+            this.audioProcessor._endStreamTimeout = null;
+          }
           this.audioProcessor._completePlaybackSession();
         } else if (bufferEmpty && !processFinished) {
           // Buffer empty but process still running - wait for process exit
           console.log(
-            `[${this.instanceId}] Buffer empty but process still running when end_stream received - will complete when process exits`
+            `[${this.instanceId}] Buffer empty but process still running when end_stream received - will complete when process exits or timeout`
           );
           // Process exit handler will call _completePlaybackSession()
         } else {
           // Buffer not empty - wait for buffer to empty and process to finish
           console.log(
-            `[${this.instanceId}] Buffer has ${this.audioProcessor.ringBuffer.size} bytes - will complete when empty and process finishes`
+            `[${this.instanceId}] Buffer has ${this.audioProcessor.ringBuffer.size} bytes - will complete when empty and process finishes, or timeout in ${completionTimeout.toFixed(0)}ms`
           );
           // Process loop will check and complete when buffer empties or process finishes
         }
