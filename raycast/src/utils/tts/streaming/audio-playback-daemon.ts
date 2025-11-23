@@ -1197,9 +1197,51 @@ export class AudioPlaybackDaemon extends EventEmitter {
         });
       }, 10000); // Log every 10 seconds
 
+      // CRITICAL FIX: Add periodic time-based fallback check
+      // This runs independently of status updates to catch completion even if status updates stop
+      let fallbackCheckInterval: NodeJS.Timeout | undefined;
+      fallbackCheckInterval = setInterval(() => {
+        if (!this._waitingForCompletion || this._waitStartTime === 0) {
+          if (fallbackCheckInterval) {
+            clearInterval(fallbackCheckInterval);
+          }
+          return;
+        }
+
+        const elapsed = Date.now() - this._waitStartTime;
+        const expectedDurationMs = this.stats.bytesReceived > 0 
+          ? (this.stats.bytesReceived / 48000) * 1000
+          : 0;
+        
+        // Calculate max wait time: expected duration + 2s safety margin, capped at 11s
+        const maxWaitTime = Math.min(expectedDurationMs + 2000, 11000);
+        
+        if (elapsed > maxWaitTime) {
+          console.log("Completion fallback: periodic check - waited longer than expected, completing anyway", {
+            component: this.name,
+            method: "waitForAudioCompletion",
+            elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+            expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+            maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
+            isPlaying: this.isPlaying,
+          });
+          if (fallbackCheckInterval) {
+            clearInterval(fallbackCheckInterval);
+          }
+          clearTimeout(timeout);
+          clearInterval(progressInterval);
+          this._waitingForCompletion = false;
+          this._waitStartTime = 0;
+          this.emit("completed");
+        }
+      }, 1000); // Check every second
+
       const onCompleted = () => {
         clearTimeout(timeout);
         clearInterval(progressInterval);
+        if (fallbackCheckInterval) {
+          clearInterval(fallbackCheckInterval);
+        }
         this._waitingForCompletion = false;
         this._waitStartTime = 0;
         this.removeListener("completed", onCompleted);
@@ -1214,6 +1256,9 @@ export class AudioPlaybackDaemon extends EventEmitter {
       const onError = (error: Error) => {
         clearTimeout(timeout);
         clearInterval(progressInterval);
+        if (fallbackCheckInterval) {
+          clearInterval(fallbackCheckInterval);
+        }
         this.removeListener("completed", onCompleted);
         this.removeListener("error", onError);
         console.warn("Audio completion error", {
@@ -1240,6 +1285,9 @@ export class AudioPlaybackDaemon extends EventEmitter {
         });
         clearTimeout(timeout);
         clearInterval(progressInterval);
+        if (fallbackCheckInterval) {
+          clearInterval(fallbackCheckInterval);
+        }
         resolve();
       }
     });
