@@ -1144,34 +1144,63 @@ export class AudioPlaybackDaemon extends EventEmitter {
         method: "waitForAudioCompletion",
         isPlaying: this.isPlaying,
         isConnected: this.daemonProcess?.isConnected,
+        totalBytes: this.stats.bytesReceived,
+        expectedDuration: this.stats.bytesReceived > 0 
+          ? `${(this.stats.bytesReceived / 48000).toFixed(1)}s` 
+          : "unknown",
       });
 
       // Mark that we're waiting for completion (used by status update handler)
       this._waitingForCompletion = true;
 
+      const waitStartTime = Date.now();
+
+      // Calculate expected audio duration + buffer
+      // For 24kHz mono 16-bit PCM: bytesPerSecond = 24000 * 2 = 48000
+      const expectedDurationMs = this.stats.bytesReceived > 0 
+        ? (this.stats.bytesReceived / 48000) * 1000  // bytes / bytesPerSecond * 1000
+        : 0;
+      // Add generous buffer: expected duration + 5 seconds, minimum 15 seconds, maximum 120 seconds
+      const timeoutDuration = Math.min(
+        Math.max(expectedDurationMs + 5000, 15000),
+        120000
+      );
+
+      console.log("Audio completion timeout configured", {
+        component: this.name,
+        method: "waitForAudioCompletion",
+        expectedDurationMs: expectedDurationMs.toFixed(0),
+        timeoutDuration: timeoutDuration.toFixed(0),
+        totalBytes: this.stats.bytesReceived,
+      });
+
       const timeout = setTimeout(() => {
+        const elapsed = Date.now() - waitStartTime;
         console.warn("Audio completion timeout - forcing stop", {
           component: this.name,
           method: "waitForAudioCompletion",
-          elapsed: "120s",
+          elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+          expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
         });
         this._waitingForCompletion = false;
         // Force stop if timeout occurs
         this.forceStop();
         resolve();
-      }, 120000); // 120 second timeout (2 minutes) - extended for long TTS generation
+      }, timeoutDuration);
 
       // Add periodic progress logging
       const progressInterval = setInterval(() => {
+        const elapsed = Date.now() - waitStartTime;
+        const remaining = Math.max(0, timeoutDuration - elapsed);
         console.log("Still waiting for audio completion", {
           component: this.name,
           method: "waitForAudioCompletion",
           isPlaying: this.isPlaying,
           isConnected: this.daemonProcess?.isConnected,
           totalBytes: this.stats.bytesReceived,
-          expectedDuration: this.stats.bytesReceived > 0 
-            ? `${(this.stats.bytesReceived / 48000).toFixed(1)}s` 
-            : "unknown",
+          expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+          elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+          timeoutIn: `${(remaining / 1000).toFixed(1)}s`,
         });
       }, 10000); // Log every 10 seconds
 
@@ -1473,6 +1502,19 @@ export class AudioPlaybackDaemon extends EventEmitter {
     const state = statusData?.state;
     const bufferUtilization = statusData?.bufferUtilization ?? 0;
 
+    // CRITICAL: Always log status updates when waiting for completion (for debugging)
+    if (this._waitingForCompletion) {
+      console.log("Status update received while waiting for completion", {
+        component: this.name,
+        method: "handleStatusUpdate",
+        state,
+        bufferUtilization,
+        isPlaying: this.isPlaying,
+        waitingForCompletion: this._waitingForCompletion,
+        messageData: JSON.stringify(statusData).substring(0, 200),
+      });
+    }
+
     // CRITICAL FIX: Update isPlaying based on daemon status
     // This helps detect completion when the daemon reports "idle" state
     if (state === "idle" || state === "completed") {
@@ -1488,36 +1530,51 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
         // CRITICAL FIX: If we're waiting for completion and daemon reports idle with empty buffer,
         // treat this as completion (fallback for when completion event doesn't arrive)
-        if (this._waitingForCompletion && bufferUtilization === 0) {
+        // Also check if bufferUtilization is very low (< 0.01) to account for floating point precision
+        if (this._waitingForCompletion && (bufferUtilization === 0 || bufferUtilization < 0.01)) {
           console.log("Completion fallback: daemon idle + empty buffer while waiting - emitting completion", {
             component: this.name,
             method: "handleStatusUpdate",
             state,
             bufferUtilization,
+            waitingForCompletion: this._waitingForCompletion,
           });
           // Emit completion event as fallback
+          this._waitingForCompletion = false;
           this.emit("completed");
         }
+      } else if (this._waitingForCompletion && (bufferUtilization === 0 || bufferUtilization < 0.01)) {
+        // Even if isPlaying was already false, if we're waiting and buffer is empty, complete
+        console.log("Completion fallback: already idle + empty buffer while waiting - emitting completion", {
+          component: this.name,
+          method: "handleStatusUpdate",
+          state,
+          bufferUtilization,
+          waitingForCompletion: this._waitingForCompletion,
+        });
+        this._waitingForCompletion = false;
+        this.emit("completed");
       }
     } else if (state === "playing") {
       this.isPlaying = true;
     }
 
-    // Log status updates periodically for debugging
-    // (reduce verbosity by only logging every 10th status update)
-    if (!this._statusUpdateCount) {
-      this._statusUpdateCount = 0;
-    }
-    this._statusUpdateCount++;
-    if (this._statusUpdateCount % 10 === 0) {
-      console.log("Status update received", {
-        component: this.name,
-        method: "handleStatusUpdate",
-        state,
-        bufferUtilization,
-        isPlaying: this.isPlaying,
-        waitingForCompletion: this._waitingForCompletion,
-      });
+    // Log status updates periodically for debugging (when not waiting)
+    if (!this._waitingForCompletion) {
+      if (!this._statusUpdateCount) {
+        this._statusUpdateCount = 0;
+      }
+      this._statusUpdateCount++;
+      if (this._statusUpdateCount % 10 === 0) {
+        console.log("Status update received", {
+          component: this.name,
+          method: "handleStatusUpdate",
+          state,
+          bufferUtilization,
+          isPlaying: this.isPlaying,
+          waitingForCompletion: this._waitingForCompletion,
+        });
+      }
     }
   }
 

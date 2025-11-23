@@ -5,7 +5,6 @@ import { AudioStreamer } from "./streaming/audio-streamer.js";
 import { PlaybackManager } from "./playback-manager.js";
 import { RetryManager } from "../api/retry-manager.js";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager.js";
-import { PerformanceMonitor } from "../performance/performance-monitor.js";
 import { PerformanceTracker } from "../core/performance-tracker.js";
 import { StatusUpdate } from "../../types.js";
 import { TextSegment } from "../validation/tts-types.js";
@@ -30,7 +29,6 @@ vi.mock("./streaming/audio-streamer");
 vi.mock("./playback-manager");
 vi.mock("../api/retry-manager");
 vi.mock("./streaming/adaptive-buffer-manager");
-vi.mock("../performance/performance-monitor");
 vi.mock("../core/cache");
 
 const mockTextProcessor = {
@@ -71,12 +69,10 @@ const mockAdaptiveBufferManager = {
   getBufferSize: vi.fn().mockReturnValue(5),
 };
 
-const mockPerformanceMonitor = {
-  initialize: vi.fn().mockResolvedValue(undefined),
-  startTracking: vi.fn(),
-  endTracking: vi.fn(),
-  logPerformanceReport: vi.fn(),
-  log: vi.fn(),
+const mockPerformanceTracker = {
+  startRequest: vi.fn(),
+  completeRequest: vi.fn().mockReturnValue(null),
+  logEvent: vi.fn(),
 };
 
 vi.mocked(TextProcessor).mockImplementation(() => mockTextProcessor as unknown as TextProcessor);
@@ -87,9 +83,6 @@ vi.mocked(PlaybackManager).mockImplementation(
 vi.mocked(RetryManager).mockImplementation(() => mockRetryManager as unknown as RetryManager);
 vi.mocked(AdaptiveBufferManager).mockImplementation(
   () => mockAdaptiveBufferManager as unknown as AdaptiveBufferManager
-);
-vi.mocked(PerformanceMonitor).mockImplementation(
-  () => mockPerformanceMonitor as unknown as PerformanceMonitor
 );
 
 describe("TTSSpeechProcessor", () => {
@@ -130,7 +123,7 @@ describe("TTSSpeechProcessor", () => {
         playbackManager: mockPlaybackManager as unknown as PlaybackManager,
         retryManager: mockRetryManager as unknown as RetryManager,
         adaptiveBufferManager: mockAdaptiveBufferManager as unknown as AdaptiveBufferManager,
-        performanceTracker: mockPerformanceMonitor as unknown as PerformanceTracker,
+        performanceTracker: mockPerformanceTracker as unknown as PerformanceTracker,
       }
     );
   });
