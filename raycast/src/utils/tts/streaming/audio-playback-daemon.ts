@@ -1224,6 +1224,19 @@ export class AudioPlaybackDaemon extends EventEmitter {
         const calculatedWaitTime = expectedDurationMs + 3000;
         const maxWaitTime = Math.min(calculatedWaitTime, clientTimeout - 3000);
         
+        // Debug logging every 10 seconds to track progress
+        if (Math.floor(elapsed / 10000) !== Math.floor((elapsed - 1000) / 10000)) {
+          console.log("Periodic fallback check progress", {
+            component: this.name,
+            method: "waitForAudioCompletion",
+            elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+            expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+            maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
+            clientTimeout: `${(clientTimeout / 1000).toFixed(1)}s`,
+            willFireIn: `${((maxWaitTime - elapsed) / 1000).toFixed(1)}s`,
+          });
+        }
+        
         if (elapsed > maxWaitTime) {
           console.log("Completion fallback: periodic check - waited longer than expected, completing anyway", {
             component: this.name,
