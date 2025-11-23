@@ -430,18 +430,16 @@ export class AudioStreamer implements IAudioStreamer {
           firstChunk = false;
         }
 
-        // Log chunk received with performance tracker (reduced frequency for less verbosity)
-        // Only log every 10th chunk to reduce console noise
-        if (chunkIndex % 10 === 0 || chunkIndex === 1) {
-          this.performanceTracker.logEvent(context.requestId, "AUDIO_CHUNK_RECEIVED", {
-            chunkIndex,
-            chunkSize: value.length,
-            totalBytesReceived,
-            elapsedTimeMs,
-          });
-        }
+        // Log chunk received with performance tracker for EVERY chunk (needed for accurate counting)
+        // But only log to console every 10th chunk to reduce verbosity
+        this.performanceTracker.logEvent(context.requestId, "AUDIO_CHUNK_RECEIVED", {
+          chunkIndex,
+          chunkSize: value.length,
+          totalBytesReceived,
+          elapsedTimeMs,
+        });
 
-        // Log progress every 10th chunk (reduced from every 5th)
+        // Log progress to console every 10th chunk (reduced from every 5th)
         if (chunkIndex % 10 === 0) {
           const avgChunkSize = totalBytesReceived / chunkIndex;
           const avgChunkTime = elapsedTimeMs / chunkIndex;
@@ -498,27 +496,19 @@ export class AudioStreamer implements IAudioStreamer {
     this.stats.streamingDuration = totalProcessingTime;
     this.stats.efficiency = this.calculateStreamingEfficiency(this.stats.streamingDuration);
 
+    // Calculate audio duration from PCM bytes
+    // For PCM: duration = bytes / (sampleRate * channels * bytesPerSample)
+    const audioDurationMs = (totalBytesReceived / this.audioFormat.bytesPerSecond) * 1000;
+
     // Log final streaming statistics with performance tracker
+    // Note: Don't complete the request here - tts-processor.ts will complete it after all segments
     this.performanceTracker.logEvent(context.requestId, "LAST_AUDIO_CHUNK", {
       totalChunks: chunkIndex,
       totalBytesReceived,
       streamingDurationMs: this.stats.streamingDuration,
       efficiency: this.stats.efficiency,
-      audioDurationMs: this.stats.totalAudioDuration * 1000,
+      audioDurationMs: audioDurationMs,
     });
-
-    // Complete the request and get final metrics
-    const finalMetrics = this.performanceTracker.completeRequest(context.requestId);
-
-    if (finalMetrics) {
-      // Log final summary
-      this.performanceTracker.logEvent(context.requestId, "REQUEST_COMPLETE", {
-        totalTimeToFirstAudio: finalMetrics.totalTimeToFirstAudio,
-        streamingEfficiency: finalMetrics.streamingEfficiency,
-        totalChunks: finalMetrics.chunkCount,
-        audioDuration: finalMetrics.audioDuration,
-      });
-    }
   }
 
   /**

@@ -109,12 +109,23 @@ export class PerformanceTracker {
 
     flow.events.push(event);
 
-    // Log with consistent format
-    console.log(`[PERF:${requestId}] ${stage}`, {
-      timestamp: new Date().toISOString(),
-      stage,
-      ...metadata,
-    });
+    // Reduce verbosity: Only log AUDIO_CHUNK_RECEIVED every 10th chunk to console
+    // But still track all chunks in the flow for accurate metrics
+    const chunkIndex = metadata.chunkIndex as number | undefined;
+    const shouldLogToConsole =
+      stage !== "AUDIO_CHUNK_RECEIVED" ||
+      chunkIndex === undefined ||
+      chunkIndex === 1 ||
+      chunkIndex % 10 === 0;
+
+    if (shouldLogToConsole) {
+      // Log with consistent format
+      console.log(`[PERF:${requestId}] ${stage}`, {
+        timestamp: new Date().toISOString(),
+        stage,
+        ...metadata,
+      });
+    }
   }
 
   /**
