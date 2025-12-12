@@ -97,6 +97,12 @@ export KOKORO_MISAKI_QUALITY_THRESHOLD="${KOKORO_MISAKI_QUALITY_THRESHOLD:-0.8}"
 # Provider configuration for development (use ANE by default for low TTFA)
 export KOKORO_COREML_COMPUTE_UNITS="${KOKORO_COREML_COMPUTE_UNITS:-CPUAndNeuralEngine}"
 
+# Model optimization testing configuration (optional)
+# Enable model optimization benchmark testing via API endpoint
+export KOKORO_ENABLE_MODEL_OPTIMIZATION_TESTING="${KOKORO_ENABLE_MODEL_OPTIMIZATION_TESTING:-false}"
+# Path to optimized model for comparison testing
+export KOKORO_OPTIMIZED_MODEL_PATH="${KOKORO_OPTIMIZED_MODEL_PATH:-optimized_models/kokoro-v1.0.int8-graph-opt.onnx}"
+
 # --- Pre-flight Checks ---
 # Check if .venv exists
 if [ ! -d ".venv" ]; then
@@ -278,6 +284,14 @@ echo "   • minimal: CPU-only, fastest startup (KOKORO_DEV_PERFORMANCE_PROFILE=
 echo "   • stable: CoreML + conservative settings (current: default)"
 echo "   • optimized: Full optimization testing"
 echo "   • benchmark: All optimizations + benchmarking"
+echo ""
+if [ "$KOKORO_ENABLE_MODEL_OPTIMIZATION_TESTING" = "true" ]; then
+    echo " Model optimization testing: ✅ Enabled"
+    echo "   Optimized model path: ${KOKORO_OPTIMIZED_MODEL_PATH}"
+else
+    echo " Model optimization testing: ⚠️  Disabled"
+    echo "   Enable with: export KOKORO_ENABLE_MODEL_OPTIMIZATION_TESTING=true"
+fi
 echo ""
 echo " For production optimizations, use: ./start_production.sh"
 

@@ -139,6 +139,12 @@ fi
 # Performance profile for optimal chunk timing (50ms chunks)
 export KOKORO_DEV_PERFORMANCE_PROFILE=${KOKORO_DEV_PERFORMANCE_PROFILE:-"stable"}
 
+# Model optimization testing configuration (optional)
+# Enable model optimization benchmark testing via API endpoint
+export KOKORO_ENABLE_MODEL_OPTIMIZATION_TESTING="${KOKORO_ENABLE_MODEL_OPTIMIZATION_TESTING:-false}"
+# Path to optimized model for comparison testing
+export KOKORO_OPTIMIZED_MODEL_PATH="${KOKORO_OPTIMIZED_MODEL_PATH:-optimized_models/kokoro-v1.0.int8-graph-opt.onnx}"
+
 echo "Production optimizations enabled:"
 echo "   • ORJSON serialization: ✅"
 echo "   • GZip compression: ✅"
@@ -148,6 +154,12 @@ echo "   • Memory arena: ${KOKORO_MEMORY_ARENA_SIZE_MB}MB"
 echo "   • Performance profile: ${KOKORO_DEV_PERFORMANCE_PROFILE} (50ms chunks)"
 echo "   • Misaki G2P enabled: ${KOKORO_MISAKI_ENABLED}"
 [[ "$(uname -m)" == "arm64" ]] && echo "   • CoreML optimization: ✅"
+if [ "$KOKORO_ENABLE_MODEL_OPTIMIZATION_TESTING" = "true" ]; then
+    echo "   • Model optimization testing: ✅ Enabled"
+    echo "   • Optimized model path: ${KOKORO_OPTIMIZED_MODEL_PATH}"
+else
+    echo "   • Model optimization testing: ⚠️  Disabled"
+fi
 
 # --- Audio Daemon Configuration ---
 AUDIO_DAEMON_PORT=${AUDIO_DAEMON_PORT:-8081}

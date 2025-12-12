@@ -1244,27 +1244,18 @@ def segment_text(text: str, max_len: int) -> List[str]:
         if sentence:
             segments.append(sentence)
     
-    # Validate full text coverage to ensure no content is lost
-    total_segmented_length = sum(len(seg) for seg in segments)
-    original_length = len(cleaned)
+    # Validate text coverage by comparing word content (not character counts)
+    # Character count comparison is unreliable because segments are stripped of whitespace
+    original_words = set(cleaned.split())
+    segmented_words = set()
+    for seg in segments:
+        segmented_words.update(seg.split())
     
-    if total_segmented_length != original_length:
-        logger.warning(f"Text coverage validation failed: original {original_length} chars, segmented {total_segmented_length} chars")
-        logger.warning(f"Original text: '{cleaned[:100]}...'")
-        logger.warning(f"Segments: {[seg[:50] + '...' if len(seg) > 50 else seg for seg in segments]}")
-        
-        # Attempt to recover by adding any missing text
-        if total_segmented_length < original_length:
-            missing_text = cleaned[total_segmented_length:]
-            if missing_text.strip():
-                logger.info(f"Recovering missing text: '{missing_text[:100]}...'")
-                segments.append(missing_text.strip())
-    
-    # Final validation and logging
-    final_coverage = sum(len(seg) for seg in segments)
-    if final_coverage == original_length:
-        logger.debug(f"✅ Full text coverage validated: {original_length} chars → {len(segments)} segments")
+    missing_words = original_words - segmented_words
+    if missing_words:
+        logger.warning(f"Text coverage validation: {len(missing_words)} words may be missing")
+        logger.debug(f"Missing words sample: {list(missing_words)[:10]}")
     else:
-        logger.warning(f" Partial text coverage: {original_length} chars → {final_coverage} chars in {len(segments)} segments")
+        logger.debug(f"✅ Full text coverage validated: {len(original_words)} words → {len(segments)} segments")
     
     return segments 

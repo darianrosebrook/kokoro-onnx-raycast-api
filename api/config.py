@@ -346,8 +346,32 @@ class TTSConfig:
 
     # Model file paths and resources
     is_production = os.environ.get("KOKORO_PRODUCTION_MODE", "false").lower() == "true"
-    MODEL_PATH = "kokoro-v0.0.int8.onnx"  # Using available quantized model
-    VOICES_PATH = "voices-v0.0.bin"
+    # Default to optimized model path, fallback to original if not available
+    # The optimized model will be auto-generated if missing during startup
+    OPTIMIZED_MODEL_PATH = os.environ.get(
+        "KOKORO_OPTIMIZED_MODEL_PATH",
+        "optimized_models/kokoro-v1.0.int8-graph-opt.onnx",
+    )
+    ORIGINAL_MODEL_PATH = os.environ.get(
+        "KOKORO_ORIGINAL_MODEL_PATH", "kokoro-v1.0.int8.onnx"
+    )
+
+    # Default MODEL_PATH - will be updated during validate_model_files() if optimized model exists
+    # If KOKORO_MODEL_PATH is explicitly set, use that; otherwise default to optimized path
+    # The actual path will be resolved during startup validation
+    MODEL_PATH = os.environ.get("KOKORO_MODEL_PATH", OPTIMIZED_MODEL_PATH)
+
+    VOICES_PATH = "voices-v1.0.bin"
+
+    # Model optimization testing configuration
+    ENABLE_MODEL_OPTIMIZATION_TESTING = (
+        os.environ.get("KOKORO_ENABLE_MODEL_OPTIMIZATION_TESTING", "false").lower()
+        == "true"
+    )
+    MODEL_OPTIMIZATION_COMPARISON = (
+        os.environ.get("KOKORO_MODEL_OPTIMIZATION_COMPARISON", "false").lower()
+        == "true"
+    )
 
     # Test data for health checks and benchmarking
     TEST_DATA = {
@@ -375,14 +399,18 @@ class TTSConfig:
     BENCHMARK_ARTICLE_LENGTH_TEXT = BENCHMARK_ARTICLE_TEXT
 
     # Benchmark configuration parameters
-    BENCHMARK_ENABLE_LONG_TEXT = False  # Disable long text benchmarking by default (too slow)
+    BENCHMARK_ENABLE_LONG_TEXT = (
+        False  # Disable long text benchmarking by default (too slow)
+    )
     BENCHMARK_WARMUP_RUNS = 0  # Reduced from 3 to 0 for faster benchmarking
     BENCHMARK_CONSISTENCY_RUNS = 0  # Reduced from 3 to 0 for faster benchmarking
     BENCHMARK_MIN_IMPROVEMENT_PERCENT = float(
         os.environ.get("KOKORO_MIN_IMPROVEMENT_PERCENT", "5.0")
     )  # Minimum improvement required to recommend provider change
     BENCHMARK_CACHE_DURATION = 86400  # Cache duration in seconds (24 hours)
-    BENCHMARK_WARMUP_TEXT = "Hello, this is a warmup inference to optimize model performance."
+    BENCHMARK_WARMUP_TEXT = (
+        "Hello, this is a warmup inference to optimize model performance."
+    )
 
     # Configurable benchmark frequency settings
     BENCHMARK_FREQUENCY_OPTIONS = {
@@ -400,13 +428,19 @@ class TTSConfig:
         BENCHMARK_FREQUENCY = "daily"
 
     # Development mode settings for faster startup and optimization testing
-    DEVELOPMENT_MODE = os.environ.get("KOKORO_DEVELOPMENT_MODE", "false").lower() == "true"
-    SKIP_BENCHMARKING = os.environ.get("KOKORO_SKIP_BENCHMARKING", "false").lower() == "true"
+    DEVELOPMENT_MODE = (
+        os.environ.get("KOKORO_DEVELOPMENT_MODE", "false").lower() == "true"
+    )
+    SKIP_BENCHMARKING = (
+        os.environ.get("KOKORO_SKIP_BENCHMARKING", "false").lower() == "true"
+    )
     FAST_STARTUP = os.environ.get("KOKORO_FAST_STARTUP", "false").lower() == "true"
 
     # Development mode performance profiles
     # Allow testing Apple Silicon optimizations during development
-    DEV_PERFORMANCE_PROFILE = os.environ.get("KOKORO_DEV_PERFORMANCE_PROFILE", "stable").lower()
+    DEV_PERFORMANCE_PROFILE = os.environ.get(
+        "KOKORO_DEV_PERFORMANCE_PROFILE", "stable"
+    ).lower()
 
     # Available development profiles:
     # - "minimal": CPU-only, fastest startup, minimal memory usage
@@ -419,7 +453,7 @@ class TTSConfig:
             "disable_dual_sessions": True,
             "skip_background_benchmarking": True,
             "enable_coreml_optimizations": False,
-            "chunk_duration_ms": 000,  # Larger chunks for stability
+            "chunk_duration_ms": 50,  # Larger chunks for stability
             "max_segment_length": 600,  # Smaller segments for safety
         },
         "stable": {
@@ -436,7 +470,7 @@ class TTSConfig:
             "skip_background_benchmarking": False,
             "enable_coreml_optimizations": True,
             "chunk_duration_ms": 50,  # Optimized chunks
-            "max_segment_length": 0200,  # Larger segments for performance
+            "max_segment_length": 200,  # Larger segments for performance
         },
         "benchmark": {
             "force_cpu_provider": False,
@@ -444,7 +478,7 @@ class TTSConfig:
             "skip_background_benchmarking": False,
             "enable_coreml_optimizations": True,
             "chunk_duration_ms": 40,  # Aggressive chunks
-            "max_segment_length": 0500,  # Maximum segments for testing
+            "max_segment_length": 500,  # Maximum segments for testing
         },
     }
 
@@ -481,38 +515,46 @@ class TTSConfig:
         CHUNK_DURATION_MS = 50  # 50ms chunks for smooth playback without latency
 
     # Calculate optimal chunk size for streaming
-    # Formula: (duration_ms / 0000) * sample_rate * bytes_per_sample
-    CHUNK_SIZE_BYTES = int(CHUNK_DURATION_MS / 0000 * SAMPLE_RATE * BYTES_PER_SAMPLE)
+    # Formula: (duration_ms / 1000) * sample_rate * bytes_per_sample
+    CHUNK_SIZE_BYTES = int(CHUNK_DURATION_MS / 1000 * SAMPLE_RATE * BYTES_PER_SAMPLE)
 
     # Performance tuning parameters
-    MAX_CONCURRENT_SEGMENTS = 4  # Optimal parallel processing without resource exhaustion
-    SEGMENT_INFERENCE_TIMEOUT_SECONDS = 05  # Per-segment timeout for reliability
+    MAX_CONCURRENT_SEGMENTS = (
+        4  # Optimal parallel processing without resource exhaustion
+    )
+    SEGMENT_INFERENCE_TIMEOUT_SECONDS = 5  # Per-segment timeout for reliability
     STREAMING_CONSUMER_WAIT_SECONDS = 0.5  # Streaming buffer management
     STREAM_IDLE_TIMEOUT_SECONDS = 30.0  # Client disconnect detection
 
     # Text processing limits for optimal performance
-    MAX_TEXT_LENGTH = 4500  # Extended from OpenAI API compatibility limit for optimization testing
+    MAX_TEXT_LENGTH = (
+        4500  # Extended from OpenAI API compatibility limit for optimization testing
+    )
     # Apply profile-specific segment length if in development mode
     if DEVELOPMENT_MODE and _current_profile.get("max_segment_length"):
         MAX_SEGMENT_LENGTH = _current_profile["max_segment_length"]
     else:
         # Production optimized: allow larger segments for better single-segment processing
         # reducing server-side processing overhead and improving time-to-first-audio
-        MAX_SEGMENT_LENGTH = 0200  # Increased from 800 based on optimization gains
+        MAX_SEGMENT_LENGTH = 200  # Increased from 800 based on optimization gains
 
     # Primer/segmentation behavior
     # Allow disabling aggressive primer splitting which can cause audible pauses
-    ENABLE_PRIMER_SPLIT = os.environ.get("KOKORO_ENABLE_PRIMER_SPLIT", "true").lower() == "true"
+    ENABLE_PRIMER_SPLIT = (
+        os.environ.get("KOKORO_ENABLE_PRIMER_SPLIT", "true").lower() == "true"
+    )
     # When primer split is enabled, enforce punctuation-aware boundaries and minimum size
     # Primer split thresholds tuned for faster TTFA: allow smaller first piece and no punctuation requirement
-    FIRST_SEGMENT_MIN_CHARS = int(os.environ.get("KOKORO_FIRST_SEGMENT_MIN_CHARS", "60"))
+    FIRST_SEGMENT_MIN_CHARS = int(
+        os.environ.get("KOKORO_FIRST_SEGMENT_MIN_CHARS", "60")
+    )
     FIRST_SEGMENT_REQUIRE_PUNCT = (
         os.environ.get("KOKORO_FIRST_SEGMENT_REQUIRE_PUNCT", "false").lower() == "true"
     )
 
     # Clause splitting thresholds (punctuation-aware sub-sentence segmentation)
-    CLAUSE_MIN_CHARS = int(os.environ.get("KOKORO_CLAUSE_MIN_CHARS", "000"))
-    CLAUSE_TARGET_CHARS = int(os.environ.get("KOKORO_CLAUSE_TARGET_CHARS", "060"))
+    CLAUSE_MIN_CHARS = int(os.environ.get("KOKORO_CLAUSE_MIN_CHARS", "0"))
+    CLAUSE_TARGET_CHARS = int(os.environ.get("KOKORO_CLAUSE_TARGET_CHARS", "60"))
 
     # ORT (ONNX Runtime) optimization settings
     ORT_OPTIMIZATION_ENABLED = os.environ.get("KOKORO_ORT_OPTIMIZATION", "auto").lower()
@@ -529,7 +571,9 @@ class TTSConfig:
     ORT_COMPUTE_UNITS = ["CPUAndNeuralEngine", "CPUAndGPU", "CPUOnly", "ALL"]
 
     # MPS (Metal Performance Shaders) provider settings
-    MPS_PROVIDER_ENABLED = os.environ.get("KOKORO_MPS_PROVIDER_ENABLED", "false").lower() == "true"
+    MPS_PROVIDER_ENABLED = (
+        os.environ.get("KOKORO_MPS_PROVIDER_ENABLED", "false").lower() == "true"
+    )
     MPS_PROVIDER_BENCHMARK = (
         os.environ.get("KOKORO_MPS_PROVIDER_BENCHMARK", "false").lower() == "true"
     )
@@ -541,7 +585,8 @@ class TTSConfig:
     PHONEMIZER_BACKEND = os.environ.get("KOKORO_PHONEMIZER_BACKEND", "espeak")
     PHONEMIZER_LANGUAGE = os.environ.get("KOKORO_PHONEMIZER_LANGUAGE", "en-us")
     PHONEMIZER_PRESERVE_PUNCTUATION = (
-        os.environ.get("KOKORO_PHONEMIZER_PRESERVE_PUNCTUATION", "true").lower() == "true"
+        os.environ.get("KOKORO_PHONEMIZER_PRESERVE_PUNCTUATION", "true").lower()
+        == "true"
     )
     PHONEMIZER_STRIP_STRESS = (
         os.environ.get("KOKORO_PHONEMIZER_STRIP_STRESS", "false").lower() == "true"
@@ -550,9 +595,12 @@ class TTSConfig:
     PHONEMIZER_QUALITY_MODE = (
         os.environ.get("KOKORO_PHONEMIZER_QUALITY_MODE", "true").lower() == "true"
     )
-    PHONEMIZER_ERROR_TOLERANCE = float(os.environ.get("KOKORO_PHONEMIZER_ERROR_TOLERANCE", "0.0"))
+    PHONEMIZER_ERROR_TOLERANCE = float(
+        os.environ.get("KOKORO_PHONEMIZER_ERROR_TOLERANCE", "0.0")
+    )
     TEXT_NORMALIZATION_AGGRESSIVE = (
-        os.environ.get("KOKORO_TEXT_NORMALIZATION_AGGRESSIVE", "false").lower() == "true"
+        os.environ.get("KOKORO_TEXT_NORMALIZATION_AGGRESSIVE", "false").lower()
+        == "true"
     )
 
     # Phoneme sequence length configuration
@@ -564,10 +612,16 @@ class TTSConfig:
     # Misaki G2P Configuration - Kokoro-specific phonemization
     MISAKI_ENABLED = os.environ.get("KOKORO_MISAKI_ENABLED", "true").lower() == "true"
     MISAKI_DEFAULT_LANG = os.environ.get("KOKORO_MISAKI_LANG", "en")
-    MISAKI_USE_TRANSFORMER = os.environ.get("KOKORO_MISAKI_TRANSFORMER", "false").lower() == "true"
-    MISAKI_FALLBACK_ENABLED = os.environ.get("KOKORO_MISAKI_FALLBACK", "true").lower() == "true"
-    MISAKI_CACHE_SIZE = int(os.environ.get("KOKORO_MISAKI_CACHE_SIZE", "0000"))
-    MISAKI_QUALITY_THRESHOLD = float(os.environ.get("KOKORO_MISAKI_QUALITY_THRESHOLD", "0.8"))
+    MISAKI_USE_TRANSFORMER = (
+        os.environ.get("KOKORO_MISAKI_TRANSFORMER", "false").lower() == "true"
+    )
+    MISAKI_FALLBACK_ENABLED = (
+        os.environ.get("KOKORO_MISAKI_FALLBACK", "true").lower() == "true"
+    )
+    MISAKI_CACHE_SIZE = int(os.environ.get("KOKORO_MISAKI_CACHE_SIZE", "1000"))
+    MISAKI_QUALITY_THRESHOLD = float(
+        os.environ.get("KOKORO_MISAKI_QUALITY_THRESHOLD", "0.8")
+    )
 
     # Misaki supported languages for multi-language processing
     MISAKI_SUPPORTED_LANGUAGES = {
@@ -639,7 +693,7 @@ class TTSConfig:
         logger.info(" Verifying TTS configuration parameters...")
 
         # Calculate expected chunk size for validation
-        expected_samples = int(cls.CHUNK_DURATION_MS / 0000 * cls.SAMPLE_RATE)
+        expected_samples = int(cls.CHUNK_DURATION_MS / 1000 * cls.SAMPLE_RATE)
         expected_bytes = expected_samples * cls.BYTES_PER_SAMPLE
 
         # Verify chunk size calculation
@@ -656,7 +710,9 @@ class TTSConfig:
 
         # Validate performance parameters
         if cls.MAX_CONCURRENT_SEGMENTS < 0:
-            logger.warning(" MAX_CONCURRENT_SEGMENTS must be at least 0, correcting to 0")
+            logger.warning(
+                " MAX_CONCURRENT_SEGMENTS must be at least 0, correcting to 0"
+            )
             cls.MAX_CONCURRENT_SEGMENTS = 0
         elif cls.MAX_CONCURRENT_SEGMENTS > 8:
             logger.warning(
@@ -670,11 +726,15 @@ class TTSConfig:
             )
 
         if cls.STREAM_IDLE_TIMEOUT_SECONDS < 00:
-            logger.warning(" STREAM_IDLE_TIMEOUT_SECONDS too low, may disconnect active clients")
+            logger.warning(
+                " STREAM_IDLE_TIMEOUT_SECONDS too low, may disconnect active clients"
+            )
 
         # Validate text processing limits
         if cls.MAX_TEXT_LENGTH > 2000:
-            logger.warning(f" MAX_TEXT_LENGTH ({cls.MAX_TEXT_LENGTH}) exceeds OpenAI API limit")
+            logger.warning(
+                f" MAX_TEXT_LENGTH ({cls.MAX_TEXT_LENGTH}) exceeds OpenAI API limit"
+            )
 
         if cls.MAX_SEGMENT_LENGTH > cls.MAX_TEXT_LENGTH:
             logger.warning(" MAX_SEGMENT_LENGTH cannot exceed MAX_TEXT_LENGTH")
@@ -714,7 +774,9 @@ class TTSConfig:
 
         # Validate error tolerance
         if cls.PHONEMIZER_ERROR_TOLERANCE < 0.0:
-            logger.warning(" PHONEMIZER_ERROR_TOLERANCE cannot be negative, setting to 0.0")
+            logger.warning(
+                " PHONEMIZER_ERROR_TOLERANCE cannot be negative, setting to 0.0"
+            )
             cls.PHONEMIZER_ERROR_TOLERANCE = 0.0
         elif cls.PHONEMIZER_ERROR_TOLERANCE > 0.0:
             logger.warning(" PHONEMIZER_ERROR_TOLERANCE too high, setting to 0.0")
@@ -740,9 +802,9 @@ class TTSConfig:
                 cls.MISAKI_DEFAULT_LANG = "en"
 
             # Validate cache size
-            if cls.MISAKI_CACHE_SIZE < 000:
+            if cls.MISAKI_CACHE_SIZE < 0:
                 logger.warning(" MISAKI_CACHE_SIZE too small, may impact performance")
-            elif cls.MISAKI_CACHE_SIZE > 00000:
+            elif cls.MISAKI_CACHE_SIZE > 100000:
                 logger.warning(
                     f" MISAKI_CACHE_SIZE ({cls.MISAKI_CACHE_SIZE}) may consume excessive memory"
                 )
@@ -776,11 +838,15 @@ class TTSConfig:
         # Log current configuration for debugging
         logger.info(f" Configuration summary:")
         logger.info(f"   - Sample rate: {cls.SAMPLE_RATE}Hz")
-        logger.info(f"   - Chunk size: {cls.CHUNK_SIZE_BYTES} bytes ({cls.CHUNK_DURATION_MS}ms)")
+        logger.info(
+            f"   - Chunk size: {cls.CHUNK_SIZE_BYTES} bytes ({cls.CHUNK_DURATION_MS}ms)"
+        )
         logger.info(f"   - Max concurrent segments: {cls.MAX_CONCURRENT_SEGMENTS}")
         logger.info(f"   - Max text length: {cls.MAX_TEXT_LENGTH} characters")
         logger.info(f"   - Max segment length: {cls.MAX_SEGMENT_LENGTH} characters")
-        logger.info(f"   - Misaki G2P: {'Enabled' if cls.MISAKI_ENABLED else 'Disabled'}")
+        logger.info(
+            f"   - Misaki G2P: {'Enabled' if cls.MISAKI_ENABLED else 'Disabled'}"
+        )
 
         # Log development mode configuration if active
         if cls.DEVELOPMENT_MODE:
@@ -788,8 +854,21 @@ class TTSConfig:
             logger.info(f"   - Performance profile: {cls.DEV_PERFORMANCE_PROFILE}")
             logger.info(f"   - Force CPU provider: {cls.FORCE_CPU_PROVIDER}")
             logger.info(f"   - Disable dual sessions: {cls.DISABLE_DUAL_SESSIONS}")
-            logger.info(f"   - Skip background benchmarking: {cls.SKIP_BACKGROUND_BENCHMARKING}")
+            logger.info(
+                f"   - Skip background benchmarking: {cls.SKIP_BACKGROUND_BENCHMARKING}"
+            )
             logger.info(f"   - CoreML optimizations: {cls.ENABLE_COREML_OPTIMIZATIONS}")
+
+        # Log model optimization configuration
+        logger.info(f"✅ Model optimization configuration validated")
+        logger.info(f"   - Original model path: {cls.ORIGINAL_MODEL_PATH}")
+        logger.info(f"   - Optimized model path: {cls.OPTIMIZED_MODEL_PATH}")
+        logger.info(f"   - Active model path: {cls.MODEL_PATH}")
+        if cls.ENABLE_MODEL_OPTIMIZATION_TESTING:
+            logger.info(f"   - Model optimization testing: enabled")
+            logger.info(
+                f"   - Model comparison: {'Enabled' if cls.MODEL_OPTIMIZATION_COMPARISON else 'Disabled'}"
+            )
 
         return True
 
@@ -843,7 +922,9 @@ class TTSConfig:
         ```
         """
         # Get base duration from frequency setting
-        base_duration = cls.BENCHMARK_FREQUENCY_OPTIONS.get(cls.BENCHMARK_FREQUENCY, 86400)
+        base_duration = cls.BENCHMARK_FREQUENCY_OPTIONS.get(
+            cls.BENCHMARK_FREQUENCY, 86400
+        )
 
         # Apply development mode extensions based on performance profile
         if cls.DEVELOPMENT_MODE or cls.FAST_STARTUP:
@@ -865,7 +946,7 @@ class TTSConfig:
                 if cls.BENCHMARK_FREQUENCY == "daily":
                     return 7 * 86400  # 7 days
                 elif cls.BENCHMARK_FREQUENCY == "weekly":
-                    return 04 * 86400  # 2 weeks
+                    return 14 * 86400  # 2 weeks
                 elif cls.BENCHMARK_FREQUENCY == "monthly":
                     return 60 * 86400  # 2 months
                 else:  # manually

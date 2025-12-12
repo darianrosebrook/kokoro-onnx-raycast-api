@@ -321,7 +321,25 @@ class AudioProcessor extends EventEmitter {
    * Start audio playback
    */
   async start() {
-    if (this.isPlaying) return;
+    // Guard: Don't reset if playback is active
+    if (this.isPlaying) {
+      console.log(`[${this.instanceId}] start() called but already playing - ignoring`);
+      return;
+    }
+
+    // Guard: Don't reset if there's still audio data in the buffer
+    // This prevents data loss when a new client reconnects during playback
+    if (this.ringBuffer.size > 0 && !this.isStopped) {
+      console.log(
+        `[${this.instanceId}] start() called but buffer has ${this.ringBuffer.size} bytes - resuming instead of resetting`
+      );
+      // Resume the audio loop if it's not active
+      if (!this._audioLoopActive && this.audioProcess && !this.audioProcess.killed) {
+        console.log(`[${this.instanceId}] Restarting audio processing loop to drain buffer`);
+        this.startRobustAudioLoop();
+      }
+      return;
+    }
 
     console.log(`[${this.instanceId}] Starting new audio session - resetting state`);
 
@@ -340,7 +358,12 @@ class AudioProcessor extends EventEmitter {
     this.isEndingStream = false;
     this.afplayMode = false;
 
-    // Always clear ring buffer for new session (since we just reset isPlaying)
+    // Only clear ring buffer if it's truly a new session (buffer is already empty or we're explicitly stopped)
+    if (this.ringBuffer.size > 0) {
+      console.log(
+        `[${this.instanceId}] WARNING: Clearing ${this.ringBuffer.size} bytes from buffer - this should not happen`
+      );
+    }
     this.ringBuffer.clear();
     console.log(`[${this.instanceId}] Cleared ring buffer for new session`);
 
@@ -517,32 +540,45 @@ class AudioProcessor extends EventEmitter {
           averageChunkSize: this.stats.averageChunkSize.toFixed(0) + " bytes",
         });
 
-        // If process exited normally (code 0), it finished playing successfully
+        // If process exited normally (code 0), check if we should restart to play remaining data
         if (code === 0) {
-          console.log("Audio playback completed successfully");
-          // Clear any remaining buffer data and reset state
-          if (this.ringBuffer.size > 0) {
-            console.log(
-              `[${this.instanceId}] Clearing remaining buffer data: ${this.ringBuffer.size} bytes`
-            );
-            this.ringBuffer.clear();
-          }
-          // Reset state for next playback
-          this.isPlaying = false;
-          this.isStopped = false;
-          this.isStopping = false;
-          this.restartAttempts = 0;
+          // Check if there's significant audio data still in the buffer
+          const remainingBytes = this.ringBuffer.size;
+          const remainingMs = (remainingBytes / this.format.bytesPerSecond) * 1000;
           
-          // CRITICAL FIX: If we're ending stream, use _completePlaybackSession() to ensure
-          // proper completion handling and avoid double emission
-          if (this.isEndingStream) {
+          if (remainingBytes > 0 && remainingMs > 100) {
+            // Significant audio data remains - sox exited prematurely
             console.log(
-              `[${this.instanceId}] Process exited while ending stream - completing playback session`
+              `[${this.instanceId}] Sox exited but ${remainingBytes} bytes (${remainingMs.toFixed(0)}ms) remain in buffer - restarting to play remaining audio`
             );
-            this._completePlaybackSession();
+            this.isPlaying = false;
+            this.restartAudioProcess();
           } else {
-            // Normal completion - emit directly
-            this.emit("completed");
+            console.log("Audio playback completed successfully");
+            // Clear any small remaining buffer data and reset state
+            if (remainingBytes > 0) {
+              console.log(
+                `[${this.instanceId}] Clearing minimal remaining buffer data: ${remainingBytes} bytes`
+              );
+              this.ringBuffer.clear();
+            }
+            // Reset state for next playback
+            this.isPlaying = false;
+            this.isStopped = false;
+            this.isStopping = false;
+            this.restartAttempts = 0;
+            
+            // CRITICAL FIX: If we're ending stream, use _completePlaybackSession() to ensure
+            // proper completion handling and avoid double emission
+            if (this.isEndingStream) {
+              console.log(
+                `[${this.instanceId}] Process exited while ending stream - completing playback session`
+              );
+              this._completePlaybackSession();
+            } else {
+              // Normal completion - emit directly
+              this.emit("completed");
+            }
           }
         } else {
           console.log("Audio process exited with error, restarting...");
@@ -613,9 +649,13 @@ class AudioProcessor extends EventEmitter {
 
   waitForDataAndStart() {
     console.log(`[${this.instanceId}] waitForDataAndStart called`);
+    // Use 50ms chunks to match the processing loop
     const chunkSize = this.format.bytesPerSecond * 0.05; // 50ms chunks
-    const minBufferSize = chunkSize * 1; // Wait for just 1 chunk (50ms) for faster TTFA
-    const fallbackBufferSize = chunkSize * 1; // Start immediately after timeout
+    // Buffer 250ms of audio before starting playback to prevent initial stuttering
+    // This provides enough headroom for the first segment to generate sufficient audio
+    // 250ms is still below the human perception threshold for "delay"
+    const minBufferSize = chunkSize * 5; // Wait for 5 chunks (250ms) before starting
+    const fallbackBufferSize = chunkSize * 2; // Start with at least 2 chunks after timeout
     const maxWaitTime = 2000; // 2 seconds max wait
     const startTime = performance.now();
 
@@ -782,8 +822,8 @@ class AudioProcessor extends EventEmitter {
         }
       }
 
-      // Continue processing
-      setTimeout(processChunk, 50); // Check every 50ms
+      // Continue processing - check every 25ms to match chunk size
+      setTimeout(processChunk, 25); // Check every 25ms (was 50ms)
     };
 
     processChunk();
@@ -999,8 +1039,10 @@ class AudioProcessor extends EventEmitter {
       return;
     }
 
+    // Use 50ms chunks for smoother playback - smaller chunks cause more overhead
+    // and can lead to micro-stutters due to processing delays
     const chunkSize = this.format.bytesPerSecond * 0.05; // 50ms chunks
-    console.log(`[${this.instanceId}] Processing with chunk size: ${chunkSize} bytes`);
+    console.log(`[${this.instanceId}] Processing with chunk size: ${chunkSize} bytes (50ms)`);
 
     // NEW: Robust state tracking
     let consecutiveEmptyBuffers = 0;
@@ -1009,6 +1051,7 @@ class AudioProcessor extends EventEmitter {
     let isWaitingForMoreData = false;
 
     // NEW: No arbitrary timeouts - only stop when explicitly told
+    // Adjusted for 50ms chunks: 100 * 50ms = 5 seconds
     const MAX_CONSECUTIVE_EMPTY_BUFFERS = 100; // Allow up to 5 seconds of empty buffers (100 * 50ms)
     const MAX_WAIT_TIME_MS = 60000; // Wait up to 1 minute for new data before giving up
 
@@ -1138,13 +1181,10 @@ class AudioProcessor extends EventEmitter {
           }
         }
 
-        // NEW: Adaptive delay based on buffer state
-        let nextDelay = 10; // Default 10ms
-        if (utilization > 0.8) {
-          nextDelay = 5; // High utilization - process faster
-        } else if (utilization < 0.2) {
-          nextDelay = 20; // Low utilization - slow down
-        }
+        // Use minimal delay for continuous playback - the key to avoiding stutters
+        // is to keep the sox stdin fed as fast as possible. Sox has its own internal
+        // buffering so we don't need to throttle on our side.
+        const nextDelay = 1; // Minimal delay - let back-pressure handle flow control
 
         // Continue processing
         setTimeout(processChunk, nextDelay);
@@ -1196,8 +1236,10 @@ class AudioProcessor extends EventEmitter {
           }
         }
 
-        // NEW: Continue waiting for more data with exponential backoff
-        const waitDelay = Math.min(1000, Math.pow(2, Math.min(consecutiveEmptyBuffers / 10, 6)));
+        // Continue waiting for more data with short fixed delay
+        // Avoid exponential backoff as it can cause noticeable stuttering
+        // when new data arrives after the delay has grown
+        const waitDelay = 10; // Fixed 10ms - fast enough to catch new data without busy-waiting
         setTimeout(processChunk, waitDelay);
       }
     };
