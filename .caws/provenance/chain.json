@@ -338,5 +338,39 @@
     },
     "previous_hash": "d135ed6fc11eaa9633090a5ffd90314a5af3fd62bef27dfec8ad22f647ed3dba",
     "hash": "5d79edc878a182bf01283867b00eec55e4c4445524198456245b29d8bae2ae0a"
+  },
+  {
+    "id": "prov-1765559772701",
+    "timestamp": "2025-12-12T17:16:12.701Z",
+    "commit": {
+      "hash": "4c96b72ee62e6db6b8e0887dbd8051cccd7d92bc",
+      "message": "Fix audio daemon crashes on long segments and reduce log verbosity",
+      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+    },
+    "working_spec": {
+      "id": "PROJ-001",
+      "title": "Kokoro TTS API - ONNX Runtime Optimization",
+      "risk_tier": 2,
+      "mode": "feature",
+      "waiver_ids": []
+    },
+    "quality_gates": {
+      "status": "unknown",
+      "last_validated": "2025-12-12T17:16:12.702Z"
+    },
+    "agent": {
+      "type": "human",
+      "confidence_level": null
+    },
+    "cursor_tracking": {
+      "available": false,
+      "reason": "Cursor tracking API not configured"
+    },
+    "checkpoints": {
+      "available": false,
+      "reason": "Cursor checkpoint API not configured"
+    },
+    "previous_hash": "5d79edc878a182bf01283867b00eec55e4c4445524198456245b29d8bae2ae0a",
+    "hash": "f3d19cb695fed8e415dadee8c66c19bb9b6895c3d6e7685e42ebacaa7cc67cf1"
   }
 ]

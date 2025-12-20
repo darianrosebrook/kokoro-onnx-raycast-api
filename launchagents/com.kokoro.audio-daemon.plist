@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.kokoro.audio-daemon</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/drosebrook/.nvm/versions/node/v23.11.1/bin/node</string>
+        <string>/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api/raycast/bin/audio-daemon.js</string>
+        <string>--port</string>
+        <string>8081</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/drosebrook/.nvm/versions/node/v23.11.1/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/drosebrook/Library/Logs/kokoro/audio-daemon.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/drosebrook/Library/Logs/kokoro/audio-daemon.log</string>
+</dict>
+</plist>

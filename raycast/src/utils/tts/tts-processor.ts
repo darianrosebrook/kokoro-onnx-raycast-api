@@ -61,7 +61,7 @@
  * const processor = new TTSSpeechProcessor({
  *   voice: "af_heart",
  *   speed: 1.25,
- *   serverUrl: "http://localhost:8000",
+ *   serverUrl: "http://localhost:8080",
  *   useStreaming: true,
  *   onStatusUpdate: (status) => console.log(status)
  * });
@@ -186,6 +186,7 @@ export class TTSSpeechProcessor {
   // Streaming and async coordination
   private onStatusUpdate: (status: StatusUpdate) => void;
   private abortController: AbortController | null = null;
+  private lastSpokenText: string = ""; // For replay functionality
 
   /**
    * Initialize TTS processor with user preferences.
@@ -209,7 +210,7 @@ export class TTSSpeechProcessor {
     this.speed = Math.max(1.25, parseFloat(prefs.speed ?? "1.0"));
 
     // Server URL with automatic trailing slash cleanup
-    this.serverUrl = prefs.serverUrl?.replace(/\/+$/, "") ?? "http://localhost:8000";
+    this.serverUrl = prefs.serverUrl?.replace(/\/+$/, "") ?? "http://localhost:8080";
 
     // Streaming enabled by default for better UX
     this.useStreaming = prefs.useStreaming ?? true;
@@ -476,8 +477,15 @@ export class TTSSpeechProcessor {
         }
       }
 
+      this.lastSpokenText = text; // Store for replay
       console.log(`[${this.instanceId}] Processing text...`);
-      this.onStatusUpdate({ message: "Processing text...", isPlaying: true, isPaused: false });
+      this.onStatusUpdate({
+        message: "Playing audio...",
+        isPlaying: true,
+        isPaused: false,
+        primaryAction: { title: "Pause", onAction: () => this.pause() },
+        secondaryAction: { title: "Stop", onAction: () => this.stop() },
+      });
 
       const processedText = this.textProcessor.preprocessText(text);
       console.log(`[${this.instanceId}] Text preprocessing complete:`, {
@@ -667,6 +675,7 @@ export class TTSSpeechProcessor {
           style: Toast.Style.Success,
           isPlaying: false,
           isPaused: false,
+          primaryAction: { title: "Replay", onAction: () => this.replay() },
         });
       }
     } catch (error) {
@@ -764,7 +773,31 @@ export class TTSSpeechProcessor {
     this.onStatusUpdate({ message: "Stopping...", isPlaying: false, isPaused: false });
     this.abortController?.abort();
     await this.playbackManager.stop();
-    this.onStatusUpdate({ message: "Stopped", isPlaying: false, isPaused: false });
+    this.onStatusUpdate({
+      message: "Stopped",
+      isPlaying: false,
+      isPaused: false,
+      primaryAction: this.lastSpokenText ? { title: "Replay", onAction: () => this.replay() } : undefined,
+    });
+  }
+
+  /**
+   * Replay the last spoken text.
+   * Stops any current playback and speaks the last text again.
+   */
+  async replay(): Promise<void> {
+    if (!this.lastSpokenText) {
+      this.onStatusUpdate({
+        message: "Nothing to replay",
+        style: Toast.Style.Failure,
+        isPlaying: false,
+        isPaused: false,
+      });
+      return;
+    }
+    
+    // Speak the last text again (speak() handles stopping any existing playback)
+    await this.speak(this.lastSpokenText);
   }
 
   /**

@@ -34,10 +34,10 @@ fi
 
 # Check if TTS server is running
 echo " Checking TTS server connection..."
-if curl -s http://localhost:8000/ > /dev/null; then
-    echo "✅ TTS server is running on localhost:8000"
+if curl -s http://localhost:8080/ > /dev/null; then
+    echo "✅ TTS server is running on localhost:8080"
 else
-    echo "  TTS server not detected on localhost:8000"
+    echo "  TTS server not detected on localhost:8080"
     echo "   Make sure to start the TTS server with: python api.py"
 fi
 

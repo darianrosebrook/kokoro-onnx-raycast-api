@@ -92,7 +92,7 @@ export class AudioStreamer implements IAudioStreamer {
   constructor(config: Partial<TTSProcessorConfig> = {}) {
     this.instanceID = `AudioStreamer_${Math.random().toString(36).substring(7)}`;
     this.config = {
-      serverUrl: config.serverUrl ?? "http://localhost:8000",
+      serverUrl: config.serverUrl ?? "http://localhost:8080",
       developmentMode: config.developmentMode ?? false,
       adaptiveBuffering: true,
     };

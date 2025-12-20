@@ -81,7 +81,7 @@ const TTSConfigSchema = z.object({
     .url("Server URL must be a valid URL")
     .or(z.string().regex(/^https?:\/\/localhost(:\d+)?$/, "Must be a valid URL or localhost"))
     .transform((url) => url.replace(/\/+$/, ""))
-    .default("http://localhost:8000")
+    .default("http://localhost:8080")
     .describe("TTS server URL"),
 
   useStreaming: z.boolean().default(true).describe("Enable streaming mode by default"),

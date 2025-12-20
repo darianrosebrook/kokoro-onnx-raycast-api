@@ -31,9 +31,9 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      const result = await fetchAvailableVoices("http://localhost:8000");
+      const result = await fetchAvailableVoices("http://localhost:8080");
 
-      expect(fetch).toHaveBeenCalledWith("http://localhost:8000/voices");
+      expect(fetch).toHaveBeenCalledWith("http://localhost:8080/voices");
       expect(result).toEqual(mockVoices);
     });
 
@@ -47,11 +47,11 @@ describe("VoiceManager", () => {
       } as Response);
 
       // First call - should fetch from server
-      const result1 = await fetchAvailableVoices("http://localhost:8000");
+      const result1 = await fetchAvailableVoices("http://localhost:8080");
       expect(result1).toEqual(mockVoices);
 
       // Second call - should use cache
-      const result2 = await fetchAvailableVoices("http://localhost:8000");
+      const result2 = await fetchAvailableVoices("http://localhost:8080");
       expect(result2).toEqual(mockVoices);
 
       // Should only call fetch once
@@ -64,7 +64,7 @@ describe("VoiceManager", () => {
         status: 500,
       } as Response);
 
-      const result = await fetchAvailableVoices("http://localhost:8000");
+      const result = await fetchAvailableVoices("http://localhost:8080");
 
       expect(result).toEqual([]);
     });
@@ -72,7 +72,7 @@ describe("VoiceManager", () => {
     it("should handle network error gracefully", async () => {
       vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await fetchAvailableVoices("http://localhost:8000");
+      const result = await fetchAvailableVoices("http://localhost:8080");
 
       expect(result).toEqual([]);
     });
@@ -85,7 +85,7 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      const result = await fetchAvailableVoices("http://localhost:8000");
+      const result = await fetchAvailableVoices("http://localhost:8080");
 
       expect(result).toEqual([]);
     });
@@ -101,7 +101,7 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      const result = await getValidatedVoice("af_heart", "http://localhost:8000");
+      const result = await getValidatedVoice("af_heart", "http://localhost:8080");
 
       expect(result).toBe("af_heart");
     });
@@ -115,7 +115,7 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      const result = await getValidatedVoice("af_heart", "http://localhost:8000");
+      const result = await getValidatedVoice("af_heart", "http://localhost:8080");
 
       expect(result).toBe("af_bella"); // Similar prefix "af"
     });
@@ -129,7 +129,7 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      const result = await getValidatedVoice("af_heart", "http://localhost:8000");
+      const result = await getValidatedVoice("af_heart", "http://localhost:8080");
 
       expect(result).toBe("am_joe"); // First available voice
     });
@@ -142,7 +142,7 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      const result = await getValidatedVoice("af_heart", "http://localhost:8000");
+      const result = await getValidatedVoice("af_heart", "http://localhost:8080");
 
       expect(result).toBe("af_heart");
     });
@@ -150,7 +150,7 @@ describe("VoiceManager", () => {
     it("should return requested voice on server error", async () => {
       vi.mocked(fetch).mockRejectedValueOnce(new Error("Server error"));
 
-      const result = await getValidatedVoice("af_heart", "http://localhost:8000");
+      const result = await getValidatedVoice("af_heart", "http://localhost:8080");
 
       expect(result).toBe("af_heart");
     });
@@ -241,7 +241,7 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      const result = await generateVoiceOptions("http://localhost:8000");
+      const result = await generateVoiceOptions("http://localhost:8080");
 
       expect(result).toEqual([
         { value: "af_bella", title: " Bella (Female)" },
@@ -259,7 +259,7 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      await expect(generateVoiceOptions("http://localhost:8000")).rejects.toThrow(
+      await expect(generateVoiceOptions("http://localhost:8080")).rejects.toThrow(
         "No voices available from server"
       );
     });
@@ -267,7 +267,7 @@ describe("VoiceManager", () => {
     it("should handle server error gracefully", async () => {
       vi.mocked(fetch).mockRejectedValueOnce(new Error("Server error"));
 
-      await expect(generateVoiceOptions("http://localhost:8000")).rejects.toThrow(
+      await expect(generateVoiceOptions("http://localhost:8080")).rejects.toThrow(
         "No voices available from server"
       );
     });
@@ -281,7 +281,7 @@ describe("VoiceManager", () => {
         json: async () => mockResponse,
       } as Response);
 
-      const result = await generateVoiceOptions("http://localhost:8000");
+      const result = await generateVoiceOptions("http://localhost:8080");
 
       // Should be sorted alphabetically within American English category
       expect(result[0].value).toBe("af_bella");
@@ -302,18 +302,18 @@ describe("VoiceManager", () => {
       } as Response);
 
       // First call - populate cache
-      await fetchAvailableVoices("http://localhost:8000");
+      await fetchAvailableVoices("http://localhost:8080");
       expect(fetch).toHaveBeenCalledTimes(1);
 
       // Second call - should use cache
-      await fetchAvailableVoices("http://localhost:8000");
+      await fetchAvailableVoices("http://localhost:8080");
       expect(fetch).toHaveBeenCalledTimes(1);
 
       // Clear cache
       clearVoiceCache();
 
       // Third call - should fetch again
-      await fetchAvailableVoices("http://localhost:8000");
+      await fetchAvailableVoices("http://localhost:8080");
       expect(fetch).toHaveBeenCalledTimes(2);
     });
   });
@@ -331,18 +331,18 @@ describe("VoiceManager", () => {
       } as Response);
 
       // First call
-      await fetchAvailableVoices("http://localhost:8000");
+      await fetchAvailableVoices("http://localhost:8080");
       expect(fetch).toHaveBeenCalledTimes(1);
 
       // Second call within cache duration
-      await fetchAvailableVoices("http://localhost:8000");
+      await fetchAvailableVoices("http://localhost:8080");
       expect(fetch).toHaveBeenCalledTimes(1);
 
       // Mock time to expire cache (5 minutes + 1 second)
       vi.advanceTimersByTime(5 * 60 * 1000 + 1000);
 
       // Third call after cache expiration
-      await fetchAvailableVoices("http://localhost:8000");
+      await fetchAvailableVoices("http://localhost:8080");
       expect(fetch).toHaveBeenCalledTimes(2);
 
       vi.useRealTimers();

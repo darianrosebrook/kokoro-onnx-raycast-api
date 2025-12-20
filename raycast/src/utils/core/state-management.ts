@@ -29,7 +29,7 @@ import { cacheManager, type CachedServerHealth } from "./cache.js";
 const DEFAULT_TTS_CONFIG: TTSProcessorConfig = {
   voice: "af_heart",
   speed: 1.0,
-  serverUrl: "http://localhost:8000",
+  serverUrl: "http://localhost:8080",
   daemonUrl: "http://localhost:8081",
   useStreaming: true,
   sentencePauses: false,

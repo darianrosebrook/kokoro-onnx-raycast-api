@@ -330,7 +330,7 @@ npm run dev
 ```
 
 ### 3. Configure Preferences (Optional)
-- **Server URL**: Default `http://localhost:8000`
+- **Server URL**: Default `http://localhost:8080`
 - **Default Voice**: Recommended `af_heart` (high quality)
 - **Default Speed**: `1.0x` (natural pace)
 - **Streaming**: Enabled (recommended for performance)
@@ -374,7 +374,7 @@ export KOKORO_MAX_CONCURRENT_SEGMENTS=4  # Parallel processing limit
 ### Server Issues
 ```bash
 # Check server status
-curl http://localhost:8000/health
+curl http://localhost:8080/health
 
 # Monitor server logs
 tail -f server.log

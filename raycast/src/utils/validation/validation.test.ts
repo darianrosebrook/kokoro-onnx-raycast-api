@@ -208,7 +208,7 @@ describe("ValidationUtils", () => {
       const config = {
         voice: "af_heart",
         speed: 1.25,
-        serverUrl: "http://localhost:8000",
+        serverUrl: "http://localhost:8080",
         useStreaming: true,
         sentencePauses: false,
         maxSentenceLength: 100,
@@ -227,7 +227,7 @@ describe("ValidationUtils", () => {
       expect(result.data).toEqual({
         voice: "af_heart",
         speed: 1.0,
-        serverUrl: "http://localhost:8000",
+        serverUrl: "http://localhost:8080",
         useStreaming: true,
         sentencePauses: false,
         maxSentenceLength: 0,
@@ -246,12 +246,12 @@ describe("ValidationUtils", () => {
 
     it("should normalize server URLs by removing trailing slashes", () => {
       const config = {
-        serverUrl: "http://localhost:8000/",
+        serverUrl: "http://localhost:8080/",
       };
 
       const result = ValidationUtils.validateTTSConfig(config);
       expect(result.success).toBe(true);
-      expect(result.data?.serverUrl).toBe("http://localhost:8000");
+      expect(result.data?.serverUrl).toBe("http://localhost:8080");
     });
 
     it("should reject invalid server URLs", () => {
@@ -408,7 +408,7 @@ describe("ValidationUtils", () => {
         code: "NETWORK_ERROR",
         message: "Connection failed",
         stack: "Error: Connection failed\n    at fetch",
-        context: { url: "http://localhost:8000" },
+        context: { url: "http://localhost:8080" },
         timestamp: Date.now(),
       };
 

@@ -1066,6 +1066,18 @@ class AudioProcessor extends EventEmitter {
       // NEW: Check if we should end stream (only when explicitly requested)
       // CRITICAL: Also check if audio process has finished playing
       if (this.isEndingStream && this.ringBuffer.size === 0) {
+        // Buffer is drained - close stdin to signal end of data to sox
+        if (this.audioProcess && 
+            this.audioProcess.stdin && 
+            !this.audioProcess.stdin.destroyed) {
+          console.log(`[${this.instanceId}] Buffer drained, closing stdin to finish playback`);
+          try {
+            this.audioProcess.stdin.end();
+          } catch (e) {
+            console.log(`[${this.instanceId}] stdin.end() error (expected if already closed):`, e.message);
+          }
+        }
+        
         // Check if audio process is still running
         const processStillRunning =
           this.audioProcess &&
@@ -2025,9 +2037,9 @@ class AudioDaemon extends EventEmitter {
         break;
 
       case "end_stream":
-        // Instead of immediately stopping, mark that we're ending the stream
-        // and let the audio finish playing naturally
-        console.log(`[${this.instanceId}] End stream requested - letting audio finish naturally`, {
+        // Mark that we're ending the stream - the audio loop will close stdin
+        // once the buffer is fully drained to sox
+        console.log(`[${this.instanceId}] End stream requested - audio loop will drain buffer first`, {
           bufferSize: this.audioProcessor.ringBuffer.size,
           processExitCode: this.audioProcessor.audioProcess?.exitCode,
           processKilled: this.audioProcessor.audioProcess?.killed,
@@ -2036,16 +2048,8 @@ class AudioDaemon extends EventEmitter {
         });
         this.audioProcessor.isEndingStream = true;
         
-        // CRITICAL FIX: Close stdin to signal no more data is coming
-        // This allows the audio process to finish playing what it has and exit naturally
-        if (this.audioProcessor.audioProcess && 
-            this.audioProcessor.audioProcess.stdin && 
-            !this.audioProcessor.audioProcess.stdin.destroyed &&
-            !this.audioProcessor.audioProcess.killed &&
-            this.audioProcessor.audioProcess.exitCode === null) {
-          console.log(`[${this.instanceId}] Closing stdin to signal end of stream`);
-          this.audioProcessor.audioProcess.stdin.end();
-        }
+        // NOTE: Do NOT close stdin here - let the audio loop drain the buffer first
+        // The audio loop will close stdin when buffer is empty (see processChunk)
         
         // CRITICAL FIX: Set up timeout-based completion check
         // If process doesn't exit naturally within expected duration + buffer, complete anyway

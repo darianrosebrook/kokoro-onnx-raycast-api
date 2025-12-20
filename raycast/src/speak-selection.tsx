@@ -78,7 +78,7 @@ export default async function SpeakSelection() {
 
     // Get user preferences with enhanced validation
     const prefs = getPreferenceValues();
-    const serverUrl = prefs.serverUrl || "http://localhost:8000";
+    const serverUrl = prefs.serverUrl || "http://localhost:8080";
     logger.consoleDebug("Validating voice configuration");
     // Validate and get the best available voice
     const validatedVoice = await getValidatedVoice(prefs.voice || "af_heart", serverUrl);
