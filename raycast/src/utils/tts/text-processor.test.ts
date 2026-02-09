@@ -138,6 +138,36 @@ describe("TextProcessor", () => {
       expect(segments[1].text).toBe("that will definitely exceed");
     });
 
+    it("should not split decimal numbers mid-token", () => {
+      const input = "I need 3.5 blocks of stone. That is enough.";
+      const segments = textProcessor.segmentText(input, 30);
+      // "3.5" must stay intact in the first segment
+      expect(segments[0].text).toContain("3.5");
+    });
+
+    it("should not split on abbreviations like Dr.", () => {
+      // Disable abbreviation expansion to test the regex directly
+      textProcessor.configurePreprocessor("expand-abbreviations", false);
+      const input = "I see Dr. Smith near the village. He has items.";
+      const segments = textProcessor.segmentText(input, 40);
+      expect(segments[0].text).toContain("Dr. Smith");
+    });
+
+    it("should not split coordinate numbers like 123.45", () => {
+      const input = "The cave is at coords 123.45, 678.90. Let me go there.";
+      const segments = textProcessor.segmentText(input, 60);
+      expect(segments[0].text).toContain("123.45");
+      expect(segments[0].text).toContain("678.90");
+    });
+
+    it("should split correctly on ellipses followed by new sentence", () => {
+      // Disable the fixPunctuation preprocessor so ellipses aren't collapsed
+      textProcessor.configurePreprocessor("fix-punctuation", false);
+      const input = "I see a village ahead... Maybe I should trade.";
+      const segments = textProcessor.segmentText(input, 30);
+      expect(segments[0].text).toBe("I see a village ahead...");
+    });
+
     it("should handle paragraphs correctly", () => {
       const input = "Paragraph one.\n\nParagraph two. It has two sentences.";
       const segments = textProcessor.segmentText(input, 200);

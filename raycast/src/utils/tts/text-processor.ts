@@ -331,12 +331,29 @@ export class TextProcessor implements ITextProcessor {
   }
 
   /**
-   * Segment text by sentences
+   * Segment text by sentences.
+   * Uses boundary-aware splitting that avoids breaking on:
+   *   - Decimal numbers (3.5, 123.45)
+   *   - Common abbreviations (Dr., Mr., e.g., i.e.) — note: the
+   *     expandAbbreviations preprocessor may already handle some of these,
+   *     but the regex protects against cases where preprocessing is disabled.
+   *   - Ellipses (...)
    */
   private segmentBySentences(text: string): string[] {
-    // Enhanced sentence detection with better punctuation handling
-    const sentences = text.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g) || [];
-    return sentences.map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+    const sentenceBoundary =
+      /(?<![A-Z][a-z])(?<!\b(?:Dr|Mr|Mrs|Ms|Jr|Sr|St|vs|etc|e\.g|i\.e|approx|dept|govt|avg))(?<!\d)(?<!\.\.)([.!?]+["']?)\s+(?=[A-Z"])/g;
+    const parts = text.split(sentenceBoundary);
+    const sentences: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) {
+        // Capture group (punctuation) — reattach to preceding segment
+        if (sentences.length > 0) sentences[sentences.length - 1] += parts[i];
+      } else {
+        const trimmed = parts[i].trim();
+        if (trimmed) sentences.push(trimmed);
+      }
+    }
+    return sentences;
   }
 
   /**
@@ -516,8 +533,8 @@ export class TextProcessor implements ITextProcessor {
       text
         // Ensure spaces after punctuation
         .replace(/([.!?])([A-Z])/g, "$1 $2")
-        // Fix multiple punctuation marks
-        .replace(/[.]{2,}/g, ".")
+        // Fix multiple punctuation marks (preserve ellipses as a pause)
+        .replace(/[.]{4,}/g, "...")
         .replace(/[!]{2,}/g, "!")
         .replace(/[?]{2,}/g, "?")
         // Remove excessive commas
