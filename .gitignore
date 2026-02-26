@@ -6,8 +6,7 @@ plans/
 archive/
 summary/
 
-# Documentation Archive (old/temporal docs)
-docs/archive/
+# Documentation Archive (tracked — contains historical reference docs)
 
 # Temporary development files (created during debugging/testing)
 temp/
