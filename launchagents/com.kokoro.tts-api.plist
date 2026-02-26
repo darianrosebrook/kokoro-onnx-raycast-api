@@ -7,7 +7,7 @@
     
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api/.venv/bin/python</string>
+        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/.venv/bin/python</string>
         <string>-m</string>
         <string>uvicorn</string>
         <string>api.main:app</string>
@@ -18,14 +18,18 @@
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api</string>
+    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx</string>
     
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>VIRTUAL_ENV</key>
-        <string>/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api/.venv</string>
+        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/.venv</string>
+        <key>KOKORO_MODEL_FILE</key>
+        <string>kokoro-v1.0.int8-graph-opt.onnx</string>
+        <key>ESPEAK_DATA_PATH</key>
+        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/.venv/lib/python3.13/site-packages/espeakng_loader/espeak-ng-data</string>
     </dict>
     
     <key>RunAtLoad</key>
@@ -41,9 +45,9 @@
     <integer>10</integer>
     
     <key>StandardOutPath</key>
-    <string>/Users/drosebrook/Library/Logs/kokoro/tts-api.log</string>
+    <string>/Users/darianrosebrook/Library/Logs/kokoro/tts-api.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/drosebrook/Library/Logs/kokoro/tts-api.log</string>
+    <string>/Users/darianrosebrook/Library/Logs/kokoro/tts-api.log</string>
 </dict>
 </plist>

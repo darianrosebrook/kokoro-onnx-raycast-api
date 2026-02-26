@@ -10,9 +10,22 @@ from pathlib import Path
 # Base paths
 PROJECT_ROOT = Path(__file__).parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
+OPTIMIZED_MODELS_DIR = PROJECT_ROOT / "optimized_models"
 
 # Model files (kokoro-onnx v1.0)
-MODEL_PATH = MODELS_DIR / "kokoro-v1.0.onnx"
+# Support environment variable to override model path (e.g., use optimized versions)
+MODEL_FILE = os.getenv("KOKORO_MODEL_FILE", "kokoro-v1.0.onnx")
+if MODEL_FILE.startswith("/") or MODEL_FILE.startswith("./"):
+    # Absolute or relative path provided
+    MODEL_PATH = Path(MODEL_FILE)
+else:
+    # Check optimized_models first, then models directory
+    optimized_path = OPTIMIZED_MODELS_DIR / MODEL_FILE
+    if optimized_path.exists():
+        MODEL_PATH = optimized_path
+    else:
+        MODEL_PATH = MODELS_DIR / MODEL_FILE
+
 VOICES_PATH = MODELS_DIR / "voices-v1.0.bin"
 
 # Server settings

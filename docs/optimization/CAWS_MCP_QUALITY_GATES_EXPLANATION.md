@@ -35,7 +35,7 @@ The `caws_quality_gates_run` MCP tool is supposed to:
 ### Error Encountered:
 
 ```
-Error: Cannot find module '/Users/drosebrook/.cursor/extensions/packages/quality-gates/run-quality-gates.mjs'
+Error: Cannot find module '/Users/darianrosebrook/.cursor/extensions/packages/quality-gates/run-quality-gates.mjs'
 ```
 
 ### Root Cause:

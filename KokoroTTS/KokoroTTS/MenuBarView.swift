@@ -123,18 +123,37 @@ struct MenuBarView: View {
             
             // Log viewer
             if showingLogs {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(serverManager.logs, id: \.self) { line in
-                            Text(line)
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(line.hasPrefix("---") ? .blue : .primary)
+                if serverManager.logs.isEmpty {
+                    VStack(spacing: 8) {
+                        Text("No logs available")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                        Button(action: { serverManager.refreshLogs() }) {
+                            Label("Try Loading Logs", systemImage: "arrow.clockwise")
                         }
+                        .buttonStyle(.bordered)
+                        .font(.caption)
                     }
+                    .frame(height: 100)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(serverManager.logs.enumerated()), id: \.offset) { index, line in
+                                Text(line)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(line.hasPrefix("---") ? .blue : 
+                                                    line.contains("ERROR") || line.contains("Error") ? .red :
+                                                    line.contains("WARNING") || line.contains("Warning") ? .orange :
+                                                    .primary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .padding(4)
+                    }
+                    .frame(height: 200)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(4)
                 }
-                .frame(height: 200)
-                .background(Color(NSColor.textBackgroundColor))
-                .cornerRadius(4)
                 
                 Button(action: { serverManager.refreshLogs() }) {
                     Label("Refresh Logs", systemImage: "arrow.clockwise")

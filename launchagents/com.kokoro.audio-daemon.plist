@@ -7,19 +7,19 @@
     
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/drosebrook/.nvm/versions/node/v23.11.1/bin/node</string>
-        <string>/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api/raycast/bin/audio-daemon.js</string>
+        <string>/Users/darianrosebrook/.nvm/versions/node/v22.19.0/bin/node</string>
+        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/raycast/bin/audio-daemon.js</string>
         <string>--port</string>
         <string>8081</string>
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api</string>
+    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx</string>
     
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/drosebrook/.nvm/versions/node/v23.11.1/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>/Users/darianrosebrook/.nvm/versions/node/v22.19.0/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
     
     <key>RunAtLoad</key>
@@ -35,9 +35,9 @@
     <integer>10</integer>
     
     <key>StandardOutPath</key>
-    <string>/Users/drosebrook/Library/Logs/kokoro/audio-daemon.log</string>
+    <string>/Users/darianrosebrook/Library/Logs/kokoro/audio-daemon.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/drosebrook/Library/Logs/kokoro/audio-daemon.log</string>
+    <string>/Users/darianrosebrook/Library/Logs/kokoro/audio-daemon.log</string>
 </dict>
 </plist>

@@ -6,7 +6,7 @@ echo "🚀 Starting startup time measurement..."
 START_TIME=$(date +%s.%N)
 
 # Start server in background
-cd /Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api
+cd /Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api
 source .venv/bin/activate 2>/dev/null
 
 # Start server and capture output

@@ -21,7 +21,7 @@ This setup creates a macOS Launch Agent that:
 ### Install Service
 
 ```bash
-cd /Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api
+cd /Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api
 ./scripts/install_service.sh
 ```
 

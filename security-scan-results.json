@@ -2,7 +2,7 @@
   "secrets": [],
   "sast": [
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 159,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -11,7 +11,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 160,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -20,7 +20,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 161,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -29,7 +29,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 162,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -38,7 +38,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 163,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -47,7 +47,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 164,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -56,7 +56,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 165,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -65,7 +65,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 166,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -74,7 +74,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 168,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -83,7 +83,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 169,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -92,7 +92,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 170,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -101,7 +101,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 172,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -110,7 +110,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 173,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -119,7 +119,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 177,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -128,7 +128,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 178,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -137,7 +137,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 179,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -146,7 +146,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 180,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -155,7 +155,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 181,
       "column": 16,
       "pattern": "compile\\s*\\(",
@@ -164,7 +164,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 811,
       "column": 24,
       "pattern": "compile\\s*\\(",
@@ -173,7 +173,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 812,
       "column": 24,
       "pattern": "compile\\s*\\(",
@@ -182,7 +182,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 813,
       "column": 24,
       "pattern": "compile\\s*\\(",
@@ -191,7 +191,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 818,
       "column": 24,
       "pattern": "compile\\s*\\(",
@@ -200,7 +200,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 819,
       "column": 24,
       "pattern": "compile\\s*\\(",
@@ -209,7 +209,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 820,
       "column": 24,
       "pattern": "compile\\s*\\(",
@@ -218,7 +218,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 821,
       "column": 24,
       "pattern": "compile\\s*\\(",
@@ -227,7 +227,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/warnings.py",
       "line": 822,
       "column": 24,
       "pattern": "compile\\s*\\(",
@@ -236,7 +236,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/security.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/security.py",
       "line": 96,
       "column": 14,
       "pattern": "exec\\s*\\(",
@@ -245,7 +245,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/security.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/security.py",
       "line": 97,
       "column": 14,
       "pattern": "eval\\s*\\(",
@@ -254,7 +254,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/main.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/main.py",
       "line": 437,
       "column": 13,
       "pattern": "__import__\\s*\\(",
@@ -263,7 +263,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/main.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/main.py",
       "line": 451,
       "column": 13,
       "pattern": "__import__\\s*\\(",
@@ -272,7 +272,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
       "line": 85,
       "column": 20,
       "pattern": "compile\\s*\\(",
@@ -281,7 +281,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
       "line": 86,
       "column": 20,
       "pattern": "compile\\s*\\(",
@@ -290,7 +290,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
       "line": 87,
       "column": 21,
       "pattern": "compile\\s*\\(",
@@ -299,7 +299,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
       "line": 90,
       "column": 23,
       "pattern": "compile\\s*\\(",
@@ -308,7 +308,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
       "line": 93,
       "column": 14,
       "pattern": "compile\\s*\\(",
@@ -317,7 +317,7 @@
       "type": "sast"
     },
     {
-      "file": "/Users/drosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
+      "file": "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api/api/tts/text_processing.py",
       "line": 94,
       "column": 14,
       "pattern": "compile\\s*\\(",

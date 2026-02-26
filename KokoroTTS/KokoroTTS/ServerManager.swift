@@ -29,7 +29,7 @@ class ServerManager: ObservableObject {
     private let apiURL = "http://127.0.0.1:8080"
     private let daemonURL = "http://127.0.0.1:8081"
     
-    let projectPath = "/Users/drosebrook/Desktop/Projects/personal/kokoro-onnx-raycast-api"
+    let projectPath = "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx"
     
     var statusIcon: String {
         if apiStatus == .running && daemonStatus == .running {
@@ -197,20 +197,44 @@ class ServerManager: ObservableObject {
     
     func refreshLogs() {
         let logFiles = [
-            "/Users/drosebrook/Library/Logs/kokoro/tts-api.log",
-            "/Users/drosebrook/Library/Logs/kokoro/audio-daemon.log"
+            "/Users/darianrosebrook/Library/Logs/kokoro/tts-api.log",
+            "/Users/darianrosebrook/Library/Logs/kokoro/audio-daemon.log"
         ]
         
         var allLogs: [String] = []
         
         for logFile in logFiles {
-            if let content = try? String(contentsOfFile: logFile, encoding: .utf8) {
-                let lines = content.components(separatedBy: .newlines)
-                let lastLines = lines.suffix(25)
-                let filename = URL(fileURLWithPath: logFile).lastPathComponent
-                allLogs.append("--- \(filename) ---")
-                allLogs.append(contentsOf: lastLines)
+            let fileURL = URL(fileURLWithPath: logFile)
+            
+            // Check if file exists
+            guard FileManager.default.fileExists(atPath: logFile) else {
+                allLogs.append("--- \(fileURL.lastPathComponent) ---")
+                allLogs.append("Log file not found at: \(logFile)")
+                continue
             }
+            
+            // Try to read the file
+            do {
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                let lines = content.components(separatedBy: .newlines)
+                let lastLines = Array(lines.suffix(25))
+                
+                if lastLines.isEmpty {
+                    allLogs.append("--- \(fileURL.lastPathComponent) ---")
+                    allLogs.append("(Log file is empty)")
+                } else {
+                    allLogs.append("--- \(fileURL.lastPathComponent) ---")
+                    allLogs.append(contentsOf: lastLines)
+                }
+            } catch {
+                allLogs.append("--- \(fileURL.lastPathComponent) ---")
+                allLogs.append("Error reading log: \(error.localizedDescription)")
+            }
+        }
+        
+        // If no logs were read, add a message
+        if allLogs.isEmpty {
+            allLogs.append("No logs available")
         }
         
         logs = allLogs
