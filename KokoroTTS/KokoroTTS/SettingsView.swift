@@ -59,7 +59,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Kokoro TTS Menu Bar")
                         .font(.headline)
-                    Text("Version 1.0.0")
+                    Text("Version 1.1.0")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text("A menu bar app for controlling Kokoro TTS server")

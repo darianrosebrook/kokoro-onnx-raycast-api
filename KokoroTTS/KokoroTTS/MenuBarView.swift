@@ -35,17 +35,17 @@ struct MenuBarView: View {
                         .foregroundColor(serverManager.apiStatus == .running ? .green : .red)
                     Text("TTS API")
                     Spacer()
-                    Text(":8080")
+                    Text(":\(serverManager.apiPort)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 HStack {
                     Image(systemName: serverManager.daemonStatus == .running ? "checkmark.circle.fill" : "xmark.circle")
                         .foregroundColor(serverManager.daemonStatus == .running ? .green : .red)
                     Text("Audio Daemon")
                     Spacer()
-                    Text(":8081")
+                    Text(":\(serverManager.daemonPort)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

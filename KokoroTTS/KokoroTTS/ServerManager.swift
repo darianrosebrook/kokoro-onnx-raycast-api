@@ -20,14 +20,25 @@ class ServerManager: ObservableObject {
     @Published var apiStatus: ServerStatus = .stopped
     @Published var daemonStatus: ServerStatus = .stopped
     @Published var voices: [String] = []
-    @Published var selectedVoice: String = "af_heart"
-    @Published var speed: Double = 1.0
+    @Published var selectedVoice: String = UserDefaults.standard.string(forKey: "selectedVoice") ?? "af_heart" {
+        didSet { UserDefaults.standard.set(selectedVoice, forKey: "selectedVoice") }
+    }
+    @Published var speed: Double = {
+        let stored = UserDefaults.standard.double(forKey: "speed")
+        return stored > 0 ? stored : 1.0
+    }() {
+        didSet { UserDefaults.standard.set(speed, forKey: "speed") }
+    }
     @Published var lastError: String?
     @Published var logs: [String] = []
-    
+
     private var healthCheckTimer: Timer?
-    private let apiURL = "http://127.0.0.1:8080"
-    private let daemonURL = "http://127.0.0.1:8081"
+
+    /// Ports — read from UserDefaults (shared with SettingsView's @AppStorage keys)
+    var apiPort: String { UserDefaults.standard.string(forKey: "apiPort") ?? "8080" }
+    var daemonPort: String { UserDefaults.standard.string(forKey: "daemonPort") ?? "8081" }
+    private var apiURL: String { "http://127.0.0.1:\(apiPort)" }
+    private var daemonURL: String { "http://127.0.0.1:\(daemonPort)" }
 
     private static let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
     static let logsDir = "\(homeDir)/Library/Logs/kokoro"
