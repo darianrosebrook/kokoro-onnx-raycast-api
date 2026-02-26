@@ -101,10 +101,25 @@ Thumbs.db
 # Backup files from emoji cleanup script
 *.backup
 
+# Swift build artifacts
+KokoroTTS/.build/
+
+# Espeak path cache (machine-specific)
+.espeak_path_cache
+
+# Build/test artifacts
+artifacts/
+coverage.xml
+htmlcov/
+.coverage
+.mutmut-cache/
+.pytest_cache/
+
+# Cursor/IDE
 .cursor/
 .cursorrules
 .cursorignore
-.cursorignorerules 
+.cursorignorerules
 
 .audio-daemon.pid
 .webui_secret_key
