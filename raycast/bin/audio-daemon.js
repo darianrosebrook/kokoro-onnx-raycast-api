@@ -2017,9 +2017,25 @@ class AudioDaemon extends EventEmitter {
    * Handle control message
    */
   async handleControl(data) {
-    if (!this.audioProcessor) return;
+    if (!this.audioProcessor) {
+      // Initialize audio processor if not already done
+      const format = new AudioFormat(
+        data?.params?.format || this.config.format || "pcm",
+        data?.params?.sampleRate || this.config.sampleRate || 24000,
+        data?.params?.channels || this.config.channels || 1,
+        data?.params?.bitDepth || this.config.bitDepth || 16
+      );
+      this.audioProcessor = new AudioProcessor(format, this.instanceId);
+    }
 
-    switch (data.action) {
+    // Handle both message formats: {action, params} or {data: {action, params}}
+    const action = data?.action || data?.data?.action;
+    if (!action) {
+      console.error(`[${this.instanceId}] Control message missing action:`, data);
+      return;
+    }
+
+    switch (action) {
       case "play":
         await this.audioProcessor.start();
         break;
@@ -2130,11 +2146,12 @@ class AudioDaemon extends EventEmitter {
         break;
 
       case "configure":
-        console.log("Configuration received:", data.params);
+        const params = data?.params || data?.data?.params;
+        console.log(`[${this.instanceId}] Configuration received:`, params);
         break;
 
       default:
-        console.warn("Unknown control action:", data.action);
+        console.warn(`[${this.instanceId}] Unknown control action:`, action);
     }
 
     // Broadcast status update

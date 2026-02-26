@@ -37,6 +37,15 @@ fi
 # Activate virtual environment
 source .venv/bin/activate
 
+# --- Set environment variables ---
+# Fix espeak-ng data path issue (dynamically detect from Python)
+ESPEAK_DATA_PATH=$(python3 -c "import espeakng_loader; print(espeakng_loader.get_data_path())" 2>/dev/null || echo "")
+if [ -n "$ESPEAK_DATA_PATH" ]; then
+    export ESPEAK_DATA_PATH
+fi
+# Use optimized model if available
+export KOKORO_MODEL_FILE="${KOKORO_MODEL_FILE:-kokoro-v1.0.int8-graph-opt.onnx}"
+
 # --- Check for audio dependencies ---
 check_audio_deps() {
     local missing=()
@@ -56,14 +65,52 @@ check_audio_deps
 
 # --- Kill existing processes ---
 kill_port() {
-    if lsof -i :$1 &>/dev/null; then
-        echo "Stopping process on port $1..."
-        kill -9 $(lsof -t -i:$1) 2>/dev/null || true
-        sleep 1
-    fi
+    local port=$1
+    local max_attempts=5
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        local pids=$(lsof -ti :$port 2>/dev/null || true)
+        
+        if [ -z "$pids" ]; then
+            # Port is free
+            return 0
+        fi
+        
+        if [ $attempt -eq 0 ]; then
+            echo "Stopping process(es) on port $port..."
+        fi
+        
+        # Kill all processes using this port
+        echo "$pids" | xargs kill -9 2>/dev/null || true
+        
+        # Wait a bit for processes to die
+        sleep 0.5
+        
+        # Check if port is still in use
+        if ! lsof -i :$port &>/dev/null; then
+            return 0
+        fi
+        
+        attempt=$((attempt + 1))
+    done
+    
+    # If we get here, port is still in use
+    echo -e "${YELLOW}Warning: Port $port may still be in use${NC}"
+    return 1
 }
+
+# Kill processes on both ports
 kill_port $PORT
 kill_port $AUDIO_DAEMON_PORT
+
+# Also kill any existing gunicorn, uvicorn or audio-daemon processes
+pkill -f "gunicorn.*api.main:app" 2>/dev/null || true
+pkill -f "uvicorn api.main:app" 2>/dev/null || true
+pkill -f "audio-daemon.js" 2>/dev/null || true
+
+# Wait a moment for processes to fully terminate
+sleep 1
 
 # --- Start Audio Daemon ---
 mkdir -p logs
@@ -89,10 +136,26 @@ start_audio_daemon() {
 cleanup() {
     echo ""
     echo "Shutting down..."
-    [ -f .audio-daemon.pid ] && kill $(cat .audio-daemon.pid) 2>/dev/null && rm -f .audio-daemon.pid
+    
+    # Kill audio daemon if PID file exists
+    if [ -f .audio-daemon.pid ]; then
+        local pid=$(cat .audio-daemon.pid)
+        kill $pid 2>/dev/null || true
+        rm -f .audio-daemon.pid
+    fi
+    
+    # Kill any remaining processes on our ports
+    kill_port $PORT 2>/dev/null || true
+    kill_port $AUDIO_DAEMON_PORT 2>/dev/null || true
+    
+    # Kill any remaining gunicorn, uvicorn or audio-daemon processes
+    pkill -f "gunicorn.*api.main:app" 2>/dev/null || true
+    pkill -f "uvicorn api.main:app" 2>/dev/null || true
+    pkill -f "audio-daemon.js" 2>/dev/null || true
+    
     exit 0
 }
-trap cleanup SIGINT SIGTERM
+trap cleanup SIGINT SIGTERM EXIT
 
 # --- Start services ---
 start_audio_daemon

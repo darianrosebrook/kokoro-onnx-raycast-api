@@ -78,6 +78,8 @@ cat > "$CONTENTS_DIR/Info.plist" << 'PLIST'
     <string></string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSUserNotificationsUsageDescription</key>
+    <string>Kokoro TTS needs to display notifications about service status.</string>
 </dict>
 </plist>
 PLIST
