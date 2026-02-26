@@ -190,7 +190,7 @@ describe("AudioProcessor", () => {
     if (processor.processKeepAliveTimer) clearTimeout(processor.processKeepAliveTimer);
     if (processor.restartTimeout) clearTimeout(processor.restartTimeout);
     if (processor.audioProcess) {
-      try { processor.audioProcess.kill("SIGTERM"); } catch (_) {}
+      try { processor.audioProcess.kill("SIGTERM"); } catch { /* process may be dead */ }
     }
     vi.restoreAllMocks();
   });
@@ -290,13 +290,13 @@ describe("AudioDaemon", () => {
   afterEach(() => {
     if (daemon.heartbeatInterval) clearInterval(daemon.heartbeatInterval);
     if (daemon.server) {
-      try { daemon.server.close(); } catch (_) {}
+      try { daemon.server.close(); } catch { /* process may be dead */ }
     }
     if (daemon.audioProcessor) {
       if (daemon.audioProcessor._audioLoopInterval)
         clearInterval(daemon.audioProcessor._audioLoopInterval);
       if (daemon.audioProcessor.audioProcess) {
-        try { daemon.audioProcessor.audioProcess.kill("SIGTERM"); } catch (_) {}
+        try { daemon.audioProcessor.audioProcess.kill("SIGTERM"); } catch { /* process may be dead */ }
       }
     }
     vi.restoreAllMocks();
@@ -440,23 +440,28 @@ describe("AudioDaemon", () => {
       expect(() => daemon.handleEndStream()).not.toThrow();
     });
 
-    it("calls stop on non-afplay processor", () => {
+    it("routes to handleControl end_stream action (drain-and-complete)", () => {
+      // BUG FIX: handleEndStream previously called stop() which killed playback
+      // without emitting "completed". Now it routes through handleControl's
+      // "end_stream" action which has proper drain-and-complete logic.
       const format = new AudioFormat("pcm", 24000, 1, 16);
       daemon.audioProcessor = new AudioProcessor(format);
       daemon.audioProcessor.afplayMode = false;
       const stopSpy = vi.spyOn(daemon.audioProcessor, "stop");
       daemon.handleEndStream();
-      expect(stopSpy).toHaveBeenCalled();
+      // Should NOT call stop — that was the bug
+      expect(stopSpy).not.toHaveBeenCalled();
+      // With empty buffer and no process, completion fires immediately,
+      // so isEndingStream is reset to false. Check _completionEmitted instead.
+      expect(daemon.audioProcessor._completionEmitted).toBe(true);
     });
 
-    it("marks buffer finished in afplay mode instead of stopping", () => {
+    it("routes to handleControl in afplay mode too", () => {
       const format = new AudioFormat("pcm", 24000, 1, 16);
       daemon.audioProcessor = new AudioProcessor(format);
       daemon.audioProcessor.afplayMode = true;
-      const stopSpy = vi.spyOn(daemon.audioProcessor, "stop");
       daemon.handleEndStream();
-      expect(daemon.audioProcessor.ringBuffer.isFinished).toBe(true);
-      expect(stopSpy).not.toHaveBeenCalled();
+      expect(daemon.audioProcessor._completionEmitted).toBe(true);
     });
   });
 
@@ -741,7 +746,7 @@ describe("AudioProcessor processAudioLoop", () => {
     if (processor.processKeepAliveTimer) clearTimeout(processor.processKeepAliveTimer);
     if (processor.restartTimeout) clearTimeout(processor.restartTimeout);
     if (processor.audioProcess) {
-      try { processor.audioProcess.kill("SIGTERM"); } catch (_) {}
+      try { processor.audioProcess.kill("SIGTERM"); } catch { /* process may be dead */ }
     }
     vi.restoreAllMocks();
   });
@@ -769,7 +774,7 @@ describe("AudioProcessor processAudioLoop", () => {
   it("prevents re-entrancy", () => {
     processor._audioLoopActive = true;
     processor.audioProcess = { killed: false, exitCode: null };
-    const logSpy = vi.spyOn(console, "log");
+    const _logSpy = vi.spyOn(console, "log");
     processor.processAudioLoop();
     // Should return early without logging "NEW ROBUST AUDIO LOOP STARTED"
     // (re-entrancy guard at line 1020)
@@ -902,7 +907,7 @@ describe("AudioProcessor restartAudioProcess", () => {
     if (processor.processKeepAliveTimer) clearTimeout(processor.processKeepAliveTimer);
     if (processor.restartTimeout) clearTimeout(processor.restartTimeout);
     if (processor.audioProcess) {
-      try { processor.audioProcess.kill("SIGTERM"); } catch (_) {}
+      try { processor.audioProcess.kill("SIGTERM"); } catch { /* process may be dead */ }
     }
     vi.restoreAllMocks();
   });
@@ -1000,7 +1005,7 @@ describe("AudioDaemon WebSocket integration", () => {
       if (daemon.audioProcessor._memoryLogInterval)
         clearInterval(daemon.audioProcessor._memoryLogInterval);
       if (daemon.audioProcessor.audioProcess) {
-        try { daemon.audioProcessor.audioProcess.kill("SIGKILL"); } catch (_) {}
+        try { daemon.audioProcessor.audioProcess.kill("SIGKILL"); } catch { /* process may be dead */ }
       }
     }
     daemon.stop();

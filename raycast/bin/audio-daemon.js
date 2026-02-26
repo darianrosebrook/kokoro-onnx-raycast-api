@@ -1987,20 +1987,17 @@ class AudioDaemon extends EventEmitter {
   }
 
   /**
-   * Handle end stream message
+   * Handle end stream message.
+   * Routes to handleControl's "end_stream" action which has the proper
+   * drain-and-complete logic (timeout, buffer check, _completePlaybackSession).
+   *
+   * BUG FIX: Previously called this.audioProcessor.stop() which killed the
+   * audio process immediately without emitting "completed", causing the
+   * Raycast extension to never know playback finished.
    */
   handleEndStream() {
     if (!this.audioProcessor) return;
-
-    console.log("End stream received, stopping audio processor");
-
-    // Mark ring buffer as finished for afplay mode
-    if (this.audioProcessor.afplayMode) {
-      this.audioProcessor.ringBuffer.markFinished();
-      console.log(`[${this.instanceId}] Marked ring buffer as finished for afplay mode`);
-    } else {
-      this.audioProcessor.stop();
-    }
+    this.handleControl({ action: "end_stream" });
   }
 
   /**
