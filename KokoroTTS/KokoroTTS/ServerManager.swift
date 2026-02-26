@@ -28,8 +28,19 @@ class ServerManager: ObservableObject {
     private var healthCheckTimer: Timer?
     private let apiURL = "http://127.0.0.1:8080"
     private let daemonURL = "http://127.0.0.1:8081"
-    
-    let projectPath = "/Users/darianrosebrook/Desktop/Projects/kokoro-onnx"
+
+    private static let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+    static let logsDir = "\(homeDir)/Library/Logs/kokoro"
+
+    /// Project path — resolved from LaunchAgent plist or defaults to ~/Desktop/Projects/kokoro-onnx
+    let projectPath: String = {
+        let plistPath = "\(homeDir)/Library/LaunchAgents/com.kokoro.tts-api.plist"
+        if let plist = NSDictionary(contentsOfFile: plistPath),
+           let workDir = plist["WorkingDirectory"] as? String {
+            return workDir
+        }
+        return "\(homeDir)/Desktop/Projects/kokoro-onnx"
+    }()
     
     var statusIcon: String {
         if apiStatus == .running && daemonStatus == .running {
@@ -179,7 +190,7 @@ class ServerManager: ObservableObject {
     }
     
     private func runLaunchctl(action: String, service: String) {
-        let plistPath = "\(projectPath)/launchagents/\(service).plist"
+        let plistPath = "\(Self.homeDir)/Library/LaunchAgents/\(service).plist"
         
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
@@ -197,8 +208,8 @@ class ServerManager: ObservableObject {
     
     func refreshLogs() {
         let logFiles = [
-            "/Users/darianrosebrook/Library/Logs/kokoro/tts-api.log",
-            "/Users/darianrosebrook/Library/Logs/kokoro/audio-daemon.log"
+            "\(Self.logsDir)/tts-api.log",
+            "\(Self.logsDir)/audio-daemon.log"
         ]
         
         var allLogs: [String] = []

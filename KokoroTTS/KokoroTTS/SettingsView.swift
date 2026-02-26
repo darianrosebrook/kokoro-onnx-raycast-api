@@ -46,7 +46,7 @@ struct SettingsView: View {
             Section("Actions") {
                 HStack {
                     Button("Open Logs Folder") {
-                        NSWorkspace.shared.open(URL(fileURLWithPath: "/Users/darianrosebrook/Library/Logs/kokoro/"))
+                        NSWorkspace.shared.open(URL(fileURLWithPath: ServerManager.logsDir))
                     }
                     
                     Button("Open Project Folder") {
