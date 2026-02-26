@@ -100,7 +100,7 @@ mkdir -p "$LOGS_DIR"
 echo -e "${GREEN}Logs directory: $LOGS_DIR${NC}"
 echo ""
 
-# Step 5: Install LaunchAgents
+# Step 5: Install LaunchAgents (resolve template placeholders)
 echo -e "${YELLOW}Step 5: Installing LaunchAgents...${NC}"
 mkdir -p "$LAUNCH_AGENTS_DIR"
 
@@ -108,11 +108,26 @@ mkdir -p "$LAUNCH_AGENTS_DIR"
 launchctl unload "$LAUNCH_AGENTS_DIR/com.kokoro.tts-api.plist" 2>/dev/null || true
 launchctl unload "$LAUNCH_AGENTS_DIR/com.kokoro.audio-daemon.plist" 2>/dev/null || true
 
-# Copy plist files
-cp "$SCRIPT_DIR/launchagents/com.kokoro.tts-api.plist" "$LAUNCH_AGENTS_DIR/"
-cp "$SCRIPT_DIR/launchagents/com.kokoro.audio-daemon.plist" "$LAUNCH_AGENTS_DIR/"
+# Detect paths for template substitution
+NODE_BIN=$(which node 2>/dev/null || echo "/usr/local/bin/node")
+NODE_DIR=$(dirname "$NODE_BIN")
+ESPEAK_DATA_PATH=$("$SCRIPT_DIR/.venv/bin/python" -c "import espeakng_loader; print(espeakng_loader.get_data_path())" 2>/dev/null || echo "")
 
-echo -e "${GREEN}LaunchAgents installed${NC}"
+echo "  Project: $SCRIPT_DIR"
+echo "  Node:    $NODE_BIN"
+echo "  Espeak:  ${ESPEAK_DATA_PATH:-not found}"
+
+# Generate plists from templates with resolved paths
+for plist in com.kokoro.tts-api.plist com.kokoro.audio-daemon.plist; do
+    sed -e "s|__PROJECT_DIR__|${SCRIPT_DIR}|g" \
+        -e "s|__HOME__|${HOME}|g" \
+        -e "s|__NODE_BIN__|${NODE_BIN}|g" \
+        -e "s|__NODE_DIR__|${NODE_DIR}|g" \
+        -e "s|__ESPEAK_DATA_PATH__|${ESPEAK_DATA_PATH}|g" \
+        "$SCRIPT_DIR/launchagents/$plist" > "$LAUNCH_AGENTS_DIR/$plist"
+done
+
+echo -e "${GREEN}LaunchAgents installed (paths resolved for this machine)${NC}"
 echo ""
 
 # Step 6: Load LaunchAgents

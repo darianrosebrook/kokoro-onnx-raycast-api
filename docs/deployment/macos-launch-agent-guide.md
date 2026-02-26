@@ -21,15 +21,11 @@ This setup creates a macOS Launch Agent that:
 ### Install Service
 
 ```bash
-cd /Users/darianrosebrook/Desktop/Projects/kokoro-onnx-raycast-api
-./scripts/install_service.sh
+cd /path/to/kokoro-onnx
+./install_menubar.sh
 ```
 
-### Uninstall Service
-
-```bash
-./scripts/uninstall_service.sh
-```
+The install script resolves paths for your machine automatically (project directory, Node.js binary, espeak data path) from template plists in `launchagents/`.
 
 ---
 

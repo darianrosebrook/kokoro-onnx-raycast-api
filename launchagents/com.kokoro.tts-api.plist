@@ -4,10 +4,10 @@
 <dict>
     <key>Label</key>
     <string>com.kokoro.tts-api</string>
-    
+
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/.venv/bin/python</string>
+        <string>__PROJECT_DIR__/.venv/bin/python</string>
         <string>-m</string>
         <string>uvicorn</string>
         <string>api.main:app</string>
@@ -16,38 +16,38 @@
         <string>--port</string>
         <string>8080</string>
     </array>
-    
+
     <key>WorkingDirectory</key>
-    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx</string>
-    
+    <string>__PROJECT_DIR__</string>
+
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>__PROJECT_DIR__/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>VIRTUAL_ENV</key>
-        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/.venv</string>
+        <string>__PROJECT_DIR__/.venv</string>
         <key>KOKORO_MODEL_FILE</key>
         <string>kokoro-v1.0.int8-graph-opt.onnx</string>
         <key>ESPEAK_DATA_PATH</key>
-        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/.venv/lib/python3.13/site-packages/espeakng_loader/espeak-ng-data</string>
+        <string>__ESPEAK_DATA_PATH__</string>
     </dict>
-    
+
     <key>RunAtLoad</key>
     <true/>
-    
+
     <key>KeepAlive</key>
     <dict>
         <key>SuccessfulExit</key>
         <false/>
     </dict>
-    
+
     <key>ThrottleInterval</key>
     <integer>10</integer>
-    
+
     <key>StandardOutPath</key>
-    <string>/Users/darianrosebrook/Library/Logs/kokoro/tts-api.log</string>
-    
+    <string>__HOME__/Library/Logs/kokoro/tts-api.log</string>
+
     <key>StandardErrorPath</key>
-    <string>/Users/darianrosebrook/Library/Logs/kokoro/tts-api.log</string>
+    <string>__HOME__/Library/Logs/kokoro/tts-api.log</string>
 </dict>
 </plist>

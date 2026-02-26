@@ -4,40 +4,40 @@
 <dict>
     <key>Label</key>
     <string>com.kokoro.audio-daemon</string>
-    
+
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/darianrosebrook/.nvm/versions/node/v22.19.0/bin/node</string>
-        <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx/raycast/bin/audio-daemon.js</string>
+        <string>__NODE_BIN__</string>
+        <string>__PROJECT_DIR__/raycast/bin/audio-daemon.js</string>
         <string>--port</string>
         <string>8081</string>
     </array>
-    
+
     <key>WorkingDirectory</key>
-    <string>/Users/darianrosebrook/Desktop/Projects/kokoro-onnx</string>
-    
+    <string>__PROJECT_DIR__</string>
+
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/darianrosebrook/.nvm/versions/node/v22.19.0/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>__NODE_DIR__:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
-    
+
     <key>RunAtLoad</key>
     <true/>
-    
+
     <key>KeepAlive</key>
     <dict>
         <key>SuccessfulExit</key>
         <false/>
     </dict>
-    
+
     <key>ThrottleInterval</key>
     <integer>10</integer>
-    
+
     <key>StandardOutPath</key>
-    <string>/Users/darianrosebrook/Library/Logs/kokoro/audio-daemon.log</string>
-    
+    <string>__HOME__/Library/Logs/kokoro/audio-daemon.log</string>
+
     <key>StandardErrorPath</key>
-    <string>/Users/darianrosebrook/Library/Logs/kokoro/audio-daemon.log</string>
+    <string>__HOME__/Library/Logs/kokoro/audio-daemon.log</string>
 </dict>
 </plist>
