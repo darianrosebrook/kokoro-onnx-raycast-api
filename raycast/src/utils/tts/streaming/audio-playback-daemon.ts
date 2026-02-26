@@ -1152,9 +1152,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
       const expectedDurationMs = this.stats.bytesReceived > 0 
         ? (this.stats.bytesReceived / 48000) * 1000  // bytes / bytesPerSecond * 1000
         : 0;
-      // Add generous buffer: expected duration + 5 seconds, minimum 15 seconds, maximum 120 seconds
+      // Add generous buffer: expected duration + daemon overhead + safety margin
+      // Daemon overhead (~5s): sox spawn, buffer fill, completion detection
       const timeoutDuration = Math.min(
-        Math.max(expectedDurationMs + 5000, 15000),
+        Math.max(expectedDurationMs + 10000, 15000),
         120000
       );
 
@@ -1212,16 +1213,17 @@ export class AudioPlaybackDaemon extends EventEmitter {
           ? (this.stats.bytesReceived / 48000) * 1000
           : 0;
         
-        // Calculate max wait time: expected duration + buffer (2s) + small margin (1s)
-        // This should fire when audio SHOULD be done, but before client timeout
-        // Client timeout is: Math.max(expectedDurationMs + 5000, 15000), capped at 120000
+        // Calculate max wait time: expected audio duration + daemon overhead + safety margin
+        // Daemon overhead includes: sox spawn time (~2s), buffer filling, completion detection
+        // Client timeout is: Math.max(expectedDurationMs + 10000, 15000), capped at 120000
+        const daemonOverheadMs = 5000; // sox spawn + buffer fill + completion detection
         const clientTimeout = Math.min(
-          Math.max(expectedDurationMs + 5000, 15000),
+          Math.max(expectedDurationMs + 10000, 15000),
           120000
         );
-        // Wait for expected duration + 3s buffer, but ensure we're at least 3s before client timeout
-        const calculatedWaitTime = expectedDurationMs + 3000;
-        const maxWaitTime = Math.min(calculatedWaitTime, clientTimeout - 3000);
+        // Wait for expected duration + daemon overhead, but stay 2s before client timeout
+        const calculatedWaitTime = expectedDurationMs + daemonOverheadMs;
+        const maxWaitTime = Math.min(calculatedWaitTime, clientTimeout - 2000);
         
         // Debug logging every 10 seconds to track progress
         if (Math.floor(elapsed / 10000) !== Math.floor((elapsed - 1000) / 10000)) {
@@ -1622,11 +1624,15 @@ export class AudioPlaybackDaemon extends EventEmitter {
           ? (bufferUtilization * expectedDurationMs)  // Estimate buffer duration from utilization
           : 0;
         
-        // Calculate max wait time, ensuring it's always less than client timeout
-        // Client timeout is: Math.max(expectedDurationMs + 5000, 15000), capped at 120000
-        // So we cap at 11s to ensure we beat the client timeout (which is at least 15s)
-        const calculatedWaitTime = expectedDurationMs + bufferDurationMs + 2000;  // Expected + buffer + 2s safety margin
-        const maxWaitTime = Math.min(calculatedWaitTime, 11000);  // Cap at 11s to beat client timeout
+        // Calculate max wait time: expected duration + buffer + daemon overhead
+        // Daemon overhead includes sox spawn time (~2s) and completion detection
+        const daemonOverheadMs = 5000;
+        const calculatedWaitTime = expectedDurationMs + bufferDurationMs + daemonOverheadMs;
+        const clientTimeout = Math.min(
+          Math.max(expectedDurationMs + 10000, 15000),
+          120000
+        );
+        const maxWaitTime = Math.min(calculatedWaitTime, clientTimeout - 2000);
         
         if (elapsed > maxWaitTime) {
           console.log("Completion fallback: time-based - waited longer than expected, completing anyway", {
