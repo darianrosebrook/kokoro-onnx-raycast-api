@@ -1,7 +1,7 @@
 # CAWS v1.0 - Engineering-Grade Operating System for Coding Agents
 # Makefile for Kokoro TTS API
 
-.PHONY: help caws-bootstrap caws-static caws-unit caws-mutation caws-contracts caws-integration caws-e2e caws-a11y caws-perf caws-validate caws-gates
+.PHONY: help caws-bootstrap caws-static caws-unit caws-mutation caws-contracts caws-integration caws-perf caws-validate caws-gates
 
 # Default target
 help:
@@ -15,8 +15,6 @@ help:
 	@echo "  caws-mutation     - Run mutation testing"
 	@echo "  caws-contracts    - Run contract tests"
 	@echo "  caws-integration  - Run integration tests"
-	@echo "  caws-e2e          - Run end-to-end tests"
-	@echo "  caws-a11y         - Run accessibility tests"
 	@echo "  caws-perf         - Run performance tests"
 	@echo "  caws-gates        - Run all quality gates"
 	@echo ""
@@ -118,18 +116,6 @@ caws-integration:
 	fi
 	@echo "✅ Integration tests complete"
 
-# End-to-end tests
-caws-e2e:
-	@echo "🎯 Running end-to-end tests..."
-	python3 -m pytest tests/e2e -v || true
-	@echo "✅ End-to-end tests complete"
-
-# Accessibility tests
-caws-a11y:
-	@echo "♿ Running accessibility tests..."
-	@echo "No a11y tests for backend-api profile"
-	@echo "✅ Accessibility tests complete"
-
 # Performance tests
 caws-perf:
 	@echo "⚡ Running performance tests..."
@@ -145,55 +131,6 @@ caws-perf:
 		echo "Python3 not available, skipping performance budget validation"; \
 	fi
 	@echo "✅ Performance tests complete"
-
-# Advanced monitoring and testing
-monitor:
-	@echo "📊 Starting performance monitoring..."
-	@if command -v python3 >/dev/null 2>&1; then \
-		python3 scripts/performance_monitor.py --url http://localhost:8000 --interval 30; \
-	else \
-		echo "Python3 not available, skipping performance monitoring"; \
-	fi
-
-dashboard:
-	@echo "🎯 Starting performance dashboard..."
-	@if command -v python3 >/dev/null 2>&1; then \
-		python3 scripts/performance_dashboard.py --url http://localhost:8000 --port 8080; \
-	else \
-		echo "Python3 not available, skipping performance dashboard"; \
-	fi
-
-load-test:
-	@echo "🚀 Running load tests..."
-	@if command -v python3 >/dev/null 2>&1; then \
-		python3 scripts/load_tester.py --test-type concurrent --users 10 --requests 5; \
-	else \
-		echo "Python3 not available, skipping load tests"; \
-	fi
-
-stress-test:
-	@echo "💪 Running stress tests..."
-	@if command -v python3 >/dev/null 2>&1; then \
-		python3 scripts/load_tester.py --test-type stress --users 20 --requests 3; \
-	else \
-		echo "Python3 not available, skipping stress tests"; \
-	fi
-
-regression-analysis:
-	@echo "📈 Running regression analysis..."
-	@if command -v python3 >/dev/null 2>&1; then \
-		python3 scripts/regression_detector.py --metrics performance-metrics.json; \
-	else \
-		echo "Python3 not available, skipping regression analysis"; \
-	fi
-
-predictive-cache:
-	@echo "🧠 Running predictive caching..."
-	@if command -v python3 >/dev/null 2>&1; then \
-		python3 scripts/predictive_cache.py --run; \
-	else \
-		echo "Python3 not available, skipping predictive caching"; \
-	fi
 
 # Run all quality gates
 caws-gates: caws-validate caws-static caws-unit caws-mutation caws-contracts caws-integration caws-perf

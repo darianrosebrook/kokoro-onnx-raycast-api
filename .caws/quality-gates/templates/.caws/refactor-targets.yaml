@@ -1,9 +1,0 @@
-week: week-1
-goals:
-  god_objects:
-    severe: 0 # files with SLOC ≥ severe threshold
-    critical: 0
-    warning: 5
-  duplicate_structs: 329
-  duplicate_filenames: 7
-  quality_gates: passing

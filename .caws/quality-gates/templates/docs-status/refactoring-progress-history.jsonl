@@ -1,9 +1,0 @@
-{"timestamp":"2025-10-20T10:00:00Z","week":"week-1","god_objects":{"severe":11,"critical":0,"warning":15},"duplicate_structs":658,"duplicate_filenames":69,"quality_gates":"passing"}
-{"timestamp":"2025-10-21T10:00:00Z","week":"week-1","god_objects":{"severe":9,"critical":0,"warning":14},"duplicate_structs":623,"duplicate_filenames":65,"quality_gates":"passing"}
-{"timestamp":"2025-10-22T10:00:00Z","week":"week-1","god_objects":{"severe":7,"critical":0,"warning":12},"duplicate_structs":589,"duplicate_filenames":62,"quality_gates":"passing"}
-{"timestamp":"2025-10-23T10:00:00Z","week":"week-1","god_objects":{"severe":5,"critical":0,"warning":10},"duplicate_structs":555,"duplicate_filenames":59,"quality_gates":"passing"}
-{"timestamp":"2025-10-24T10:00:00Z","week":"week-1","god_objects":{"severe":4,"critical":0,"warning":9},"duplicate_structs":521,"duplicate_filenames":56,"quality_gates":"passing"}
-{"timestamp":"2025-10-25T10:00:00Z","week":"week-1","god_objects":{"severe":3,"critical":0,"warning":8},"duplicate_structs":487,"duplicate_filenames":53,"quality_gates":"passing"}
-{"timestamp":"2025-10-26T10:00:00Z","week":"week-1","god_objects":{"severe":2,"critical":0,"warning":8},"duplicate_structs":453,"duplicate_filenames":50,"quality_gates":"passing"}
-{"timestamp":"2025-10-27T10:00:00Z","week":"week-1","god_objects":{"severe":2,"critical":0,"warning":8},"duplicate_structs":419,"duplicate_filenames":47,"quality_gates":"passing"}
-{"timestamp":"2025-10-28T10:00:00Z","week":"week-1","god_objects":{"severe":2,"critical":0,"warning":8},"duplicate_structs":385,"duplicate_filenames":44,"quality_gates":"passing"}

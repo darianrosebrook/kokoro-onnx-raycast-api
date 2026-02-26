@@ -5,7 +5,7 @@
     "commit": {
       "hash": "7fd7f951ea76cf3779618f007a30c36a853c9f69",
       "message": "refactor: consolidate benchmark suite and CAWS compliance",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -39,7 +39,7 @@
     "commit": {
       "hash": "6055d5725f243bb85176358b56bfe5e21b7e079c",
       "message": "docs: archive temporal docs and clean up quality gate violations",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -73,7 +73,7 @@
     "commit": {
       "hash": "f3561bfa8221bed109427d3d00b09b50e76d0ad3",
       "message": "docs: fix remaining quality gate violation in CAWS documentation",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -107,7 +107,7 @@
     "commit": {
       "hash": "fdbf56517e84b8cb3dd9cf98f7c1ad3d164c2422",
       "message": "docs: fix remaining 'all relevant' references in CAWS docs",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -141,7 +141,7 @@
     "commit": {
       "hash": "ee749f290d9c01b4e94580ce7e9d8fd188c3b024",
       "message": "chore: update CAWS provenance and quality gates artifacts",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -175,7 +175,7 @@
     "commit": {
       "hash": "3b98c6c4c162d068de614b97973e60e2685a221b",
       "message": "refactor: consolidate benchmark suite and CAWS compliance",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -209,7 +209,7 @@
     "commit": {
       "hash": "912eb78910262015d8f296dcabe935d9e8548d53",
       "message": "docs: archive temporal docs and clean up quality gate violations",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -243,7 +243,7 @@
     "commit": {
       "hash": "1b60d483e4fcfb81b1fb9c3cc817f269cf56a236",
       "message": "docs: fix remaining quality gate violation in CAWS documentation",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -277,7 +277,7 @@
     "commit": {
       "hash": "c6796fe67f6f4ccc4b0e7b22d87fb21f328f3b65",
       "message": "docs: fix remaining 'all relevant' references in CAWS docs",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -311,7 +311,7 @@
     "commit": {
       "hash": "4d69eff289d3180fbd4240012ef1468c6f3e4865",
       "message": "chore: update CAWS provenance and quality gates artifacts",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
@@ -345,7 +345,7 @@
     "commit": {
       "hash": "4c96b72ee62e6db6b8e0887dbd8051cccd7d92bc",
       "message": "Fix audio daemon crashes on long segments and reduce log verbosity",
-      "author": "Darian Rosebrook <drosebrook@qualtrics.com>"
+      "author": "Darian Rosebrook <darianrosebrook@qualtrics.com>"
     },
     "working_spec": {
       "id": "PROJ-001",
