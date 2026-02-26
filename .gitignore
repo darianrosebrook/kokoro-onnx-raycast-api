@@ -3,7 +3,6 @@ logs/
 .cache/
 reports/
 plans/
-archive/
 summary/
 
 # Documentation Archive (tracked — contains historical reference docs)
