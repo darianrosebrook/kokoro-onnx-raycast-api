@@ -228,8 +228,8 @@ export const validateServerUrl = (url: unknown): ValidationResult<string> => {
     }
 
     // Check for common port patterns
-    if (parsedUrl.port && parsedUrl.port !== "8000") {
-      warnings.push(`Using non-standard port ${parsedUrl.port} - default is 8000`);
+    if (parsedUrl.port && parsedUrl.port !== "8080") {
+      warnings.push(`Using non-standard port ${parsedUrl.port} - default is 8080`);
     }
 
     return {
