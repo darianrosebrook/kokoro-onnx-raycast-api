@@ -78,7 +78,6 @@ import { PerformanceTracker } from "../core/performance-tracker.js";
 import { RetryManager } from "../api/retry-manager.js";
 import { AdaptiveBufferManager } from "./streaming/adaptive-buffer-manager.js";
 import { StreamingContext, TextSegment, TTS_CONSTANTS } from "../validation/tts-types.js";
-import { EventEmitter } from "events";
 // const execAsync = promisify(exec);
 
 /**
@@ -446,9 +445,9 @@ export class TTSSpeechProcessor {
     let streamingPlayback: {
       writeChunk: (chunk: Uint8Array) => Promise<void>;
       endStream: () => Promise<void>;
-      on: (event: string, listener: (...args: any[]) => void) => void;
-      once: (event: string, listener: (...args: any[]) => void) => void;
-      off: (event: string, listener: (...args: any[]) => void) => void;
+      on: (event: string, listener: (...args: unknown[]) => void) => void;
+      once: (event: string, listener: (...args: unknown[]) => void) => void;
+      off: (event: string, listener: (...args: unknown[]) => void) => void;
     } | null = null;
 
     let streamingStarted = false;
@@ -556,7 +555,7 @@ export class TTSSpeechProcessor {
 
         await this.audioStreamer.streamAudio(requestParams, streamingContext, async (chunk) => {
           totalChunksReceived++;
-          const elapsedTime = performance.now() - startTime;
+          const _elapsedTime = performance.now() - startTime;
 
           // Verbose chunk logging removed - only log errors and completion events
 

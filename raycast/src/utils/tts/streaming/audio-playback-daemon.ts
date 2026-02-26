@@ -1199,8 +1199,7 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
       // CRITICAL FIX: Add periodic time-based fallback check
       // This runs independently of status updates to catch completion even if status updates stop
-      let fallbackCheckInterval: NodeJS.Timeout | undefined;
-      fallbackCheckInterval = setInterval(() => {
+      const fallbackCheckInterval: ReturnType<typeof setInterval> | undefined = setInterval(() => {
         if (!this._waitingForCompletion || this._waitStartTime === 0) {
           if (fallbackCheckInterval) {
             clearInterval(fallbackCheckInterval);

@@ -21,6 +21,9 @@
 
 import WebSocket, { WebSocketServer } from "ws";
 import http from "http";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { spawn } from "child_process";
 import { EventEmitter } from "events";
 
@@ -195,8 +198,9 @@ class AudioRingBuffer {
     this._ensureCapacity(data.length);
 
     const available = this.capacity - this.size;
-    available === 0 &&
+    if (available === 0) {
       debugLog(`Buffer is full`, "color: #FFAAAA; background-color: #222222; font-weight: bold");
+    }
     debugLog(`Buffer size: ${this.size}, available: ${available}, capacity: ${this.capacity}`);
 
     const toWrite = Math.min(data.length, available);
@@ -371,8 +375,8 @@ class AudioProcessor extends EventEmitter {
     if (this.audioProcess) {
       try {
         this.audioProcess.kill("SIGTERM");
-      } catch (e) {
-        // Process might already be dead, RIP little buddy
+      } catch {
+        // Process might already be dead
       }
       this.audioProcess = null;
     }
@@ -444,7 +448,6 @@ class AudioProcessor extends EventEmitter {
         "/usr/bin/sox", // System sox
       ];
       let soxPath = null;
-      let lastError = null;
 
       for (const candidate of soxCandidates) {
         try {
@@ -460,10 +463,9 @@ class AudioProcessor extends EventEmitter {
           soxPath = candidate;
           debugLog(`Found sox at: ${soxPath}`);
           break;
-        } catch (e) {
+        } catch {
           // Continue to next candidate
           debugLog(`sox not found at: ${candidate}`);
-          lastError = e;
         }
       }
 
@@ -757,10 +759,6 @@ class AudioProcessor extends EventEmitter {
    */
   startWithAfplay() {
     try {
-      const fs = require("fs");
-      const os = require("os");
-      const path = require("path");
-
       // Initialize afplay chunked streaming mode
       this.afplayMode = true;
       this.tempDir = path.join(os.tmpdir(), `audio-daemon-${this.instanceId}`);
@@ -790,10 +788,6 @@ class AudioProcessor extends EventEmitter {
    * Process incoming audio data in afplay mode by creating temporary WAV files
    */
   processAfplayChunks() {
-    const fs = require("fs");
-    const path = require("path");
-
-    let chunkBuffer = Buffer.alloc(0);
     const CHUNK_SIZE = this.format.sampleRate * 2; // 1 second of 16-bit mono audio
 
     const processChunk = () => {
@@ -845,12 +839,12 @@ class AudioProcessor extends EventEmitter {
       detached: false,
     });
 
-    afplayProcess.on("exit", (code) => {
+    afplayProcess.on("exit", (_code) => {
       console.log(`[${this.instanceId}] Chunk finished: ${nextFile}`);
 
       // Clean up the temporary file
       try {
-        require("fs").unlinkSync(nextFile);
+        fs.unlinkSync(nextFile);
       } catch (err) {
         console.warn(`[${this.instanceId}] Failed to clean up ${nextFile}:`, err.message);
       }
@@ -933,14 +927,11 @@ class AudioProcessor extends EventEmitter {
     if (!this.tempDir) return;
 
     try {
-      const fs = require("fs");
-
       // Clean up any remaining files
       if (fs.existsSync(this.tempDir)) {
         const files = fs.readdirSync(this.tempDir);
         for (const file of files) {
           try {
-            const path = require("path");
             fs.unlinkSync(path.join(this.tempDir, file));
           } catch (err) {
             console.warn(`[${this.instanceId}] Failed to clean up ${file}:`, err.message);
@@ -1120,7 +1111,6 @@ class AudioProcessor extends EventEmitter {
       }
 
       const available = this.ringBuffer.size;
-      const utilization = available / this.ringBuffer.capacity;
 
       if (available >= chunkSize) {
         // NEW: Reset empty buffer counter when we have data
@@ -2052,7 +2042,7 @@ class AudioDaemon extends EventEmitter {
         this.audioProcessor.stop();
         break;
 
-      case "end_stream":
+      case "end_stream": {
         // Mark that we're ending the stream - the audio loop will close stdin
         // once the buffer is fully drained to sox
         console.log(`[${this.instanceId}] End stream requested - audio loop will drain buffer first`, {
@@ -2063,35 +2053,35 @@ class AudioDaemon extends EventEmitter {
           expectedDuration: this.audioProcessor.audioDurationMs,
         });
         this.audioProcessor.isEndingStream = true;
-        
+
         // NOTE: Do NOT close stdin here - let the audio loop drain the buffer first
         // The audio loop will close stdin when buffer is empty (see processChunk)
-        
+
         // CRITICAL FIX: Set up timeout-based completion check
         // If process doesn't exit naturally within expected duration + buffer, complete anyway
         // Use audioDurationMs if available, otherwise fall back to stats.expectedDuration
-        const expectedDuration = this.audioProcessor.audioDurationMs || 
-                                 this.audioProcessor.stats.expectedDuration || 
+        const expectedDuration = this.audioProcessor.audioDurationMs ||
+                                 this.audioProcessor.stats.expectedDuration ||
                                  0;
         const bufferDuration = this.audioProcessor.ringBuffer.size > 0
           ? (this.audioProcessor.ringBuffer.size / this.audioProcessor.format.bytesPerSecond) * 1000
           : 0;
-        
+
         // Use a more aggressive timeout: expected duration + buffer + 1s safety margin
         // This ensures we complete before the client timeout (which is typically 2x duration + 10s)
         const completionTimeout = Math.max(
           expectedDuration + bufferDuration + 1000, // Expected duration + buffer + 1s safety margin
           Math.min(expectedDuration * 1.5 + 2000, 12000) // Cap at 12s to ensure we beat client timeout
         );
-        
+
         console.log(`[${this.instanceId}] Setting completion timeout: ${completionTimeout.toFixed(0)}ms (expected: ${expectedDuration.toFixed(0)}ms, buffer: ${bufferDuration.toFixed(0)}ms, audioDurationMs: ${this.audioProcessor.audioDurationMs?.toFixed(0) || 'N/A'}, statsExpected: ${this.audioProcessor.stats.expectedDuration?.toFixed(0) || 'N/A'})`);
-        
+
         // Clear any existing timeout
         if (this.audioProcessor._endStreamTimeout) {
           clearTimeout(this.audioProcessor._endStreamTimeout);
           console.log(`[${this.instanceId}] Cleared existing end stream timeout`);
         }
-        
+
         // Set timeout to force completion if process doesn't exit naturally
         this.audioProcessor._endStreamTimeout = setTimeout(() => {
           console.log(`[${this.instanceId}] Completion timeout callback fired`, {
@@ -2111,15 +2101,15 @@ class AudioDaemon extends EventEmitter {
             );
           }
         }, completionTimeout);
-        
+
         console.log(`[${this.instanceId}] Completion timeout scheduled for ${completionTimeout.toFixed(0)}ms from now`);
-        
+
         // CRITICAL FIX: Check buffer AND process state immediately
         const bufferEmpty = this.audioProcessor.ringBuffer.size === 0;
-        const processFinished = !this.audioProcessor.audioProcess || 
-                                this.audioProcessor.audioProcess.killed || 
+        const processFinished = !this.audioProcessor.audioProcess ||
+                                this.audioProcessor.audioProcess.killed ||
                                 this.audioProcessor.audioProcess.exitCode !== null;
-        
+
         if (bufferEmpty && processFinished) {
           // Buffer empty AND process finished - complete immediately
           console.log(
@@ -2144,11 +2134,13 @@ class AudioDaemon extends EventEmitter {
           // Process loop will check and complete when buffer empties or process finishes
         }
         break;
+      }
 
-      case "configure":
+      case "configure": {
         const params = data?.params || data?.data?.params;
         console.log(`[${this.instanceId}] Configuration received:`, params);
         break;
+      }
 
       default:
         console.warn(`[${this.instanceId}] Unknown control action:`, action);
