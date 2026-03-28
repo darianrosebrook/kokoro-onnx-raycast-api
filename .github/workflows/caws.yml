@@ -13,7 +13,7 @@ jobs:
       risk: ${{ steps.risk.outputs.tier }}
       profile: ${{ steps.risk.outputs.profile }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -54,7 +54,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -71,7 +71,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -92,7 +92,7 @@ jobs:
     needs: unit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.setup.outputs.profile == 'backend-api' || (needs.setup.outputs.profile == 'web-ui' && contains(github.event.pull_request.changed_files, 'contracts/'))
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -136,7 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.setup.outputs.profile == 'backend-api' || needs.setup.outputs.profile == 'web-ui'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -154,7 +154,7 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.setup.outputs.profile == 'web-ui'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -175,7 +175,7 @@ jobs:
     needs: [integration]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -197,7 +197,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -245,7 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     if: false  # Disabled in favor of CAWS pipeline
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Use Node.js 20.x
         uses: actions/setup-node@v4
         with:
