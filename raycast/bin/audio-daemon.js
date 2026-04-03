@@ -1054,12 +1054,24 @@ class AudioProcessor extends EventEmitter {
         return;
       }
 
-      // NEW: Check if we should end stream (only when explicitly requested)
-      // CRITICAL: Also check if audio process has finished playing
-      if (this.isEndingStream && this.ringBuffer.size === 0) {
-        // Buffer is drained - close stdin to signal end of data to sox
-        if (this.audioProcess && 
-            this.audioProcess.stdin && 
+      // Check if we should end stream (only when explicitly requested)
+      // When ending, flush any remaining data (even partial chunks) and close stdin
+      if (this.isEndingStream && this.ringBuffer.size < chunkSize) {
+        // Flush any remaining partial data to sox before closing stdin
+        if (this.ringBuffer.size > 0 &&
+            this.audioProcess &&
+            this.audioProcess.stdin &&
+            !this.audioProcess.stdin.destroyed) {
+          const remaining = this.ringBuffer.read(this.ringBuffer.size);
+          console.log(`[${this.instanceId}] Flushing final ${remaining.length} bytes to sox`);
+          this.audioProcess.stdin.write(remaining);
+          this.stats.bytesProcessed += remaining.length;
+          this.stats.audioPosition += remaining.length;
+        }
+
+        // Close stdin to signal end of data to sox
+        if (this.audioProcess &&
+            this.audioProcess.stdin &&
             !this.audioProcess.stdin.destroyed) {
           console.log(`[${this.instanceId}] Buffer drained, closing stdin to finish playback`);
           try {
@@ -1068,7 +1080,7 @@ class AudioProcessor extends EventEmitter {
             console.log(`[${this.instanceId}] stdin.end() error (expected if already closed):`, e.message);
           }
         }
-        
+
         // Check if audio process is still running
         const processStillRunning =
           this.audioProcess &&
@@ -1083,10 +1095,10 @@ class AudioProcessor extends EventEmitter {
           this._completePlaybackSession();
           return;
         } else {
-          // Buffer is empty but process is still running - wait for it to finish
-          // The process exit handler will call _completePlaybackSession() when it exits
+          // stdin closed, sox still playing — wait for it to finish naturally
+          // The process exit handler will call _completePlaybackSession() when sox exits
           console.log(
-            `[${this.instanceId}]  End stream requested and buffer empty, but audio process still running - waiting for process to finish`
+            `[${this.instanceId}]  stdin closed, waiting for sox to finish playback`
           );
           // Continue the loop to check again
         }
@@ -1302,10 +1314,24 @@ class AudioProcessor extends EventEmitter {
       this._endStreamTimeout = null;
     }
 
-    // Reset flags
+    // Reset playback state so next start() can launch a new session
+    this.isPlaying = false;
+    this.isPaused = false;
+    this.isStopping = false;
+    this.isStopped = false;
     this.isEndingStream = false;
     this.ringBuffer.clear();
     this._audioLoopActive = false;
+
+    // Kill the old audio process so it doesn't linger
+    if (this.audioProcess) {
+      try {
+        this.audioProcess.kill("SIGTERM");
+      } catch {
+        // Process might already be dead
+      }
+      this.audioProcess = null;
+    }
     // Note: _completionEmitted is reset in start() for new sessions
   }
 
@@ -1500,19 +1526,17 @@ class AudioProcessor extends EventEmitter {
     this.stats.totalChunksReceived++;
     this.stats.chunksReceived++;
 
-    // Calculate average chunk size
-    this.stats.averageChunkSize = this.stats.bytesProcessed / this.stats.totalChunksReceived;
+    // Calculate average chunk size based on total bytes received (not bytesProcessed,
+    // which tracks bytes sent to sox and is incremented in the audio loop)
+    this.stats.averageChunkSize = this.totalAudioBytes / this.stats.totalChunksReceived;
 
     debugLog(
       `[${this.instanceId}] writeChunk: wrote ${written} bytes, buffer size: ${this.ringBuffer.size}, chunk #${this.stats.totalChunksReceived}`
     );
 
-    // Update expected duration based on total bytes received
-    this.stats.bytesProcessed += written;
-    this.stats.expectedDuration = this.calculateExpectedDuration(this.stats.bytesProcessed);
-
-    // Track total audio bytes and set duration for process management
+    // Track total audio bytes and update expected duration
     this.totalAudioBytes += written;
+    this.stats.expectedDuration = this.calculateExpectedDuration(this.totalAudioBytes);
     this.setAudioDuration(this.totalAudioBytes);
 
     this.emit("chunkReceived", {
@@ -1889,25 +1913,26 @@ class AudioDaemon extends EventEmitter {
     }
     switch (message.type) {
       case "start":
-        this.handleStart(ws, message);
+        this.handleControl({ action: "play", ...message.data });
         break;
       case "stop":
-        this.handleStop(ws, message);
+        this.handleControl({ action: "stop", ...message.data });
         break;
       case "pause":
-        this.handlePause(ws, message);
+        this.handleControl({ action: "pause", ...message.data });
         break;
       case "resume":
-        this.handleResume(ws, message);
+        this.handleControl({ action: "resume", ...message.data });
         break;
       case "audio_chunk":
         this.handleAudioChunk(ws, message);
         break;
       case "status":
-        this.handleStatus(ws, message);
+        // Client requesting current status — send it back
+        this.sendStatus(ws);
         break;
       case "flow_control":
-        this.handleFlowControl(ws, message);
+        console.log(`[${this.instanceId}] Flow control received:`, message.data);
         break;
       case "end_stream":
         this.handleEndStream();
@@ -2154,6 +2179,31 @@ class AudioDaemon extends EventEmitter {
         performance: this.audioProcessor.getStatus(),
       },
     });
+  }
+
+  /**
+   * Send current status to a specific client.
+   */
+  sendStatus(ws) {
+    const state = this.audioProcessor?.isPlaying
+      ? "playing"
+      : this.audioProcessor?.isPaused
+        ? "paused"
+        : "idle";
+    ws.send(
+      JSON.stringify({
+        type: "status",
+        timestamp: Date.now(),
+        data: {
+          state,
+          bufferUtilization: this.audioProcessor?.ringBuffer
+            ? this.audioProcessor.ringBuffer.utilization
+            : 0,
+          audioPosition: this.audioProcessor?.stats?.audioPosition || 0,
+          performance: this.audioProcessor?.getStatus() || {},
+        },
+      })
+    );
   }
 
   /**

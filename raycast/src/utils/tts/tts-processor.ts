@@ -555,9 +555,6 @@ export class TTSSpeechProcessor {
 
         await this.audioStreamer.streamAudio(requestParams, streamingContext, async (chunk) => {
           totalChunksReceived++;
-          const _elapsedTime = performance.now() - startTime;
-
-          // Verbose chunk logging removed - only log errors and completion events
 
           if (
             this.useStreaming &&
@@ -776,7 +773,9 @@ export class TTSSpeechProcessor {
       message: "Stopped",
       isPlaying: false,
       isPaused: false,
-      primaryAction: this.lastSpokenText ? { title: "Replay", onAction: () => this.replay() } : undefined,
+      primaryAction: this.lastSpokenText
+        ? { title: "Replay", onAction: () => this.replay() }
+        : undefined,
     });
   }
 
@@ -794,7 +793,7 @@ export class TTSSpeechProcessor {
       });
       return;
     }
-    
+
     // Speak the last text again (speak() handles stopping any existing playback)
     await this.speak(this.lastSpokenText);
   }

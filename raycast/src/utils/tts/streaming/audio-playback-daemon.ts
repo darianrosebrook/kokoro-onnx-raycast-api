@@ -1136,9 +1136,10 @@ export class AudioPlaybackDaemon extends EventEmitter {
         isPlaying: this.isPlaying,
         isConnected: this.daemonProcess?.isConnected,
         totalBytes: this.stats.bytesReceived,
-        expectedDuration: this.stats.bytesReceived > 0 
-          ? `${(this.stats.bytesReceived / 48000).toFixed(1)}s` 
-          : "unknown",
+        expectedDuration:
+          this.stats.bytesReceived > 0
+            ? `${(this.stats.bytesReceived / 48000).toFixed(1)}s`
+            : "unknown",
       });
 
       // Mark that we're waiting for completion (used by status update handler)
@@ -1149,15 +1150,13 @@ export class AudioPlaybackDaemon extends EventEmitter {
 
       // Calculate expected audio duration + buffer
       // For 24kHz mono 16-bit PCM: bytesPerSecond = 24000 * 2 = 48000
-      const expectedDurationMs = this.stats.bytesReceived > 0 
-        ? (this.stats.bytesReceived / 48000) * 1000  // bytes / bytesPerSecond * 1000
-        : 0;
+      const expectedDurationMs =
+        this.stats.bytesReceived > 0
+          ? (this.stats.bytesReceived / 48000) * 1000 // bytes / bytesPerSecond * 1000
+          : 0;
       // Add generous buffer: expected duration + daemon overhead + safety margin
       // Daemon overhead (~5s): sox spawn, buffer fill, completion detection
-      const timeoutDuration = Math.min(
-        Math.max(expectedDurationMs + 10000, 15000),
-        120000
-      );
+      const timeoutDuration = Math.min(Math.max(expectedDurationMs + 10000, 15000), 120000);
 
       console.log("Audio completion timeout configured", {
         component: this.name,
@@ -1173,7 +1172,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
           component: this.name,
           method: "waitForAudioCompletion",
           elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-          expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+          expectedDuration:
+            expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
         });
         this._waitingForCompletion = false;
         this._waitStartTime = 0;
@@ -1192,7 +1192,8 @@ export class AudioPlaybackDaemon extends EventEmitter {
           isPlaying: this.isPlaying,
           isConnected: this.daemonProcess?.isConnected,
           totalBytes: this.stats.bytesReceived,
-          expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+          expectedDuration:
+            expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
           elapsed: `${(elapsed / 1000).toFixed(1)}s`,
           timeoutIn: `${(remaining / 1000).toFixed(1)}s`,
         });
@@ -1209,44 +1210,45 @@ export class AudioPlaybackDaemon extends EventEmitter {
         }
 
         const elapsed = Date.now() - this._waitStartTime;
-        const expectedDurationMs = this.stats.bytesReceived > 0 
-          ? (this.stats.bytesReceived / 48000) * 1000
-          : 0;
-        
+        const expectedDurationMs =
+          this.stats.bytesReceived > 0 ? (this.stats.bytesReceived / 48000) * 1000 : 0;
+
         // Calculate max wait time: expected audio duration + daemon overhead + safety margin
         // Daemon overhead includes: sox spawn time (~2s), buffer filling, completion detection
         // Client timeout is: Math.max(expectedDurationMs + 10000, 15000), capped at 120000
         const daemonOverheadMs = 5000; // sox spawn + buffer fill + completion detection
-        const clientTimeout = Math.min(
-          Math.max(expectedDurationMs + 10000, 15000),
-          120000
-        );
+        const clientTimeout = Math.min(Math.max(expectedDurationMs + 10000, 15000), 120000);
         // Wait for expected duration + daemon overhead, but stay 2s before client timeout
         const calculatedWaitTime = expectedDurationMs + daemonOverheadMs;
         const maxWaitTime = Math.min(calculatedWaitTime, clientTimeout - 2000);
-        
+
         // Debug logging every 10 seconds to track progress
         if (Math.floor(elapsed / 10000) !== Math.floor((elapsed - 1000) / 10000)) {
           console.log("Periodic fallback check progress", {
             component: this.name,
             method: "waitForAudioCompletion",
             elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-            expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+            expectedDuration:
+              expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
             maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
             clientTimeout: `${(clientTimeout / 1000).toFixed(1)}s`,
             willFireIn: `${((maxWaitTime - elapsed) / 1000).toFixed(1)}s`,
           });
         }
-        
+
         if (elapsed > maxWaitTime) {
-          console.log("Completion fallback: periodic check - waited longer than expected, completing anyway", {
-            component: this.name,
-            method: "waitForAudioCompletion",
-            elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-            expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
-            maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
-            isPlaying: this.isPlaying,
-          });
+          console.log(
+            "Completion fallback: periodic check - waited longer than expected, completing anyway",
+            {
+              component: this.name,
+              method: "waitForAudioCompletion",
+              elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+              expectedDuration:
+                expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+              maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
+              isPlaying: this.isPlaying,
+            }
+          );
           if (fallbackCheckInterval) {
             clearInterval(fallbackCheckInterval);
           }
@@ -1584,68 +1586,81 @@ export class AudioPlaybackDaemon extends EventEmitter {
         // treat this as completion (fallback for when completion event doesn't arrive)
         // Also check if bufferUtilization is very low (< 0.01) to account for floating point precision
         if (this._waitingForCompletion && (bufferUtilization === 0 || bufferUtilization < 0.01)) {
-          console.log("Completion fallback: daemon idle + empty buffer while waiting - emitting completion", {
-            component: this.name,
-            method: "handleStatusUpdate",
-            state,
-            bufferUtilization,
-            waitingForCompletion: this._waitingForCompletion,
-          });
+          console.log(
+            "Completion fallback: daemon idle + empty buffer while waiting - emitting completion",
+            {
+              component: this.name,
+              method: "handleStatusUpdate",
+              state,
+              bufferUtilization,
+              waitingForCompletion: this._waitingForCompletion,
+            }
+          );
           // Emit completion event as fallback
           this._waitingForCompletion = false;
           this._waitStartTime = 0;
           this.emit("completed");
         }
-      } else if (this._waitingForCompletion && (bufferUtilization === 0 || bufferUtilization < 0.01)) {
+      } else if (
+        this._waitingForCompletion &&
+        (bufferUtilization === 0 || bufferUtilization < 0.01)
+      ) {
         // Even if isPlaying was already false, if we're waiting and buffer is empty, complete
-        console.log("Completion fallback: already idle + empty buffer while waiting - emitting completion", {
-          component: this.name,
-          method: "handleStatusUpdate",
-          state,
-          bufferUtilization,
-          waitingForCompletion: this._waitingForCompletion,
-        });
+        console.log(
+          "Completion fallback: already idle + empty buffer while waiting - emitting completion",
+          {
+            component: this.name,
+            method: "handleStatusUpdate",
+            state,
+            bufferUtilization,
+            waitingForCompletion: this._waitingForCompletion,
+          }
+        );
         this._waitingForCompletion = false;
         this._waitStartTime = 0;
         this.emit("completed");
       }
     } else if (state === "playing") {
       this.isPlaying = true;
-      
+
       // CRITICAL FIX: Time-based fallback - if we've been waiting longer than expected duration + buffer,
       // complete anyway even if daemon is still reporting "playing" state
       // This must fire BEFORE the client timeout (which is typically expectedDuration + 5s, min 15s, max 120s)
       if (this._waitingForCompletion && this._waitStartTime > 0) {
         const elapsed = Date.now() - this._waitStartTime;
-        const expectedDurationMs = this.stats.bytesReceived > 0 
-          ? (this.stats.bytesReceived / 48000) * 1000  // bytes / bytesPerSecond * 1000
-          : 0;
-        const bufferDurationMs = bufferUtilization > 0 && expectedDurationMs > 0
-          ? (bufferUtilization * expectedDurationMs)  // Estimate buffer duration from utilization
-          : 0;
-        
+        const expectedDurationMs =
+          this.stats.bytesReceived > 0
+            ? (this.stats.bytesReceived / 48000) * 1000 // bytes / bytesPerSecond * 1000
+            : 0;
+        const bufferDurationMs =
+          bufferUtilization > 0 && expectedDurationMs > 0
+            ? bufferUtilization * expectedDurationMs // Estimate buffer duration from utilization
+            : 0;
+
         // Calculate max wait time: expected duration + buffer + daemon overhead
         // Daemon overhead includes sox spawn time (~2s) and completion detection
         const daemonOverheadMs = 5000;
         const calculatedWaitTime = expectedDurationMs + bufferDurationMs + daemonOverheadMs;
-        const clientTimeout = Math.min(
-          Math.max(expectedDurationMs + 10000, 15000),
-          120000
-        );
+        const clientTimeout = Math.min(Math.max(expectedDurationMs + 10000, 15000), 120000);
         const maxWaitTime = Math.min(calculatedWaitTime, clientTimeout - 2000);
-        
+
         if (elapsed > maxWaitTime) {
-          console.log("Completion fallback: time-based - waited longer than expected, completing anyway", {
-            component: this.name,
-            method: "handleStatusUpdate",
-            state,
-            bufferUtilization,
-            elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-            expectedDuration: expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
-            bufferDuration: bufferDurationMs > 0 ? `${(bufferDurationMs / 1000).toFixed(1)}s` : "0s",
-            maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
-            calculatedWaitTime: `${(calculatedWaitTime / 1000).toFixed(1)}s`,
-          });
+          console.log(
+            "Completion fallback: time-based - waited longer than expected, completing anyway",
+            {
+              component: this.name,
+              method: "handleStatusUpdate",
+              state,
+              bufferUtilization,
+              elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+              expectedDuration:
+                expectedDurationMs > 0 ? `${(expectedDurationMs / 1000).toFixed(1)}s` : "unknown",
+              bufferDuration:
+                bufferDurationMs > 0 ? `${(bufferDurationMs / 1000).toFixed(1)}s` : "0s",
+              maxWaitTime: `${(maxWaitTime / 1000).toFixed(1)}s`,
+              calculatedWaitTime: `${(calculatedWaitTime / 1000).toFixed(1)}s`,
+            }
+          );
           this._waitingForCompletion = false;
           this._waitStartTime = 0;
           this.emit("completed");

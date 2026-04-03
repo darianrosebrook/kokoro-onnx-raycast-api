@@ -61,8 +61,6 @@ function waitForMessage(ws, messages, type, timeoutMs = 10000) {
       return resolve(existing);
     }
 
-    const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${type}`)), timeoutMs);
-    // Poll the buffer — new messages are pushed by the persistent listener
     const interval = setInterval(() => {
       const idx = messages.findIndex((m) => m.type === type);
       if (idx !== -1) {
@@ -74,12 +72,10 @@ function waitForMessage(ws, messages, type, timeoutMs = 10000) {
       }
     }, 20);
 
-    // Clean up on timeout
-    const origReject = reject;
-    reject = (err) => {
+    const timer = setTimeout(() => {
       clearInterval(interval);
-      origReject(err);
-    };
+      reject(new Error(`Timeout waiting for ${type}`));
+    }, timeoutMs);
   });
 }
 

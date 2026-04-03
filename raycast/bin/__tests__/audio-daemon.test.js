@@ -215,16 +215,22 @@ describe("AudioProcessor", () => {
     expect(completedSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("_completePlaybackSession emits completed event", () => {
+  it("_completePlaybackSession emits completed event and resets state", () => {
     const completedSpy = vi.fn();
     processor.on("completed", completedSpy);
+
+    // Simulate active playback state
+    processor.isPlaying = true;
+    processor.isEndingStream = true;
 
     processor._completePlaybackSession();
 
     expect(completedSpy).toHaveBeenCalledTimes(1);
     expect(processor._completionEmitted).toBe(true);
     expect(processor.isEndingStream).toBe(false);
+    expect(processor.isPlaying).toBe(false);
     expect(processor.ringBuffer.size).toBe(0);
+    expect(processor.audioProcess).toBeNull();
   });
 
   it("_completePlaybackSession records timing stats", () => {
@@ -465,27 +471,31 @@ describe("AudioDaemon", () => {
     });
   });
 
-  // --- Undefined handler methods (CRITICAL BUG) ---
+  // --- Legacy message types route through handleControl ---
 
-  describe("undefined handler methods", () => {
-    it("handleStart is not defined — 'start' message throws TypeError", () => {
-      expect(typeof daemon.handleStart).toBe("undefined");
-      expect(() => daemon.handleMessage({}, { type: "start" })).toThrow(TypeError);
+  describe("legacy message type routing", () => {
+    it("'start' routes to handleControl with play action", () => {
+      const spy = vi.spyOn(daemon, "handleControl").mockImplementation(() => {});
+      daemon.handleMessage({}, { type: "start", data: { foo: 1 } });
+      expect(spy).toHaveBeenCalledWith({ action: "play", foo: 1 });
     });
 
-    it("handleStop is not defined — 'stop' message throws TypeError", () => {
-      expect(typeof daemon.handleStop).toBe("undefined");
-      expect(() => daemon.handleMessage({}, { type: "stop" })).toThrow(TypeError);
+    it("'stop' routes to handleControl with stop action", () => {
+      const spy = vi.spyOn(daemon, "handleControl").mockImplementation(() => {});
+      daemon.handleMessage({}, { type: "stop", data: {} });
+      expect(spy).toHaveBeenCalledWith({ action: "stop" });
     });
 
-    it("handlePause is not defined — 'pause' message throws TypeError", () => {
-      expect(typeof daemon.handlePause).toBe("undefined");
-      expect(() => daemon.handleMessage({}, { type: "pause" })).toThrow(TypeError);
+    it("'pause' routes to handleControl with pause action", () => {
+      const spy = vi.spyOn(daemon, "handleControl").mockImplementation(() => {});
+      daemon.handleMessage({}, { type: "pause", data: {} });
+      expect(spy).toHaveBeenCalledWith({ action: "pause" });
     });
 
-    it("handleResume is not defined — 'resume' message throws TypeError", () => {
-      expect(typeof daemon.handleResume).toBe("undefined");
-      expect(() => daemon.handleMessage({}, { type: "resume" })).toThrow(TypeError);
+    it("'resume' routes to handleControl with resume action", () => {
+      const spy = vi.spyOn(daemon, "handleControl").mockImplementation(() => {});
+      daemon.handleMessage({}, { type: "resume", data: {} });
+      expect(spy).toHaveBeenCalledWith({ action: "resume" });
     });
   });
 
@@ -604,10 +614,16 @@ describe("AudioDaemon", () => {
 
   // --- handleStatus and handleHeartbeat ---
 
-  describe("handleStatus — undefined method bug", () => {
-    it("handleStatus is not defined — 'status' message throws TypeError", () => {
-      expect(typeof daemon.handleStatus).toBe("undefined");
-      expect(() => daemon.handleMessage({}, { type: "status" })).toThrow(TypeError);
+  describe("handleStatus — sendStatus", () => {
+    it("'status' message sends current status to client", () => {
+      const format = new AudioFormat("pcm", 24000, 1, 16);
+      daemon.audioProcessor = new AudioProcessor(format);
+      const ws = { send: vi.fn() };
+      daemon.handleMessage(ws, { type: "status" });
+      expect(ws.send).toHaveBeenCalled();
+      const sent = JSON.parse(ws.send.mock.calls[0][0]);
+      expect(sent.type).toBe("status");
+      expect(sent.data).toHaveProperty("state");
     });
   });
 
