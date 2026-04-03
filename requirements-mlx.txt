@@ -1,0 +1,17 @@
+# Requirements for MLX backend (Python 3.11, Apple Silicon)
+# Install: python3.11 -m venv .venv-mlx && .venv-mlx/bin/pip install -r requirements-mlx.txt
+
+# TTS backend (Apple Silicon GPU via Metal)
+kokoro-mlx>=0.1.1
+
+# Web framework
+fastapi>=0.115.12
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+
+# Audio processing
+numpy>=1.26.0
+
+# Testing
+pytest>=7.0.0
+httpx>=0.24.0

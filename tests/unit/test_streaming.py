@@ -16,6 +16,7 @@ from api.streaming import (
     create_wav_header,
     get_audio_duration,
     stream_audio_chunks,
+    stream_audio_chunks_live,
 )
 from api.config import CHUNK_SIZE_SAMPLES, SAMPLE_RATE
 
@@ -242,3 +243,70 @@ class TestGetAudioDuration:
     def test_custom_sample_rate(self):
         audio = np.zeros(44100, dtype=np.float32)
         assert get_audio_duration(audio, sample_rate=44100) == pytest.approx(1.0)
+
+
+# --- stream_audio_chunks_live ---
+
+class TestStreamAudioChunksLive:
+    def _collect_live(self, audio_segments):
+        """Collect chunks from live streaming with a list of (audio, sr) tuples."""
+        async def _gather():
+            async def fake_stream():
+                for segment, sr in audio_segments:
+                    yield segment, sr
+
+            chunks = []
+            async for chunk in stream_audio_chunks_live(fake_stream()):
+                chunks.append(chunk)
+            return chunks
+        return asyncio.run(_gather())
+
+    def test_single_segment(self, sample_audio):
+        """Single segment should produce same total bytes as blocking path."""
+        segments = [(sample_audio, 24000)]
+        chunks = self._collect_live(segments)
+        total = sum(len(c) for c in chunks)
+        assert total == len(sample_audio) * 2
+
+    def test_multiple_segments(self, sample_audio):
+        """Multiple segments should concatenate correctly."""
+        half = len(sample_audio) // 2
+        seg1 = sample_audio[:half]
+        seg2 = sample_audio[half:]
+        segments = [(seg1, 24000), (seg2, 24000)]
+        chunks = self._collect_live(segments)
+        total = sum(len(c) for c in chunks)
+        assert total == len(sample_audio) * 2
+
+    def test_chunk_size_respected(self, sample_audio):
+        """All chunks except the last per segment should be CHUNK_SIZE_SAMPLES * 2."""
+        segments = [(sample_audio, 24000)]
+        chunks = self._collect_live(segments)
+        expected_size = CHUNK_SIZE_SAMPLES * 2
+        for chunk in chunks[:-1]:
+            assert len(chunk) == expected_size
+
+    def test_empty_segment(self):
+        """Empty segment should produce no chunks."""
+        segments = [(np.array([], dtype=np.float32), 24000)]
+        chunks = self._collect_live(segments)
+        assert len(chunks) == 0
+
+    def test_pcm_data_integrity(self):
+        """Streamed PCM data should match direct conversion."""
+        audio = np.array([0.0, 0.5, -0.5, 1.0, -1.0], dtype=np.float32)
+        segments = [(audio, 24000)]
+        chunks = self._collect_live(segments)
+        streamed = b''.join(chunks)
+        direct = audio_to_pcm_bytes(audio)
+        assert streamed == direct
+
+    def test_three_segments_data_integrity(self):
+        """Three segments should produce contiguous PCM matching full audio."""
+        full = np.sin(np.linspace(0, 2 * np.pi, 7200, dtype=np.float32))
+        s1, s2, s3 = full[:2400], full[2400:4800], full[4800:]
+        segments = [(s1, 24000), (s2, 24000), (s3, 24000)]
+        chunks = self._collect_live(segments)
+        streamed = b''.join(chunks)
+        direct = audio_to_pcm_bytes(full)
+        assert streamed == direct

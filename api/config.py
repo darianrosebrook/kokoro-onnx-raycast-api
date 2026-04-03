@@ -43,5 +43,8 @@ DEFAULT_SPEED = 1.0
 MIN_SPEED = 0.5
 MAX_SPEED = 2.0
 
+# MLX model settings
+MODEL_ID = os.getenv("KOKORO_MODEL_ID", "mlx-community/Kokoro-82M-bf16")
+
 # Warmup settings
 WARMUP_TEXT = "System ready."

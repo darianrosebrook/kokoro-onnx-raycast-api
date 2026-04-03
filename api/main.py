@@ -16,8 +16,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from .config import HOST, PORT, DEFAULT_VOICE, DEFAULT_SPEED, MIN_SPEED, MAX_SPEED
-from .tts import initialize_model, get_model, get_voices, generate_audio, is_model_ready
-from .streaming import stream_audio_chunks, get_audio_duration
+from .tts import initialize_model, get_model, get_voices, generate_audio, generate_audio_stream, is_model_ready
+from .streaming import stream_audio_chunks, stream_audio_chunks_live, get_audio_duration
 
 # Configure logging
 logging.basicConfig(
@@ -173,35 +173,49 @@ async def create_speech(request: TTSRequest):
                 f"text='{request.input[:50]}...' ({len(request.input)} chars)")
     
     try:
-        # Generate audio
-        start_time = time.perf_counter()
-        audio, sample_rate, gen_time = generate_audio(
-            text=request.input,
-            voice=request.voice,
-            speed=request.speed,
-        )
-        
-        # Calculate metrics
-        audio_duration = get_audio_duration(audio)
-        rtf = gen_time / audio_duration if audio_duration > 0 else 0
-        
-        logger.info(f"Generated {audio_duration:.2f}s audio in {gen_time:.2f}s (RTF: {rtf:.3f})")
-        
-        # Determine content type and whether to include WAV header
-        include_wav = request.response_format == "wav"
-        content_type = "audio/wav" if include_wav else "audio/pcm"
-        
-        # Stream the audio
-        return StreamingResponse(
-            stream_audio_chunks(audio, include_wav_header=include_wav),
-            media_type=content_type,
-            headers={
-                "X-Audio-Duration": str(audio_duration),
-                "X-Generation-Time": str(gen_time),
-                "X-RTF": str(rtf),
-            },
-        )
-        
+        # WAV requires knowing total size upfront; non-streaming requests
+        # also use the blocking path for metric headers
+        if request.response_format == "wav" or not request.stream:
+            # --- Blocking path (generates all audio, then streams response) ---
+            start_time = time.perf_counter()
+            audio, sample_rate, gen_time = generate_audio(
+                text=request.input,
+                voice=request.voice,
+                speed=request.speed,
+            )
+
+            audio_duration = get_audio_duration(audio)
+            rtf = gen_time / audio_duration if audio_duration > 0 else 0
+
+            logger.info(f"Generated {audio_duration:.2f}s audio in {gen_time:.2f}s (RTF: {rtf:.3f})")
+
+            include_wav = request.response_format == "wav"
+            content_type = "audio/wav" if include_wav else "audio/pcm"
+
+            return StreamingResponse(
+                stream_audio_chunks(audio, include_wav_header=include_wav),
+                media_type=content_type,
+                headers={
+                    "X-Audio-Duration": str(audio_duration),
+                    "X-Generation-Time": str(gen_time),
+                    "X-RTF": str(rtf),
+                },
+            )
+        else:
+            # --- True streaming path (yields audio as each segment completes) ---
+            logger.info(f"Streaming TTS: voice={request.voice}, speed={request.speed}")
+
+            audio_stream = generate_audio_stream(
+                text=request.input,
+                voice=request.voice,
+                speed=request.speed,
+            )
+
+            return StreamingResponse(
+                stream_audio_chunks_live(audio_stream),
+                media_type="audio/pcm",
+            )
+
     except Exception as e:
         logger.error(f"TTS generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

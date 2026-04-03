@@ -93,6 +93,30 @@ async def stream_audio_chunks(
         yield pcm_data[i:i + chunk_size_bytes]
 
 
+async def stream_audio_chunks_live(
+    audio_stream: AsyncGenerator[tuple[np.ndarray, int], None],
+) -> AsyncGenerator[bytes, None]:
+    """
+    Stream PCM chunks from a live audio generator.
+
+    Converts each audio segment to PCM bytes and yields in
+    CHUNK_SIZE_SAMPLES-sized sub-chunks as each segment arrives.
+
+    Args:
+        audio_stream: Async generator yielding (audio_segment, sample_rate) tuples.
+
+    Yields:
+        PCM bytes chunks (16-bit signed, little-endian).
+    """
+    chunk_size_bytes = CHUNK_SIZE_SAMPLES * 2  # 2 bytes per sample (16-bit)
+
+    async for audio_segment, sample_rate in audio_stream:
+        pcm_data = audio_to_pcm_bytes(audio_segment)
+
+        for i in range(0, len(pcm_data), chunk_size_bytes):
+            yield pcm_data[i:i + chunk_size_bytes]
+
+
 def get_audio_duration(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> float:
     """Calculate audio duration in seconds."""
     return len(audio) / sample_rate

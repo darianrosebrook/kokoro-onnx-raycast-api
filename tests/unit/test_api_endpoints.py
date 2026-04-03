@@ -114,8 +114,9 @@ class TestTTSEndpointValid:
         # PCM should NOT start with RIFF
         assert r.content[:4] != b'RIFF'
 
-    def test_response_headers(self, client):
-        r = client.post("/v1/audio/speech", json={"input": "Hello"})
+    def test_response_headers_non_streaming(self, client):
+        """Non-streaming requests include metric headers."""
+        r = client.post("/v1/audio/speech", json={"input": "Hello", "stream": False})
         assert "x-audio-duration" in r.headers
         assert "x-generation-time" in r.headers
         assert "x-rtf" in r.headers
@@ -212,19 +213,18 @@ class TestTTSEndpointErrors:
         assert "not ready" in r.json()["detail"].lower()
 
     def test_generation_exception(self, client):
-        """If model.create() throws, endpoint should return 500."""
-        from unittest.mock import patch
+        """If model.generate_stream() throws, non-streaming endpoint should return 500."""
         import api.tts as tts_module
 
         failing_model = tts_module._model
-        failing_model.create.side_effect = RuntimeError("ONNX crash")
-        r = client.post("/v1/audio/speech", json={"input": "Hello"})
+        failing_model.generate_stream.side_effect = RuntimeError("MLX crash")
+        r = client.post("/v1/audio/speech", json={"input": "Hello", "stream": False})
         assert r.status_code == 500
-        assert "ONNX crash" in r.json()["detail"]
+        assert "MLX crash" in r.json()["detail"]
         # Restore
         from tests.conftest import _make_mock_model
         mock = _make_mock_model()
-        failing_model.create.side_effect = mock.create.side_effect
+        failing_model.generate_stream.side_effect = mock.generate_stream.side_effect
 
 
 # --- Concurrent requests ---
@@ -259,3 +259,121 @@ class TestConcurrentRequests:
             results = [f.result() for f in as_completed(futures)]
 
         assert all(r.status_code == 200 for r in results)
+
+
+# --- TTS endpoint: true streaming ---
+
+class TestTTSEndpointStreaming:
+    def test_streaming_pcm_returns_audio(self, client):
+        """stream=True with pcm format should return audio via streaming path."""
+        r = client.post("/v1/audio/speech", json={
+            "input": "Hello world streaming test",
+            "stream": True,
+            "response_format": "pcm",
+        })
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "audio/pcm"
+        assert len(r.content) > 0
+        # PCM, not WAV
+        assert r.content[:4] != b'RIFF'
+
+    def test_streaming_omits_duration_header(self, client):
+        """Streaming responses should not have X-Audio-Duration."""
+        r = client.post("/v1/audio/speech", json={
+            "input": "Hello world",
+            "stream": True,
+            "response_format": "pcm",
+        })
+        assert r.status_code == 200
+        assert "x-audio-duration" not in r.headers
+        assert "x-generation-time" not in r.headers
+
+    def test_non_streaming_has_headers(self, client):
+        """stream=False should still include metric headers."""
+        r = client.post("/v1/audio/speech", json={
+            "input": "Hello world",
+            "stream": False,
+            "response_format": "pcm",
+        })
+        assert r.status_code == 200
+        assert "x-audio-duration" in r.headers
+        assert "x-generation-time" in r.headers
+
+    def test_wav_ignores_stream_flag(self, client):
+        """WAV format should use blocking path even with stream=True."""
+        r = client.post("/v1/audio/speech", json={
+            "input": "Hello",
+            "stream": True,
+            "response_format": "wav",
+        })
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "audio/wav"
+        assert r.content[:4] == b'RIFF'
+        assert "x-audio-duration" in r.headers
+
+    def test_streaming_multi_sentence(self, client):
+        """Multi-sentence text should produce more audio than single word."""
+        r_short = client.post("/v1/audio/speech", json={
+            "input": "Hi.",
+            "stream": True,
+            "response_format": "pcm",
+        })
+        r_long = client.post("/v1/audio/speech", json={
+            "input": "The quick brown fox jumps over the lazy dog. "
+                     "She sells seashells by the seashore. "
+                     "How much wood would a woodchuck chuck?",
+            "stream": True,
+            "response_format": "pcm",
+        })
+        assert r_short.status_code == 200
+        assert r_long.status_code == 200
+        assert len(r_long.content) > len(r_short.content)
+
+    def test_streaming_paragraph(self, client):
+        """Paragraph-length text should succeed and produce substantial audio."""
+        text = (
+            "The ancient library stood at the edge of town, its weathered stone "
+            "walls covered in ivy that had been growing for decades. Inside, rows "
+            "upon rows of leather-bound books stretched from floor to ceiling, "
+            "their spines cracked and faded from years of careful handling. A "
+            "single shaft of sunlight pierced through the stained glass window, "
+            "casting colorful patterns across the reading table where an old "
+            "scholar sat hunched over a manuscript."
+        )
+        r = client.post("/v1/audio/speech", json={
+            "input": text,
+            "stream": True,
+            "response_format": "pcm",
+        })
+        assert r.status_code == 200
+        # 490 chars should produce at least 10 seconds of audio (~480000 bytes)
+        assert len(r.content) > 100000
+
+    def test_streaming_multiple_paragraphs(self, client):
+        """Multiple paragraphs should succeed."""
+        text = (
+            "The morning sun cast long shadows across the quiet street. Birds "
+            "sang their dawn chorus from the oak trees lining the sidewalk.\n\n"
+            "Inside the bakery, the aroma of fresh bread filled every corner. "
+            "Mrs. Chen carefully arranged croissants in the display case, each "
+            "one golden and perfectly flaky.\n\n"
+            "The first customer of the day pushed open the door, setting off "
+            "the small brass bell that announced each arrival."
+        )
+        r = client.post("/v1/audio/speech", json={
+            "input": text,
+            "stream": True,
+            "response_format": "pcm",
+        })
+        assert r.status_code == 200
+        assert len(r.content) > 50000
+
+    def test_streaming_pcm_data_valid(self, client):
+        """Streamed PCM bytes should be even-length (16-bit samples)."""
+        r = client.post("/v1/audio/speech", json={
+            "input": "Testing PCM validity",
+            "stream": True,
+            "response_format": "pcm",
+        })
+        assert r.status_code == 200
+        assert len(r.content) % 2 == 0
