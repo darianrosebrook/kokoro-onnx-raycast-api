@@ -111,7 +111,7 @@ launchctl unload "$LAUNCH_AGENTS_DIR/com.kokoro.audio-daemon.plist" 2>/dev/null 
 # Detect paths for template substitution
 NODE_BIN=$(which node 2>/dev/null || echo "/usr/local/bin/node")
 NODE_DIR=$(dirname "$NODE_BIN")
-ESPEAK_DATA_PATH=$("$SCRIPT_DIR/.venv/bin/python" -c "import espeakng_loader; print(espeakng_loader.get_data_path())" 2>/dev/null || echo "")
+ESPEAK_DATA_PATH=$("$SCRIPT_DIR/.venv-mlx/bin/python" -c "import espeakng_loader; print(espeakng_loader.get_data_path())" 2>/dev/null || echo "")
 
 echo "  Project: $SCRIPT_DIR"
 echo "  Node:    $NODE_BIN"

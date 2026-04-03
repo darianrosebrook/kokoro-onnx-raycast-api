@@ -144,12 +144,12 @@ async def list_voices():
 @app.get("/status", response_model=StatusResponse)
 async def get_status():
     """Get server status."""
-    from .config import MODEL_PATH
-    
+    from .config import MODEL_ID
+
     return StatusResponse(
         status="ok" if is_model_ready() else "initializing",
         model_loaded=is_model_ready(),
-        model_path=str(MODEL_PATH),
+        model_path=MODEL_ID,
         voices_count=len(get_voices()) if is_model_ready() else 0,
         uptime_seconds=time.time() - _start_time,
     )

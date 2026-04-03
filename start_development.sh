@@ -48,25 +48,17 @@ echo "  Kokoro TTS API - Development Server"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # --- Pre-flight Checks ---
-if [ ! -d ".venv" ]; then
-    echo -e "${RED}ERROR: Virtual environment '.venv' not found.${NC}"
-    echo "Please run: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
-    exit 1
-fi
-
-# Check for model files
-if [ ! -f "models/kokoro-v1.0.onnx" ]; then
-    echo -e "${RED}ERROR: Model file not found at models/kokoro-v1.0.onnx${NC}"
-    echo "Download from: https://github.com/thewh1teagle/kokoro-onnx/releases"
+if [ ! -d ".venv-mlx" ]; then
+    echo -e "${RED}ERROR: Virtual environment '.venv-mlx' not found.${NC}"
+    echo "Please run: python3.11 -m venv .venv-mlx && .venv-mlx/bin/pip install -r requirements-mlx.txt"
     exit 1
 fi
 
 # Activate virtual environment
 # Suppress Python extension hooks during activation
 export VIRTUAL_ENV_DISABLE_PROMPT=1
-# Temporarily disable Python extension detection
 export PYTHON_EXTENSION_DISABLED=1
-source .venv/bin/activate
+source .venv-mlx/bin/activate
 unset PYTHON_EXTENSION_DISABLED
 
 # --- Set environment variables ---
@@ -94,8 +86,8 @@ fi
 if [ -n "$ESPEAK_DATA_PATH" ]; then
     export ESPEAK_DATA_PATH
 fi
-# Use optimized model if available
-export KOKORO_MODEL_FILE="${KOKORO_MODEL_FILE:-kokoro-v1.0.int8-graph-opt.onnx}"
+# MLX model auto-downloads from HuggingFace Hub on first load
+export KOKORO_MODEL_ID="${KOKORO_MODEL_ID:-mlx-community/Kokoro-82M-bf16}"
 
 # --- Check for audio dependencies ---
 check_audio_deps() {

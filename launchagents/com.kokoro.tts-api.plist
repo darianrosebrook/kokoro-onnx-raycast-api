@@ -7,7 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>__PROJECT_DIR__/.venv/bin/python</string>
+        <string>__PROJECT_DIR__/.venv-mlx/bin/python</string>
         <string>-m</string>
         <string>uvicorn</string>
         <string>api.main:app</string>
@@ -23,11 +23,9 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>__PROJECT_DIR__/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>__PROJECT_DIR__/.venv-mlx/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>VIRTUAL_ENV</key>
-        <string>__PROJECT_DIR__/.venv</string>
-        <key>KOKORO_MODEL_FILE</key>
-        <string>kokoro-v1.0.int8-graph-opt.onnx</string>
+        <string>__PROJECT_DIR__/.venv-mlx</string>
         <key>ESPEAK_DATA_PATH</key>
         <string>__ESPEAK_DATA_PATH__</string>
     </dict>
