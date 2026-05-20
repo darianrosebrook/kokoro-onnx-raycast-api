@@ -44,15 +44,23 @@ _model_ready: bool = False
 # stream. max_workers=1 is the only serialization primitive needed — adding
 # a Lock on top would be redundant and would mislead anyone raising the
 # worker count without removing the lock.
-_mlx_executor: concurrent.futures.ThreadPoolExecutor = (
-    concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx")
-)
+def _new_mlx_executor() -> concurrent.futures.ThreadPoolExecutor:
+    return concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx")
+
+
+_mlx_executor: concurrent.futures.ThreadPoolExecutor = _new_mlx_executor()
+
 
 def shutdown_executor() -> None:
-    """Drain and shut down the MLX worker. Call from the FastAPI lifespan
-    teardown so in-flight generations finish before the process exits and the
-    Metal command queue is torn down cleanly."""
+    """Drain and shut down the MLX worker, then replace it with a fresh one.
+    Call from the FastAPI lifespan teardown so in-flight generations finish
+    before the process exits. Replacing the executor (rather than leaving it
+    dead) keeps the module re-usable across lifecycle boundaries — uvicorn
+    --reload, repeated TestClient lifespans, and integration tests all
+    re-enter the app without a stale shutdown_lock blocking submissions."""
+    global _mlx_executor
     _mlx_executor.shutdown(wait=True)
+    _mlx_executor = _new_mlx_executor()
 
 
 def get_model() -> KokoroTTS:

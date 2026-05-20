@@ -176,3 +176,98 @@ class TestGenerateAudioStream:
         segments = self._collect_stream(mock_model, text)
         total = sum(len(s) for s, _ in segments)
         assert total > 0
+
+
+class TestMLXSerialization:
+    """All MLX inference must run on the single _mlx_executor worker so the
+    Metal command-encoder isn't accessed from multiple threads concurrently
+    (which trips an AGX assertion and aborts the process). These tests would
+    fail if anyone removed the executor or raised max_workers > 1."""
+
+    def test_generate_audio_runs_on_mlx_worker(self, mock_model):
+        observed_threads: list[str] = []
+
+        def capture_thread_stream(text, voice="af_heart", speed=1.0, **kwargs):
+            import threading
+            observed_threads.append(threading.current_thread().name)
+            audio = np.zeros(2400, dtype=np.float32)
+            yield audio
+
+        mock_model.generate_stream.side_effect = capture_thread_stream
+
+        with patch.object(tts_module, '_model', mock_model), \
+             patch.object(tts_module, '_model_ready', True):
+            generate_audio("Hello")
+
+        assert len(observed_threads) == 1
+        assert observed_threads[0].startswith("mlx"), (
+            f"generate_audio ran on {observed_threads[0]!r}, expected the "
+            f"single 'mlx' worker thread. The MLX serialization fix may have "
+            f"regressed."
+        )
+
+    def test_concurrent_generate_audio_serializes_on_one_worker(self, mock_model):
+        """Concurrent calls from many threads must all serialize through the
+        same single mlx worker — never run in parallel on different threads."""
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+
+        observed_threads: list[str] = []
+        active_count = {"current": 0, "max": 0}
+        lock = threading.Lock()
+
+        def capture_concurrent_stream(text, voice="af_heart", speed=1.0, **kwargs):
+            with lock:
+                active_count["current"] += 1
+                active_count["max"] = max(active_count["max"], active_count["current"])
+                observed_threads.append(threading.current_thread().name)
+            try:
+                yield np.zeros(2400, dtype=np.float32)
+            finally:
+                with lock:
+                    active_count["current"] -= 1
+
+        mock_model.generate_stream.side_effect = capture_concurrent_stream
+
+        with patch.object(tts_module, '_model', mock_model), \
+             patch.object(tts_module, '_model_ready', True):
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(generate_audio, f"text {i}") for i in range(8)]
+                for f in futures:
+                    f.result()
+
+        # All 8 calls hit exactly one worker thread.
+        assert len(set(observed_threads)) == 1, (
+            f"Expected all calls to serialize on one mlx worker, got "
+            f"{set(observed_threads)}"
+        )
+        assert observed_threads[0].startswith("mlx")
+        # Never more than one in flight at a time.
+        assert active_count["max"] == 1, (
+            f"Detected {active_count['max']} concurrent MLX evals — the "
+            f"serialization guarantee is broken."
+        )
+
+    def test_streaming_runs_on_mlx_worker(self, mock_model):
+        observed_threads: list[str] = []
+
+        def capture_thread_stream(text, voice="af_heart", speed=1.0, **kwargs):
+            import threading
+            observed_threads.append(threading.current_thread().name)
+            yield np.zeros(2400, dtype=np.float32)
+
+        mock_model.generate_stream.side_effect = capture_thread_stream
+
+        async def _gather():
+            async for _ in generate_audio_stream("Hello"):
+                pass
+
+        with patch.object(tts_module, '_model', mock_model), \
+             patch.object(tts_module, '_model_ready', True):
+            asyncio.run(_gather())
+
+        assert len(observed_threads) == 1
+        assert observed_threads[0].startswith("mlx"), (
+            f"generate_audio_stream ran on {observed_threads[0]!r}, expected "
+            f"the single 'mlx' worker thread."
+        )

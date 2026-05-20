@@ -5,6 +5,7 @@ Minimal FastAPI server for Kokoro TTS.
 ~200 lines replacing 26,000+ lines of the original implementation.
 """
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -178,8 +179,12 @@ async def create_speech(request: TTSRequest):
         # also use the blocking path for metric headers
         if request.response_format == "wav" or not request.stream:
             # --- Blocking path (generates all audio, then streams response) ---
+            # generate_audio submits to a single MLX worker thread and blocks
+            # on .result(); run it off the event loop so concurrent requests
+            # and health checks keep getting served while inference runs.
             start_time = time.perf_counter()
-            audio, sample_rate, gen_time = generate_audio(
+            audio, sample_rate, gen_time = await asyncio.to_thread(
+                generate_audio,
                 text=request.input,
                 voice=request.voice,
                 speed=request.speed,
