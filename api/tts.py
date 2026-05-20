@@ -2,11 +2,16 @@
 Kokoro TTS API v2 - TTS Generation
 
 Uses kokoro-mlx for Apple Silicon GPU-accelerated inference via Metal.
-Implements split-and-parallel streaming: first 2 sentences generate immediately,
-remainder generates concurrently in background thread.
+generate_stream yields per-batch audio segments as they complete, which the
+client can begin playing while subsequent segments are still synthesizing.
+
+All MLX inference is pinned to a single worker thread (see _mlx_executor)
+because the Metal command-encoder is not safe for concurrent use across
+threads.
 """
 
 import asyncio
+import concurrent.futures
 import logging
 import queue
 import time
@@ -30,6 +35,25 @@ logger = logging.getLogger(__name__)
 # Global model instance
 _model: Optional[KokoroTTS] = None
 _model_ready: bool = False
+
+# MLX is not safe for concurrent eval on the same Metal stream from multiple
+# threads — two parallel inferences trip an AGX command-encoder assertion and
+# abort the process (SIGABRT in -[AGXG13XFamilyCommandBuffer
+# tryCoalescingPreviousComputeCommandEncoderWithConfig:]). Pin all inference
+# to a single worker thread so concurrent requests serialize on one Metal
+# stream. max_workers=1 is the only serialization primitive needed — adding
+# a Lock on top would be redundant and would mislead anyone raising the
+# worker count without removing the lock.
+_mlx_executor: concurrent.futures.ThreadPoolExecutor = (
+    concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx")
+)
+
+def shutdown_executor() -> None:
+    """Drain and shut down the MLX worker. Call from the FastAPI lifespan
+    teardown so in-flight generations finish before the process exits and the
+    Metal command queue is torn down cleanly."""
+    _mlx_executor.shutdown(wait=True)
+
 
 def get_model() -> KokoroTTS:
     """Get the global model instance."""
@@ -58,13 +82,18 @@ def initialize_model() -> float:
     logger.info(f"Loading MLX model: {MODEL_ID}")
     _model = KokoroTTS.from_pretrained(MODEL_ID)
 
-    # Single warmup call to prime pipelines and voice cache
+    # Single warmup call to prime pipelines and voice cache. Run it on the
+    # same single-worker executor so the worker thread that owns the Metal
+    # stream is the same one that serves requests.
     logger.info("Warming up model...")
-    result = _model.generate(WARMUP_TEXT, voice=DEFAULT_VOICE, speed=DEFAULT_SPEED)
-    # Consume the result (it may be a generator in some versions)
-    if hasattr(result, '__iter__') and not hasattr(result, 'audio'):
-        for _ in result:
-            pass
+
+    def _warmup():
+        result = _model.generate(WARMUP_TEXT, voice=DEFAULT_VOICE, speed=DEFAULT_SPEED)
+        if hasattr(result, '__iter__') and not hasattr(result, 'audio'):
+            for _ in result:
+                pass
+
+    _mlx_executor.submit(_warmup).result()
 
     init_time = time.perf_counter() - start_time
     _model_ready = True
@@ -107,10 +136,15 @@ def generate_audio(
 
     start_time = time.perf_counter()
 
-    # Collect all segments from generate_stream
-    segments = []
-    for result in model.generate_stream(text, voice=voice, speed=speed):
-        segments.append(np.array(result))
+    # Serialize all MLX eval through the single worker thread to avoid
+    # concurrent Metal command-encoder use across threads.
+    def _run() -> list[np.ndarray]:
+        collected: list[np.ndarray] = []
+        for result in model.generate_stream(text, voice=voice, speed=speed):
+            collected.append(np.asarray(result, dtype=np.float32))
+        return collected
+
+    segments = _mlx_executor.submit(_run).result()
 
     if segments:
         audio = np.concatenate(segments)
@@ -155,8 +189,9 @@ async def generate_audio_stream(
         voice = DEFAULT_VOICE
 
     # generate_stream is sync (MLX is not thread-safe for concurrent inference),
-    # so we run it in a single executor thread and yield segments as they arrive.
-    loop = asyncio.get_event_loop()
+    # so we run it on a dedicated single-worker executor so concurrent requests
+    # serialize on the same Metal stream.
+    loop = asyncio.get_running_loop()
 
     # Use a queue to bridge sync generator → async generator
     q: queue.Queue = queue.Queue()
@@ -165,14 +200,14 @@ async def generate_audio_stream(
     def _run_generation():
         try:
             for result in model.generate_stream(text, voice=voice, speed=speed):
-                q.put((np.array(result), SAMPLE_RATE))
+                q.put((np.asarray(result, dtype=np.float32), SAMPLE_RATE))
         except Exception as e:
             q.put(e)
         finally:
             q.put(sentinel)
 
-    # Start generation in background thread
-    future = loop.run_in_executor(None, _run_generation)
+    # Start generation on the dedicated MLX worker
+    future = loop.run_in_executor(_mlx_executor, _run_generation)
 
     # Yield segments as they arrive from the queue
     while True:
