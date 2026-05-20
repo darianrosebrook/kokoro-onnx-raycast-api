@@ -51,6 +51,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+.venv-*/
 dist/
 build/
 *.egg-info/
@@ -104,6 +105,10 @@ KokoroTTS/.build/
 
 # Espeak path cache (machine-specific)
 .espeak_path_cache
+
+# CAWS local-runtime telemetry (not source of truth)
+.caws/state/
+.caws/events.jsonl
 
 # Build/test artifacts
 artifacts/

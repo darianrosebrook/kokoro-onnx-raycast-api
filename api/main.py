@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from .config import HOST, PORT, DEFAULT_VOICE, DEFAULT_SPEED, MIN_SPEED, MAX_SPEED
-from .tts import initialize_model, get_model, get_voices, generate_audio, generate_audio_stream, is_model_ready
+from .tts import initialize_model, get_model, get_voices, generate_audio, generate_audio_stream, is_model_ready, shutdown_executor
 from .streaming import stream_audio_chunks, stream_audio_chunks_live, get_audio_duration
 
 # Configure logging
@@ -100,15 +100,16 @@ async def lifespan(app: FastAPI):
         raise
     
     yield
-    
+
     logger.info("Shutting down...")
+    shutdown_executor()
 
 
 # Create FastAPI app
 app = FastAPI(
     title="Kokoro TTS API",
     version="2.0.0",
-    description="Minimal, high-performance TTS API using Kokoro ONNX",
+    description="Minimal, high-performance TTS API using Kokoro MLX",
     lifespan=lifespan,
 )
 
