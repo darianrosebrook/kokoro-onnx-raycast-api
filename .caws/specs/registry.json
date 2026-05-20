@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "specs": {
+    "TTS-002": {
+      "path": "TTS-002.yaml",
+      "type": "fix",
+      "status": "active",
+      "created_at": "2026-05-20T23:48:44.409Z",
+      "updated_at": "2026-05-20T23:49:55.003Z",
+      "owner": null
+    }
+  },
+  "lastUpdated": "2026-05-20T23:49:55.276Z"
+}

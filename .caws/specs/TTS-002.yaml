@@ -1,0 +1,94 @@
+type: fix
+status: active
+risk_tier: 3
+mode: chore
+blast_radius:
+  modules:
+    - api/
+    - tests/
+    - scripts/
+    - raycast/
+  data_migration: false
+  external_apis: false
+operational_rollback_slo: 5m
+scope:
+  in:
+    - api/
+    - tests/unit/test_tts.py
+    - tests/unit/test_api_endpoints.py
+    - scripts/check_environment.py
+    - raycast/package.json
+    - raycast/src/utils/tts/tts-processor.ts
+    - raycast/src/utils/tts/streaming/audio-streamer.ts
+    - raycast/src/utils/validation/tts-types.ts
+    - .gitignore
+    - .caws/specs/
+  out:
+    - node_modules/
+    - dist/
+    - build/
+    - .venv-mlx/
+    - __pycache__/
+    - logs/
+    - artifacts/
+    - KokoroTTS/.build/
+invariants:
+  - All MLX inference runs on a single executor worker (max_workers=1)
+  - asyncio event loop never blocks on MLX inference for >100ms
+  - TTFA (Time to First Audio) ≤500ms for streaming requests
+  - API stays responsive (health checks return) during long generations
+  - Test suite proves single-worker serialization via thread-name capture
+acceptance:
+  - id: A1
+    given: A streaming TTS request is in flight on the MLX worker
+    when: A second concurrent request arrives
+    then: It serializes on the same worker; no AGX SIGABRT; both responses complete
+  - id: A2
+    given: A long blocking TTS request (response_format=wav) is generating
+    when: A /health request arrives
+    then: /health returns 200 within 100ms, not waiting for generation
+  - id: A3
+    given: The MLX serialization is in place
+    when: Eight concurrent generate_audio calls run from a ThreadPoolExecutor
+    then: All eight execute on a single 'mlx*' thread with active_count never >1
+  - id: A4
+    given: A developer runs scripts/check_environment.py
+    when: kokoro-mlx is installed and MLX is importable on Apple Silicon
+    then: >-
+      The script reports ready without listing onnxruntime/kokoro-onnx as
+      required
+acceptance_criteria: []
+non_functional:
+  a11y: []
+  perf:
+    asyncio_unblocked_p95_ms: 100
+    ttfa_streaming_p95_ms: 500
+  security: []
+contracts:
+  - type: project_setup
+    path: .caws/specs/TTS-002.yaml
+    description: >-
+      MLX backend hardening — no API surface changes, internal serialization fix
+      and branding cleanup.
+id: TTS-002
+title: MLX backend hardening — serialization, asyncio unblocking, branding
+created_at: '2026-05-20T23:48:44.409Z'
+updated_at: '2026-05-20T23:49:55.003Z'
+change_budget:
+  max_files: 15
+  max_loc: 500
+  max_days: 1
+  max_complexity: 8
+threats:
+  - >-
+    Concurrent MLX inference crashes the process via AGX command-encoder
+    assertion
+  - >-
+    Blocking inference on the asyncio event loop starves health checks and
+    concurrent requests
+  - >-
+    Test suite passes without exercising the actual MLX serialization machinery
+    (mocked)
+  - >-
+    Stale ONNX references in CLI/Raycast surfaces mislead users about the active
+    backend
