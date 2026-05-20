@@ -74,16 +74,15 @@ def check_required_packages():
     print(" Package Installation Status")
     print("=" * 50)
     
-    # Core packages for the TTS system
+    # Core packages for the TTS system (MLX backend on Apple Silicon)
     required_packages = [
-        ('onnxruntime', 'onnxruntime'),
-        ('kokoro-onnx', 'kokoro_onnx'),
+        ('kokoro-mlx', 'kokoro_mlx'),
         ('numpy', 'numpy'),
         ('fastapi', 'fastapi'),
         ('uvicorn', 'uvicorn'),
         ('pydantic', 'pydantic'),
     ]
-    
+
     # Optional packages (for additional features)
     optional_packages = [
         ('transformers', 'transformers'),
@@ -115,31 +114,28 @@ def check_required_packages():
             package_status[pip_name] = {'installed': False, 'version': None, 'required': False}
             print(f"ℹ  {pip_name}: Missing (optional)")
     
-    # Check ONNX Runtime providers if available
+    # Check MLX availability (kokoro-mlx pulls it in transitively)
     try:
-        import onnxruntime as ort
-        providers = ort.get_available_providers()
-        package_status['onnxruntime']['providers'] = providers
-        
-        print(f"\n ONNX Runtime Providers:")
-        for provider in providers:
-            marker = "✅" if provider == 'CoreMLExecutionProvider' else ""
-            print(f"   {marker} {provider}")
-        
-        if 'CoreMLExecutionProvider' not in providers:
-            print("     CoreMLExecutionProvider not available")
+        import mlx.core as mx
+        mlx_version = getattr(mx, '__version__', 'unknown')
+        print(f"\n MLX runtime: {mlx_version}")
+        # Metal is the default device on Apple Silicon
+        try:
+            print(f"   Default device: {mx.default_device()}")
+        except Exception:
+            pass
     except ImportError:
-        print(" ONNX Runtime: Not installed")
-    
+        print(" MLX runtime: Not installed (required by kokoro-mlx)")
+
     print()
     return package_status, missing_packages
 
 def check_system_compatibility():
-    """Check system compatibility for CoreML and hardware acceleration."""
-    
+    """Check system compatibility for MLX / Metal GPU acceleration."""
+
     print(" System Compatibility")
     print("=" * 50)
-    
+
     compatibility = {
         'is_macos': sys.platform == 'darwin',
         'is_apple_silicon': False,
@@ -147,46 +143,46 @@ def check_system_compatibility():
         'issues': [],
         'recommendations': []
     }
-    
+
     if not compatibility['is_macos']:
-        compatibility['issues'].append("CoreML requires macOS")
-        print(f"  Platform: {sys.platform} (CoreML requires macOS)")
+        compatibility['issues'].append("MLX requires macOS")
+        print(f"  Platform: {sys.platform} (MLX requires macOS on Apple Silicon)")
         return compatibility
-    
-    # Check Apple Silicon
+
+    # Check Apple Silicon (MLX requires arm64; there's no Intel fallback)
     try:
         result = subprocess.run(['uname', '-m'], capture_output=True, text=True)
         if result.returncode == 0:
             arch = result.stdout.strip()
             compatibility['is_apple_silicon'] = arch == 'arm64'
             print(f" Architecture: {arch}")
-            
+
             if not compatibility['is_apple_silicon']:
-                compatibility['recommendations'].append(
-                    "Consider using CPU execution instead of CoreML on Intel"
+                compatibility['issues'].append(
+                    "MLX requires Apple Silicon (arm64) — Intel is not supported"
                 )
     except:
         print(" Could not determine architecture")
-    
-    # Check macOS version
+
+    # Check macOS version (MLX needs macOS 13.3+ for Metal Performance Shaders Graph)
     try:
         result = subprocess.run(['sw_vers', '-productVersion'], capture_output=True, text=True)
         if result.returncode == 0:
             version = result.stdout.strip()
             compatibility['macos_version'] = version
             print(f" macOS Version: {version}")
-            
-            # Parse version for compatibility check
+
             version_parts = version.split('.')
             major = int(version_parts[0])
-            
-            if major < 11:
+            minor = int(version_parts[1]) if len(version_parts) > 1 else 0
+
+            if major < 13 or (major == 13 and minor < 3):
                 compatibility['issues'].append(
-                    f"macOS 11.0+ required for CoreML - current: {version}"
+                    f"macOS 13.3+ required for MLX - current: {version}"
                 )
     except:
         print(" Could not determine macOS version")
-    
+
     print()
     return compatibility
 
@@ -241,13 +237,13 @@ def check_project_structure():
     print(" Project Structure")
     print("=" * 50)
     
+    # MLX backend pulls model weights from HuggingFace at runtime, so no
+    # local model/voice files are required.
     expected_files = [
-        'kokoro-v1.0.int8.onnx',
-        'voices-v1.0.bin',
         'api/main.py',
         'api/config.py',
-        'api/model/loader.py',
-        'requirements.txt'
+        'api/tts.py',
+        'requirements-mlx.txt',
     ]
     
     structure_status = {}
@@ -331,7 +327,7 @@ def main():
                 print(f"   3. Address compatibility issues: {', '.join(compatibility['issues'])}")
         
         print(f"\n Full diagnostic report saved to: {report_file}")
-        print("\nFor setup help, see: ORT_OPTIMIZATION_GUIDE.md")
+        print("\nFor setup help, see: README.md")
         
         return 0 if report['overall_status'] == 'ready' else 1
         

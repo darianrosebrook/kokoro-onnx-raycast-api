@@ -562,7 +562,7 @@ export const TTS_CONSTANTS = {
   MAX_TEXT_LENGTH: 1800,
   MAX_CHUNK_SIZE: 2000,
 
-  // Audio format (Kokoro ONNX)
+  // Audio format (Kokoro MLX)
   SAMPLE_RATE: 24000,
   CHANNELS: 1,
   BIT_DEPTH: 16,

@@ -100,7 +100,7 @@ export class AudioStreamer implements IAudioStreamer {
     // Initialize performance tracker
     this.performanceTracker = PerformanceTracker.getInstance();
 
-    // Initialize audio format for Kokoro ONNX
+    // Initialize audio format for Kokoro MLX
     this.audioFormat = {
       format: "wav",
       sampleRate: TTS_CONSTANTS.SAMPLE_RATE,

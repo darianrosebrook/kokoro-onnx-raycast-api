@@ -1,5 +1,5 @@
 /**
- * TTS Processor Coordinator - Production-Ready Streaming Audio Orchestrator for Kokoro ONNX
+ * TTS Processor Coordinator - Production-Ready Streaming Audio Orchestrator for Kokoro MLX
  *
  * This module orchestrates the entire TTS pipeline from text input to audio output,
  * coordinating between text processing, audio streaming, and the standalone audio daemon.
@@ -125,7 +125,7 @@ interface ProcessorDependencies {
  *
  * This class orchestrates the entire TTS pipeline from text input to audio output,
  * implementing a sophisticated streaming architecture optimized for macOS and the
- * Kokoro ONNX model.
+ * Kokoro MLX model.
  *
  * ## Key Design Decisions
  *

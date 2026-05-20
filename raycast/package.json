@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "raycast-kokoro-tts",
   "title": "Raycast Kokoro Tts",
-  "description": "Text-to-Speech using Kokoro ONNX with word highlighting",
+  "description": "Text-to-Speech using Kokoro MLX with word highlighting",
   "icon": "icon.png",
   "author": "darianrosebrook",
   "categories": [
